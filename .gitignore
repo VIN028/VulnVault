@@ -1,0 +1,8 @@
+.env
+node_modules/
+uploads/
+*.db
+*.sqlite
+.DS_Store
+# Optional: large local templates (not required for Render)
+templateReport/
