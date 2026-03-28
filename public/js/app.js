@@ -1298,7 +1298,16 @@ async function selectProject(project) {
   }
   
   updateBreadcrumb();
-  await refreshFindings();
+
+  // Phishing projects don't have findings
+  const isPhishing = project.project_type === 'phishing';
+  document.getElementById('btn-add-finding').style.display = isPhishing ? 'none' : '';
+  document.getElementById('btn-gen-pdf').style.display = isPhishing ? 'none' : '';
+  if (isPhishing) {
+    document.getElementById('findings-list').innerHTML = '<div class="drill-empty">Phishing projects do not have findings.</div>';
+  } else {
+    await refreshFindings();
+  }
 }
 
 async function saveReportLinks() {
