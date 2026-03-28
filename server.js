@@ -11,7 +11,7 @@ const auth = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Behind Render / other reverse proxies (correct client IP, HTTPS awareness)
+// Behind reverse proxies (correct client IP, HTTPS awareness)
 app.set('trust proxy', 1);
 
 // Initialize DB on startup
@@ -63,15 +63,251 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ─── Current User ─────────────────────────────────────────────────────────────
+app.get('/api/me', (req, res) => {
+  const s = req.session;
+  if (!s) return res.status(401).json({ error: 'Unauthorized' });
+  res.json({ userId: s.userId, username: s.username, displayName: s.displayName, role: s.role });
+});
+
+// ─── User Management (PM + Manager + Admin) ───────────────────────────────────
+const mgmtRoles = ['admin', 'manager', 'pm'];
+
+app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
+  db.getAllUsers((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/api/users/engineers', auth.requireRole(...mgmtRoles), (req, res) => {
+  db.getAllEngineers((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
+  const { username, display_name, role, password } = req.body;
+  if (!username || !display_name || !role || !password) {
+    return res.status(400).json({ error: 'username, display_name, role, and password are required.' });
+  }
+  const allowedRoles = ['engineer', 'pm', 'manager'];
+  // Only admin can create other admins
+  if (role === 'admin' && req.session.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admin can create another admin.' });
+  }
+  if (!allowedRoles.includes(role) && role !== 'admin') {
+    return res.status(400).json({ error: 'Invalid role. Must be engineer, pm, manager, or admin.' });
+  }
+  db.createUser({ username, display_name, role, password }, (err, id) => {
+    if (err) {
+      if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Username already exists.' });
+      return res.status(500).json({ error: err.message });
+    }
+    db.writeActivityLog({ type:'user', actorId: req.session.userId, action:'create_user', details:`Created user @${username} (${role})` });
+    res.status(201).json({ id, username, display_name, role });
+  });
+});
+
+app.delete('/api/users/:id', auth.requireRole(...mgmtRoles), (req, res) => {
+  const targetId = Number(req.params.id);
+  // Prevent self-deletion
+  if (targetId === req.session.userId) {
+    return res.status(400).json({ error: 'Cannot delete your own account.' });
+  }
+  db.deleteUser(targetId, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.writeActivityLog({ type:'user', actorId: req.session.userId, action:'delete_user', details:`Deleted user ID ${targetId}` });
+    res.json({ ok: true });
+  });
+});
+
+// ─── Password Change ─────────────────────────────────────────────────────────
+const bcrypt = require('bcryptjs');
+app.patch('/api/users/:id/password', (req, res) => {
+  const targetId = Number(req.params.id);
+  const { old_password, new_password } = req.body;
+  const s = req.session;
+
+  if (!new_password || new_password.length < 8) {
+    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  }
+
+  // Self-change: require old password
+  // Management changing others: no old password needed
+  const isSelf = targetId === s.userId;
+  const isManagement = mgmtRoles.includes(s.role);
+
+  if (!isSelf && !isManagement) {
+    return res.status(403).json({ error: 'You can only change your own password.' });
+  }
+
+  db.getUserById(targetId, async (err, user) => {
+    if (err || !user) return res.status(404).json({ error: 'User not found.' });
+
+    // If changing own password, verify old password
+    if (isSelf) {
+      if (!old_password) return res.status(400).json({ error: 'Current password is required.' });
+      const ok = await bcrypt.compare(old_password, user.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+
+    const hash = await bcrypt.hash(new_password, 10);
+    db.changePassword(targetId, hash, (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      db.writeActivityLog({ type:'user', actorId: s.userId, action:'change_password', details:`Password changed for user ID ${targetId}` });
+      res.json({ ok: true });
+    });
+  });
+});
+
+// ─── Dashboard (PM + Manager + Admin) ─────────────────────────────────────────
+app.get('/api/dashboard/summary', auth.requireRole(...mgmtRoles), (req, res) => {
+  db.getDashboardSummary((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// ─── Access Requests ──────────────────────────────────────────────────────────
+app.get('/api/access-requests', (req, res) => {
+  const s = req.session;
+  if (s.role === 'engineer') {
+    db.getAccessRequests({ requesterId: s.userId }, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  } else if (mgmtRoles.includes(s.role)) {
+    db.getAccessRequests({}, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  } else {
+    res.status(403).json({ error: 'Forbidden' });
+  }
+});
+
+app.post('/api/access-requests', auth.requireRole('engineer'), (req, res) => {
+  const { target_engineer_id } = req.body;
+  if (!target_engineer_id) return res.status(400).json({ error: 'target_engineer_id is required.' });
+  db.createAccessRequest(
+    { requesterId: req.session.userId, targetEngineerId: Number(target_engineer_id) },
+    (err, id) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id, status: 'pending' });
+    }
+  );
+});
+
+app.patch('/api/access-requests/:id', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
+  const { status } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'status must be approved or rejected.' });
+  }
+  db.updateAccessRequest({ id: Number(req.params.id), status, reviewedBy: req.session.userId }, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true, status });
+  });
+});
+
+// ─── Project Access Requests (engineer → PM/Manager) ─────────────────────────
+// GET /api/project-access-requests — engineer sees own; mgmt sees all pending
+app.get('/api/project-access-requests', (req, res) => {
+  const s = req.session;
+  const filter = s.role === 'engineer' ? { engineerId: s.userId } : {};
+  db.getProjectAccessRequests(filter, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+// GET /api/projects/all — projects the engineer can REQUEST (only unassigned)
+app.get('/api/projects/all', (req, res) => {
+  db.getAllProjects((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // Engineers can only request projects where they are not PIC/Assist
+    // AND the project has at least one open slot (PIC or Assist is null)
+    if (req.session?.role === 'engineer') {
+      const uid = Number(req.session.userId);
+      rows = rows.filter(p => 
+        Number(p.assigned_engineer_id) !== uid && 
+        Number(p.assist_engineer_id) !== uid &&
+        (!p.assigned_engineer_id || !p.assist_engineer_id)
+      );
+    }
+    res.json(rows);
+  });
+});
+
+// POST /api/project-access-requests — engineer submits request
+app.post('/api/project-access-requests', auth.requireRole('engineer'), (req, res) => {
+  const { project_id, message } = req.body;
+  if (!project_id) return res.status(400).json({ error: 'project_id is required.' });
+  db.createProjectAccessRequest(
+    { engineerId: req.session.userId, projectId: Number(project_id), message },
+    (err, id) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.status(201).json({ id, status: 'pending' });
+    }
+  );
+});
+
+// PATCH /api/project-access-requests/:id — PM/Manager approves or rejects (auto-assigns on approve)
+app.patch('/api/project-access-requests/:id', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
+  const { status } = req.body;
+  if (!['approved', 'rejected'].includes(status)) {
+    return res.status(400).json({ error: 'status must be approved or rejected.' });
+  }
+  db.updateProjectAccessRequest({ id: Number(req.params.id), status, reviewedBy: req.session.userId }, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    // Write activity log
+    db.getProjectAccessRequests({}, (e2, pending) => {
+      // find the request that was just updated by re-fetching via project-access endpoint
+    });
+    // Log the action (best-effort)
+    db.getDb().get(
+      'SELECT par.engineer_id, par.project_id FROM project_access_requests par WHERE par.id=?',
+      [Number(req.params.id)],
+      (e, row) => {
+        if (row) {
+          db.writeActivityLog({
+            type: 'project_request',
+            actorId: req.session.userId,
+            engineerId: row.engineer_id,
+            projectId: row.project_id,
+            action: status,
+            details: `Project access request ${status} by ${req.session.username}`
+          });
+        }
+      }
+    );
+    res.json({ ok: true, status });
+  });
+});
+
+// GET /api/activity-log — PM/Manager/Admin only, optional ?type=user|crud|project_request
+app.get('/api/activity-log', auth.requireRole('admin','manager','pm'), (req, res) => {
+  const type = req.query.type || null;
+  db.getActivityLog(type, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // ─── Vulnerability Routes ─────────────────────────────────────────────────────
 app.get('/api/vulnerabilities', (req, res) => {
   const { search, severity, sort, project_id } = req.query;
+  const s = req.session;
+  // The library is global for all roles
+  const engineerId = null;
   db.listVulnerabilities(
     {
       search:     (search   || '').trim(),
       severity:   (severity || '').trim(),
       sort:       (sort     || 'newest').trim(),
       project_id: project_id ? Number(project_id) : null,
+      owner_engineer_id: engineerId,
     },
     (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -89,10 +325,11 @@ app.get('/api/vulnerabilities/:id', (req, res) => {
 });
 
 app.post('/api/vulnerabilities', (req, res) => {
-  const { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity } = req.body;
+  const { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload } = req.body;
   if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
+  const owner_engineer_id = req.session?.role === 'engineer' ? req.session.userId : null;
   db.saveVulnerability(
-    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity },
+    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, owner_engineer_id },
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       db.getVulnerabilityById(result.id, (err2, row) => {
@@ -104,22 +341,52 @@ app.post('/api/vulnerabilities', (req, res) => {
 });
 
 app.delete('/api/vulnerabilities/:id', (req, res) => {
-  db.deleteVulnerability(req.params.id, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (result.changes === 0) return res.status(404).json({ error: 'Vulnerability not found' });
-    res.json({ message: 'Deleted successfully' });
+  // First fetch the vulnerability to get screenshot paths for cleanup
+  db.getVulnerabilityById(req.params.id, (fetchErr, vuln) => {
+    if (fetchErr) return res.status(500).json({ error: fetchErr.message });
+    if (!vuln) return res.status(404).json({ error: 'Vulnerability not found' });
+
+    // Clean up screenshot files from disk
+    if (vuln.screenshot_path) {
+      let paths = [];
+      try { paths = JSON.parse(vuln.screenshot_path); if (!Array.isArray(paths)) paths = [vuln.screenshot_path]; }
+      catch { paths = [vuln.screenshot_path]; }
+      for (const p of paths) {
+        const absPath = path.join(__dirname, p.replace(/^\//, ''));
+        if (fs.existsSync(absPath)) {
+          try { fs.unlinkSync(absPath); } catch (e) { console.warn('[cleanup] Failed to delete:', absPath, e.message); }
+        }
+      }
+    }
+
+    db.deleteVulnerability(req.params.id, (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (result.changes === 0) return res.status(404).json({ error: 'Vulnerability not found' });
+      res.json({ message: 'Deleted successfully' });
+    });
   });
 });
 
 // ─── Client / Project Grouping Routes ────────────────────────────────────────
 app.get('/api/clients', (req, res) => {
-  db.getClients((err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+  const s = req.session;
+  if (s?.role === 'engineer') {
+    // Engineers only see clients for projects they're assigned to
+    db.getClientsByEngineer(s.userId, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  } else {
+    db.getClients((err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  }
 });
 
 app.post('/api/clients', (req, res) => {
+  // Engineers cannot create clients
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create clients. Ask your PM to create and assign you.' });
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Client name is required' });
   db.createClient(name, (err, result) => {
@@ -127,6 +394,7 @@ app.post('/api/clients', (req, res) => {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Client already exists' });
       return res.status(500).json({ error: err.message });
     }
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, action:'create_client', details:`Created client "${name}"` });
     db.getClients((err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
       const created = rows.find(r => r.id === result.id);
@@ -136,6 +404,7 @@ app.post('/api/clients', (req, res) => {
 });
 
 app.delete('/api/clients/:id', (req, res) => {
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete clients.' });
   const clientId = Number(req.params.id);
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
@@ -143,6 +412,7 @@ app.delete('/api/clients/:id', (req, res) => {
   db.deleteClient(clientId, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result?.changes) return res.status(404).json({ error: 'Client not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, action:'delete_client', details:`Deleted client ID ${clientId}` });
     res.json({ message: 'Client deleted successfully' });
   });
 });
@@ -154,31 +424,49 @@ app.get('/api/clients/:clientId/projects', (req, res) => {
   }
   db.getProjectsByClient(clientId, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
+    // Engineers only see their own assigned projects (PIC or Assist)
+    if (req.session?.role === 'engineer') {
+      const uid = Number(req.session.userId);
+      rows = rows.filter(p => Number(p.assigned_engineer_id) === uid || Number(p.assist_engineer_id) === uid);
+    }
+    res.json(rows);
+  });
+});
+
+// GET /api/clients/full — all clients with their projects (LEFT JOIN) for portal accordion
+app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res) => {
+  db.getClientsWithProjects((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
 app.post('/api/clients/:clientId/projects', (req, res) => {
+  // Engineers cannot create projects directly
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  const name = (req.body?.name || '').trim();
+  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date } = req.body;
+  const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
   }
-  if (!name) return res.status(400).json({ error: 'Project name is required' });
-  db.createProject(clientId, name, (err, result) => {
+  if (!trimName) return res.status(400).json({ error: 'Project name is required' });
+  db.createProject(clientId, trimName, { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
     }
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: result.id, action:'create_project', details:`Created project "${trimName}" in client ID ${clientId}` });
     db.getProjectsByClient(clientId, (err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
       const created = rows.find(r => r.id === result.id);
-      res.status(201).json(created || { id: result.id, client_id: clientId, name });
+      res.status(201).json(created || { id: result.id, client_id: clientId, name: trimName });
     });
   });
 });
 
 app.delete('/api/projects/:projectId', (req, res) => {
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete projects.' });
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ error: 'Invalid project id' });
@@ -186,7 +474,22 @@ app.delete('/api/projects/:projectId', (req, res) => {
   db.deleteProject(projectId, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId, action:'delete_project', details:`Deleted project ID ${projectId}` });
     res.json({ message: 'Project deleted successfully' });
+  });
+});
+
+app.patch('/api/projects/:projectId/reports', (req, res) => {
+  const projectId = Number(req.params.projectId);
+  const { link_report_en, link_report_id } = req.body;
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+  db.updateProjectReports(projectId, { link_report_en, link_report_id }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId, action:'edit_project', details:`Updated report links for project ID ${projectId}` });
+    res.json({ message: 'Report links updated successfully' });
   });
 });
 
@@ -251,6 +554,7 @@ app.get('/api/projects/:projectId/export', (req, res) => {
 // ─── Client / Project — rename + single-vuln management + report ─────────────
 
 app.put('/api/clients/:id', (req, res) => {
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit clients.' });
   const id   = Number(req.params.id);
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Name is required' });
@@ -265,13 +569,57 @@ app.put('/api/clients/:id', (req, res) => {
 });
 
 app.put('/api/projects/:id', (req, res) => {
+  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  const name = (req.body?.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-  db.renameProject(id, name, (err, result) => {
+  const { name, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date } = req.body;
+  const trimName = (name || '').trim();
+  if (!trimName) return res.status(400).json({ error: 'Name is required' });
+  db.updateProject(id, { name: trimName, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-    res.json({ id, name });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
+    res.json({ id, name: trimName, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date });
+  });
+});
+
+app.patch('/api/projects/:id/reports', auth.requireRole('engineer', 'admin', 'manager', 'pm'), (req, res) => {
+  const id   = Number(req.params.id);
+  const { link_report_en, link_report_id } = req.body;
+  
+  db.updateProjectReports(id, { link_report_en, link_report_id }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated report links for project ID ${id}` });
+    res.json({ id, link_report_en, link_report_id });
+  });
+});
+
+app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'manager', 'pm'), (req, res) => {
+  const id = Number(req.params.id);
+  const { initial_report_status, final_report_status } = req.body;
+  if (!initial_report_status && !final_report_status) return res.json({ ok: true });
+
+  db.updateProjectReportStatus(id, { initial_report_status, final_report_status }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+
+    db.getProjectById(id, (err, proj) => {
+      if (!err && proj) {
+        let msg = '';
+        if (initial_report_status === 'completed') msg = `Initial Report completed for project ${proj.name}`;
+        if (final_report_status === 'completed') msg = `Final Report completed for project ${proj.name}`;
+        if (msg) {
+          db.writeActivityLog({
+            type: 'project',
+            actorId: req.session.userId,
+            projectId: id,
+            action: 'report_completed',
+            details: msg
+          }, () => {});
+        }
+      }
+    });
+    res.json({ ok: true });
   });
 });
 
@@ -360,7 +708,7 @@ app.get('/api/projects/:projectId/report', (req, res) => {
           ${screenshots.length ? `
             <div class="section">
               <div class="section-title">Screenshots</div>
-              <div class="screenshots">${screenshots.map(s => `<img src="${s}" alt="POC" />`).join('')}</div>
+              <div class="screenshots">${screenshots.map(s => `<img src="${escHtml(s)}" alt="POC" />`).join('')}</div>
             </div>` : ''}
         </div>`;
     }).join('');
@@ -551,8 +899,11 @@ Be thorough and specific. Reference actual values you can see in the screenshot.
       parsed = JSON.parse(text);
     } catch (parseErr) {
       console.error('[Ask AI] JSON parse error:', parseErr.message);
-      console.error('[Ask AI] Text was:', text.substring(0, 300));
-      return res.status(500).json({ error: 'AI returned invalid response. Please try again.' });
+      console.error('[Ask AI] Text was:', text.substring(0, 500));
+      // Return the raw text for debugging so the user knows what the model returned
+      return res.status(500).json({
+        error: `AI returned unparseable response. Raw: ${text.substring(0, 200)}`
+      });
     }
 
     res.json({
@@ -571,8 +922,9 @@ Be thorough and specific. Reference actual values you can see in the screenshot.
       return res.status(401).json({ error: 'Invalid API key.' });
     }
     if (error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      return res.status(429).json({ error: 'API quota exceeded. Please try another model.' });
+      return res.status(429).json({ error: 'API quota exceeded. Please try another model or wait.' });
     }
+    // Return the real error so user knows what happened
     res.status(500).json({ error: error.message || 'Analysis failed.' });
   }
 });
@@ -595,29 +947,42 @@ app.post('/api/ai/generate', async (req, res) => {
   }
 
   const geminiModel = model || 'gemini-2.5-pro';
-  const lang = language === 'en' ? 'English' : 'Bahasa Indonesia';
-  const isID = language !== 'en';
 
   // Build client/project context string if provided
   const clientCtx = client_name && project_name
     ? `\n\nCONTEXT: This vulnerability was found during the "${project_name}" penetration test engagement for client "${client_name}". Ensure all descriptions, impacts, and recommendations are relevant and specific to this client and project engagement. Do NOT use generic company names — always reference "${client_name}" when mentioning the affected party.`
     : '';
 
-  const systemInstruction = `You are an expert cybersecurity penetration tester writing professional vulnerability reports in ${lang}.
+  const systemInstruction = `You are an expert cybersecurity penetration tester writing professional vulnerability reports.
 
-Your response must be valid JSON with EXACTLY these keys:
+You MUST output a single JSON object with TWO top-level keys: "en" (English) and "id" (Bahasa Indonesia).
+Each key contains the SAME vulnerability report in its respective language.
+
+Your response must be valid JSON with EXACTLY this structure:
 {
-  "name": "string",
-  "description": "string",
-  "affected_items": "string",
-  "impact": "string",
-  "recommendation": "string",
-  "poc": "string",
-  "references": "string",
-  "severity": "Critical|High|Medium|Low|Info"
+  "en": {
+    "name": "string",
+    "description": "string",
+    "affected_items": "string",
+    "impact": "string",
+    "recommendation": "string",
+    "poc": "string",
+    "references": "string",
+    "severity": "Critical|High|Medium|Low|Info"
+  },
+  "id": {
+    "name": "string",
+    "description": "string",
+    "affected_items": "string",
+    "impact": "string",
+    "recommendation": "string",
+    "poc": "string",
+    "references": "string",
+    "severity": "Critical|High|Medium|Low|Info"
+  }
 }
 
-Follow these EXACT format templates for each section:
+Follow these EXACT format templates for each section (apply to both languages):
 
 === DESCRIPTION ===
 Write exactly 2 paragraphs. First paragraph explains what the vulnerability is, where it was found, and technical details. Second paragraph explains how it was discovered (tool/method/technique).
@@ -631,24 +996,31 @@ Endpoint: [value]
 Parameter: [value if applicable]
 Component: [value if applicable]
 
-=== IMPACT ===
-${isID
-  ? 'Start with: "Dampak dari temuan ini dapat mengakibatkan beberapa hal diantaranya:"'
-  : 'Start with: "The impact of this finding may include the following:"'}
+=== IMPACT (English) ===
+Start with: "The impact of this finding may include the following:"
 Then write a bullet list using "- " prefix for each impact item. Minimum 3 bullets, maximum 6.
 
-=== RECOMMENDATION ===
-${isID
-  ? 'Start with a short sentence like "Untuk mengatasi kerentanan ini, kami menyarankan untuk..."'
-  : 'Start with a short sentence like "To remediate this vulnerability, we recommend..."'}
-Then provide remediation steps. Can be bullet points or short paragraphs. Be specific and actionable.
+=== IMPACT (Indonesian) ===
+Start with: "Dampak dari temuan ini dapat mengakibatkan beberapa hal diantaranya:"
+Then write a bullet list using "- " prefix for each impact item. Minimum 3 bullets, maximum 6.
 
-=== POC ===
-${isID
-  ? 'Start with: "Untuk membuktikan kerentanan ini, kami melakukan langkah-langkah berikut:"'
-  : 'Start with: "To reproduce this vulnerability, perform the following steps:"'}
+=== RECOMMENDATION (English) ===
+Start with a short sentence like "To remediate this vulnerability, we recommend..."
+Then provide remediation steps. Be specific and actionable.
+
+=== RECOMMENDATION (Indonesian) ===
+Start with a short sentence like "Untuk mengatasi kerentanan ini, kami menyarankan untuk..."
+Then provide remediation steps. Be specific and actionable.
+
+=== POC (English) ===
+Start with: "To reproduce this vulnerability, perform the following steps:"
 Then write numbered steps using "1. ", "2. ", etc. Each step should be clear and reproducible.
-${isID ? 'If screenshots were attached, reference them in the relevant steps.' : 'If screenshots are provided, reference them in the relevant steps.'}
+If screenshots are provided, reference them in the relevant steps.
+
+=== POC (Indonesian) ===
+Start with: "Untuk membuktikan kerentanan ini, kami melakukan langkah-langkah berikut:"
+Then write numbered steps using "1. ", "2. ", etc.
+If screenshots were attached, reference them in the relevant steps.
 
 === REFERENCES ===
 List relevant references using "- " prefix, one per line. Include OWASP, CWE, CVE, or official documentation URLs where applicable. Minimum 2 references.
@@ -657,13 +1029,14 @@ List relevant references using "- " prefix, one per line. Include OWASP, CWE, CV
 Polish the user-provided vulnerability name into a professional, standardized pentest finding title.
 Keep it concise (max 8 words), use proper capitalization.
 Example: "sql injection" → "SQL Injection on Login Form"
+In the "id" section, translate the name to Indonesian if appropriate, or keep English technical terms.
 
 === SEVERITY ===
-IMPORTANT: The user has already selected the severity as "${req.body.severity || 'Medium'}". You MUST use exactly this value in the JSON. Do NOT change or reassess it.
+IMPORTANT: The user has already selected the severity. You MUST use exactly this value in BOTH the "en" and "id" objects. Do NOT change or reassess it.
 
-Be thorough and professional. Output only valid JSON.`;
+Be thorough and professional. Output ONLY valid JSON — no markdown fences, no extra text.`;
 
-  const userPrompt = `Generate a complete vulnerability report for:
+  const userPrompt = `Generate a complete bilingual (EN + ID) vulnerability report for:
 
 Vulnerability Name (raw input, polish it): ${name}
 User-Selected Severity (USE THIS EXACTLY): ${req.body.severity || 'Medium'}
@@ -717,17 +1090,38 @@ Return only valid JSON as described.${clientCtx}`;
       ? (screenshotPaths.length === 1 ? screenshotPaths[0] : JSON.stringify(screenshotPaths))
       : null;
 
+    // The AI returns { en: {...}, id: {...} } — pass it through to the frontend
+    // Include metadata fields at the top level so the frontend can access them
+    const en = parsed.en || parsed; // fallback: if model returned flat, treat as English
+    const id = parsed.id || parsed;
+
     res.json({
-      name:           parsed.name           || name,
-      description:   parsed.description    || '',
-      affected_items: parsed.affected_items || affected_items || '',
-      impact:         parsed.impact         || '',
-      recommendation: parsed.recommendation || '',
-      poc:            parsed.poc            || poc_notes || '',
-      references:     parsed.references     || '',
+      // Top-level metadata used by frontend for save/display
+      name:           en.name || name,
+      severity:       req.body.severity || en.severity || 'Medium',
       screenshot_path: screenshotPathValue,
-      severity:       req.body.severity     || parsed.severity || 'Medium',
-      project_id:     project_id            || null,
+      project_id:     project_id || null,
+      // Bilingual language objects
+      en: {
+        name:           en.name           || name,
+        description:    en.description    || '',
+        affected_items: en.affected_items || affected_items || '',
+        impact:         en.impact         || '',
+        recommendation: en.recommendation || '',
+        poc:            en.poc            || poc_notes || '',
+        references:     en.references     || '',
+        severity:       req.body.severity || en.severity || 'Medium',
+      },
+      id: {
+        name:           id.name           || name,
+        description:    id.description    || '',
+        affected_items: id.affected_items || affected_items || '',
+        impact:         id.impact         || '',
+        recommendation: id.recommendation || '',
+        poc:            id.poc            || poc_notes || '',
+        references:     id.references     || '',
+        severity:       req.body.severity || id.severity || 'Medium',
+      },
     });
 
   } catch (error) {

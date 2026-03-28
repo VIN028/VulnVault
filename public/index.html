@@ -140,6 +140,11 @@
         <span id="ai-status-text">Gemini Ready</span>
       </div>
       <div class="sidebar-footer-actions">
+        <button class="btn-settings" onclick="openEngineerChangePassword()" title="Change Password">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+          </svg>
+        </button>
         <button class="btn-settings" onclick="logoutApp()" title="Sign out">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
@@ -165,7 +170,8 @@
         <h1 class="page-title" id="page-title">Vulnerability Library</h1>
         <p class="page-subtitle" id="page-subtitle">Browse and manage your saved vulnerability reports</p>
       </div>
-      <div class="top-bar-right">
+      <div class="top-bar-right" style="display:flex;align-items:center;">
+        <div id="user-profile-name" style="font-size:12px;font-weight:600;color:#94a3b8;background:rgba(255,255,255,0.04);padding:6px 12px;border-radius:20px;margin-right:16px;text-transform:lowercase;border:1px solid rgba(255,255,255,0.05);display:none;"></div>
         <div class="search-box" id="search-container">
           <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
@@ -330,15 +336,7 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="report-lang">Report Language</label>
-              <select id="report-lang">
-                <option value="id" selected>Bahasa Indonesia</option>
-                <option value="en">English</option>
-              </select>
-            </div>
-
-            <button type="submit" class="btn-generate-report" id="generate-btn">
+            <button type="submit" class="btn-generate-report" id="generate-btn" style="margin-top:24px;width:100%">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
               </svg>
@@ -360,11 +358,16 @@
           </div>
 
           <div class="report-result" id="report-result" style="display:none">
-            <div class="report-result-header">
-              <div class="report-title-area">
+            <div class="report-result-header" style="align-items:center;flex-wrap:wrap;gap:8px">
+              <div class="report-title-area" style="flex:1;min-width:0">
                 <div class="report-severity-badge" id="result-severity-badge">Medium</div>
                 <h2 id="result-title">Vulnerability Name</h2>
                 <div class="report-timestamp" id="result-timestamp"></div>
+              </div>
+              <!-- Bilingual Toggle (shown only after generation) -->
+              <div id="lang-toggle-preview" style="display:none;align-items:center;background:var(--bg-input);border-radius:24px;padding:4px;gap:4px">
+                <button id="btn-lang-id" onclick="togglePreviewLang('id')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:none;background:var(--bg-card);color:var(--text-primary);cursor:pointer;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.1)">ID</button>
+                <button id="btn-lang-en" onclick="togglePreviewLang('en')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;transition:all 0.2s">EN</button>
               </div>
               <div class="report-actions">
                 <button class="btn-save" id="btn-save" onclick="saveToLibrary()">
@@ -522,24 +525,35 @@
       </div>
       <div class="clients-columns">
         <div class="drill-col" id="col-clients">
-          <div class="drill-col-header">
-            <h3>Clients</h3>
-            <button class="btn-drill-add" onclick="promptAddClient()">
+          <div class="drill-col-header" style="justify-content: space-between;">
+            <div style="display:flex; align-items:center; gap:8px">
+              <h3>Clients</h3>
+              <button onclick="const b=this;b.style.opacity='0.5';loadClientsView().finally(()=>b.style.opacity='1')" title="Refresh Clients & Projects" style="padding:4px; color:var(--text-muted); background:transparent; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; border-radius:4px; transition:all 0.2s">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+              </button>
+            </div>
+            <button class="btn-drill-add data-mgmt-only" id="btn-new-client" onclick="promptAddClient()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>
               New Client
             </button>
           </div>
           <div class="drill-list" id="client-list">
-            <div class="drill-empty">No clients yet.<br><span>Click New Client to add one.</span></div>
+            <div class="drill-empty" id="client-list-empty">No clients yet.<br><span>Click New Client to add one.</span></div>
           </div>
         </div>
         <div class="drill-col drill-col--dim" id="col-projects">
           <div class="drill-col-header">
             <h3 id="projects-col-title">Projects</h3>
-            <button class="btn-drill-add" onclick="promptAddProject()" id="btn-add-project" disabled>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>
-              New Project
-            </button>
+            <div style="display:flex;gap:6px">
+              <button class="btn-drill-add data-mgmt-only" onclick="promptAddProject()" id="btn-add-project" disabled>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px"><path d="M12 5v14M5 12h14"/></svg>
+                New Project
+              </button>
+              <button class="btn-drill-add data-eng-only" style="display:none;background:rgba(99,102,241,0.18);color:#a5b4fc" onclick="openRequestAccess()" id="btn-request-access">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                Request Access
+              </button>
+            </div>
           </div>
           <div class="drill-list" id="project-list">
             <div class="drill-empty">Select a client first.</div>
@@ -559,12 +573,54 @@
               </button>
             </div>
           </div>
+          
+          <div id="project-reports-panel" style="display:none; padding:16px; background:var(--bg-input); border-bottom:1px solid rgba(148,163,184,0.1)">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:0.5px">Project Report Links</div>
+            <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px">
+              <input type="url" id="inp-report-en" placeholder="English Report URL (https://...)" style="width:100%; padding:9px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.1); background:#0f172a; color:var(--text); font-size:13px; outline:none">
+              <input type="url" id="inp-report-id" placeholder="Indonesian Report URL (https://...)" style="width:100%; padding:9px 12px; border-radius:6px; border:1px solid rgba(148,163,184,0.1); background:#0f172a; color:var(--text); font-size:13px; outline:none">
+            </div>
+            <button id="btn-save-reports" onclick="saveReportLinks()" style="padding:7px 14px; background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:6px; color:#a5b4fc; font-size:12px; cursor:pointer; font-weight:600; transition:all 0.2s; width:100%">Save Links</button>
+
+            <!-- Engineer Report Actions -->
+            <div class="data-eng-only" style="margin-top:12px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+              <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;text-transform:uppercase;">Mark Report Phase as Complete</div>
+              <div style="display:flex;gap:10px;">
+                <button onclick="markReportComplete('initial')" id="btn-finish-initial" style="flex:1;padding:6px 12px;font-size:11px;background:#6366f1;color:white;border:none;border-radius:4px;cursor:pointer">Finish Initial Report</button>
+                <button onclick="markReportComplete('final')" id="btn-finish-final" style="flex:1;padding:6px 12px;font-size:11px;background:#8b5cf6;color:white;border:none;border-radius:4px;cursor:pointer">Finish Final Report</button>
+              </div>
+            </div>
+          </div>
+
           <div class="drill-list" id="findings-list">
             <div class="drill-empty">Select a project first.</div>
           </div>
         </div>
       </div>
     </section>
+
+    <!-- ── Request Access to Project Modal ── -->
+    <div class="modal-overlay" id="modal-request-access" onclick="this.classList.remove('open')" style="z-index:2000">
+      <div onclick="event.stopPropagation()" style="background:#13192a;border:1px solid rgba(148,163,184,0.1);border-radius:18px;padding:32px;width:100%;max-width:460px;box-shadow:0 32px 80px rgba(0,0,0,0.6);animation:slideUp 0.2s ease">
+        <div style="font-size:18px;font-weight:700;margin-bottom:8px">Request Project Access</div>
+        <div style="font-size:13px;color:#94a3b8;margin-bottom:24px">Your PM or Manager will be notified and can assign you to the project.</div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:8px">Project *</label>
+          <select id="ra-project" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:#0f172a;color:#f0f4ff;font-size:14px;font-family:inherit;outline:none">
+            <option value="">— Select project —</option>
+          </select>
+        </div>
+        <div style="margin-bottom:16px">
+          <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:8px">Message (optional)</label>
+          <input id="ra-message" placeholder="Reason for requesting access..." style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:#0f172a;color:#f0f4ff;font-size:14px;font-family:inherit;outline:none" />
+        </div>
+        <div id="ra-err" style="font-size:12px;color:#ef4444;margin-bottom:12px;display:none"></div>
+        <div style="display:flex;gap:10px">
+          <button onclick="document.getElementById('modal-request-access').classList.remove('open')" style="flex:1;padding:10px;border-radius:9px;background:rgba(255,255,255,0.06);color:#f0f4ff;font-size:13px;font-weight:600;font-family:inherit;border:none;cursor:pointer">Cancel</button>
+          <button id="ra-btn" onclick="submitRequestAccess()" style="flex:1;padding:10px;border-radius:9px;background:#6366f1;color:white;font-size:13px;font-weight:700;font-family:inherit;border:none;cursor:pointer">Send Request</button>
+        </div>
+      </div>
+    </div>
     <div class="modal-overlay" id="library-picker-modal" onclick="closeLibraryPicker(event)">
       <div class="modal-content" style="max-width:640px">
         <div class="modal-header">
@@ -588,11 +644,16 @@
   <!-- ── Detail Modal ── -->
   <div class="modal-overlay" id="detail-modal" onclick="closeDetailModal(event)">
     <div class="modal-content" id="modal-content">
-      <div class="modal-header">
-        <div class="modal-title-area">
+      <div class="modal-header" style="align-items:center;flex-wrap:wrap;gap:8px">
+        <div class="modal-title-area" style="flex:1;min-width:0">
           <div class="modal-severity" id="modal-severity"></div>
           <h2 id="modal-title"></h2>
           <div class="modal-date" id="modal-date"></div>
+        </div>
+        <!-- Library Modal Bilingual Toggle (shown only when bilingual_payload exists) -->
+        <div id="modal-lang-toggle" style="display:none;align-items:center;background:var(--bg-input);border-radius:24px;padding:4px;gap:4px">
+          <button id="btn-modal-lang-id" onclick="toggleModalLang('id')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;border:none;background:var(--bg-card);color:var(--text-primary);cursor:pointer;transition:all 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.1)">ID</button>
+          <button id="btn-modal-lang-en" onclick="toggleModalLang('en')" style="padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;border:none;background:transparent;color:var(--text-secondary);cursor:pointer;transition:all 0.2s">EN</button>
         </div>
         <div class="modal-controls">
           <button class="btn-delete-modal" id="btn-delete-modal" onclick="deleteVulnerability(currentDetailId)">
@@ -603,6 +664,30 @@
         </div>
       </div>
       <div class="modal-body" id="modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Engineer Change Password Modal -->
+  <div class="modal-overlay" id="eng-pw-modal" onclick="if(event.target===this)this.classList.remove('open')" style="z-index:3000">
+    <div onclick="event.stopPropagation()" style="background:var(--bg-card,#13192a);border:1px solid rgba(148,163,184,0.1);border-radius:18px;padding:32px;width:100%;max-width:420px;box-shadow:0 32px 80px rgba(0,0,0,0.6);animation:modalIn 0.2s ease">
+      <div style="font-size:18px;font-weight:700;margin-bottom:20px">Change Password</div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary,#94a3b8);margin-bottom:6px">Current Password *</label>
+        <input id="eng-pw-old" type="password" placeholder="Enter current password" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:var(--bg-input,#0f172a);color:var(--text-primary,#f0f4ff);font-size:14px;font-family:inherit;outline:none" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary,#94a3b8);margin-bottom:6px">New Password *</label>
+        <input id="eng-pw-new" type="password" placeholder="Minimum 8 characters" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:var(--bg-input,#0f172a);color:var(--text-primary,#f0f4ff);font-size:14px;font-family:inherit;outline:none" />
+      </div>
+      <div style="margin-bottom:14px">
+        <label style="display:block;font-size:12px;font-weight:600;color:var(--text-secondary,#94a3b8);margin-bottom:6px">Confirm New Password *</label>
+        <input id="eng-pw-confirm" type="password" placeholder="Re-enter new password" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:var(--bg-input,#0f172a);color:var(--text-primary,#f0f4ff);font-size:14px;font-family:inherit;outline:none" />
+      </div>
+      <div id="eng-pw-err" style="font-size:12px;color:#ef4444;margin-bottom:12px;display:none"></div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('eng-pw-modal').classList.remove('open')" style="flex:1;padding:10px;border-radius:9px;background:rgba(255,255,255,0.06);color:var(--text-primary,#f0f4ff);font-size:13px;font-weight:600;font-family:inherit;border:none;cursor:pointer">Cancel</button>
+        <button id="eng-pw-btn" onclick="submitEngineerChangePassword()" style="flex:1;padding:10px;border-radius:9px;background:#6366f1;color:white;font-size:13px;font-weight:700;font-family:inherit;border:none;cursor:pointer">Update Password</button>
+      </div>
     </div>
   </div>
 

@@ -6,6 +6,9 @@
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentReport = null;
 let currentDetailId = null;
+let currentPreviewLang = 'id';   // Preview panel toggle: 'id' | 'en'
+let currentModalReport = null;   // Full vuln object open in library modal
+let currentModalLang   = 'id';   // Library modal toggle: 'id' | 'en'
 let uploadedScreenshotPaths = [];   // Array for multi-image
 let selectedSeverity = 'Medium';
 let searchDebounceTimer = null;
@@ -175,6 +178,7 @@ function showView(view) {
     filtersBox.style.display = 'none';
     btnNew.style.display    = 'none';
     loadClientsView();
+    applyRoleUI();
   } else {
     document.getElementById('page-title').textContent    = 'AI Report Generator';
     document.getElementById('page-subtitle').textContent = 'Powered by Gemini — craft a full pentest report in seconds';
@@ -401,8 +405,9 @@ function renderSection({ num, title, content, screenshots, isRefs }) {
 }
 
 function openImgFullscreen(src) {
+  const safeSrc = src.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const w = window.open('', '_blank');
-  w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${src}" style="max-width:100%;max-height:100vh"/></body></html>`);
+  w.document.write(`<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${safeSrc}" style="max-width:100%;max-height:100vh"/></body></html>`);
 }
 
 // Parse screenshot_path — can be single string or JSON array
@@ -507,7 +512,6 @@ async function handleGenerate(e) {
   const shortDesc    = document.getElementById('short-desc').value.trim();
   const affectedItems = document.getElementById('affected-items').value.trim();
   const pocNotes     = document.getElementById('poc-notes').value.trim();
-  const language     = document.getElementById('report-lang').value;
   // Read optional client/project context
   const genClientSel  = document.getElementById('gen-client-select');
   const genProjectSel = document.getElementById('gen-project-select');
@@ -537,7 +541,7 @@ async function handleGenerate(e) {
         name, short_description: shortDesc,
         affected_items: affectedItems, poc_notes: pocNotes,
         screenshot_paths: uploadedScreenshotPaths,
-        language, apiKey, severity: selectedSeverity,
+        apiKey, severity: selectedSeverity,
         model: getModel(),
         client_name, project_name, project_id
       })
@@ -572,16 +576,43 @@ function displayReport(report) {
   document.getElementById('result-title').textContent     = report.name;
   document.getElementById('result-timestamp').textContent = `Generated ${new Date().toLocaleString()}`;
 
+  // Show toggle only when bilingual data is present
+  const hasBilingual = !!(report.en && report.id);
+  const toggleDiv = document.getElementById('lang-toggle-preview');
+  if (toggleDiv) toggleDiv.style.display = hasBilingual ? 'flex' : 'none';
+
+  // Pick the right language slice
+  const langData = hasBilingual ? (report[currentPreviewLang] || report) : report;
+
   const screenshots = parseScreenshots(report.screenshot_path);
   const sections = [
-    { num:1, title:'Description',    content: report.description },
-    { num:2, title:'Affected Items', content: report.affected_items },
-    { num:3, title:'Impact',         content: report.impact },
-    { num:4, title:'Recommendation', content: report.recommendation },
-    { num:5, title:'POC',            content: report.poc, screenshots },
-    { num:6, title:'References',     content: report.references, isRefs: true },
+    { num:1, title:'Description',    content: langData.description },
+    { num:2, title:'Affected Items', content: langData.affected_items },
+    { num:3, title:'Impact',         content: langData.impact },
+    { num:4, title:'Recommendation', content: langData.recommendation },
+    { num:5, title:'POC',            content: langData.poc, screenshots },
+    { num:6, title:'References',     content: langData.references || langData.vuln_references, isRefs: true },
   ];
   document.getElementById('report-sections').innerHTML = sections.map(s => renderSection(s)).join('');
+}
+
+function togglePreviewLang(lang) {
+  currentPreviewLang = lang;
+  const btnId = document.getElementById('btn-lang-id');
+  const btnEn = document.getElementById('btn-lang-en');
+  if (btnId) {
+    btnId.style.background  = lang === 'id' ? 'var(--bg-card)' : 'transparent';
+    btnId.style.color       = lang === 'id' ? 'var(--text-primary)' : 'var(--text-secondary)';
+    btnId.style.fontWeight  = lang === 'id' ? '600' : '500';
+    btnId.style.boxShadow   = lang === 'id' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+  }
+  if (btnEn) {
+    btnEn.style.background  = lang === 'en' ? 'var(--bg-card)' : 'transparent';
+    btnEn.style.color       = lang === 'en' ? 'var(--text-primary)' : 'var(--text-secondary)';
+    btnEn.style.fontWeight  = lang === 'en' ? '600' : '500';
+    btnEn.style.boxShadow   = lang === 'en' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+  }
+  if (currentReport) displayReport(currentReport);
 }
 
 async function saveToLibrary() {
@@ -596,9 +627,16 @@ async function saveToLibrary() {
     : parseScreenshots(currentReport.screenshot_path);
 
   try {
+    // Save the currently-active language as the flat fields
+    const hasBilingual = !!(currentReport.en && currentReport.id);
+    const langData = hasBilingual ? (currentReport[currentPreviewLang] || currentReport) : currentReport;
     const payload = {
-      ...currentReport,
+      ...langData,
+      name:            currentReport.name,
+      severity:        currentReport.severity,
+      project_id:      currentReport.project_id,
       screenshot_path: allScreenshots.length ? JSON.stringify(allScreenshots) : null,
+      bilingual_payload: hasBilingual ? JSON.stringify({ en: currentReport.en, id: currentReport.id }) : null,
     };
     const res = await fetch('/api/vulnerabilities', {
       method: 'POST',
@@ -679,30 +717,71 @@ async function openDetail(id) {
     const res = await fetch(`/api/vulnerabilities/${id}`);
     if (!res.ok) throw new Error('Not found');
     const v = await res.json();
-    currentDetailId = id;
+    currentDetailId  = id;
+    currentModalReport = v;
+    currentModalLang   = 'id';   // reset to ID on each open
 
-    const sev    = v.severity || 'Medium';
-    const badge  = document.getElementById('modal-severity');
+    // Try to parse bilingual payload if present
+    if (v.bilingual_payload) {
+      try {
+        const bp = JSON.parse(v.bilingual_payload);
+        currentModalReport.en = bp.en;
+        currentModalReport.id = bp.id;
+      } catch (e) {}
+    }
+
+    const sev  = v.severity || 'Medium';
+    const badge = document.getElementById('modal-severity');
     badge.textContent = sev;
     badge.className   = `modal-severity sev-${sev}`;
     document.getElementById('modal-title').textContent = v.name;
     document.getElementById('modal-date').textContent  = `Saved on ${new Date(v.created_at).toLocaleString()}`;
 
-    const screenshots = parseScreenshots(v.screenshot_path);
-    const sections = [
-      { num:1, title:'Description',    content: v.description },
-      { num:2, title:'Affected Items', content: v.affected_items },
-      { num:3, title:'Impact',         content: v.impact },
-      { num:4, title:'Recommendation', content: v.recommendation },
-      { num:5, title:'POC',            content: v.poc, screenshots },
-      { num:6, title:'References',     content: v.references, isRefs: true },
-    ];
-    document.getElementById('modal-body').innerHTML = sections.map(s => renderSection(s)).join('');
+    // Show/hide language toggle
+    const hasBilingual = !!(currentModalReport.en && currentModalReport.id);
+    const toggleDiv = document.getElementById('modal-lang-toggle');
+    if (toggleDiv) toggleDiv.style.display = hasBilingual ? 'flex' : 'none';
+
+    renderModalContent();
     document.getElementById('detail-modal').classList.add('open');
     document.body.style.overflow = 'hidden';
   } catch {
     showToast('Failed to load vulnerability', 'error');
   }
+}
+
+function renderModalContent() {
+  const hasBilingual = !!(currentModalReport.en && currentModalReport.id);
+  const data = hasBilingual ? (currentModalReport[currentModalLang] || currentModalReport) : currentModalReport;
+  const screenshots = parseScreenshots(currentModalReport.screenshot_path);
+  const sections = [
+    { num:1, title:'Description',    content: data.description },
+    { num:2, title:'Affected Items', content: data.affected_items },
+    { num:3, title:'Impact',         content: data.impact },
+    { num:4, title:'Recommendation', content: data.recommendation },
+    { num:5, title:'POC',            content: data.poc, screenshots },
+    { num:6, title:'References',     content: data.references || data.vuln_references, isRefs: true },
+  ];
+  document.getElementById('modal-body').innerHTML = sections.map(s => renderSection(s)).join('');
+}
+
+function toggleModalLang(lang) {
+  currentModalLang = lang;
+  const btnId = document.getElementById('btn-modal-lang-id');
+  const btnEn = document.getElementById('btn-modal-lang-en');
+  if (btnId) {
+    btnId.style.background = lang === 'id' ? 'var(--bg-card)' : 'transparent';
+    btnId.style.color      = lang === 'id' ? 'var(--text-primary)' : 'var(--text-secondary)';
+    btnId.style.fontWeight = lang === 'id' ? '600' : '500';
+    btnId.style.boxShadow  = lang === 'id' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+  }
+  if (btnEn) {
+    btnEn.style.background = lang === 'en' ? 'var(--bg-card)' : 'transparent';
+    btnEn.style.color      = lang === 'en' ? 'var(--text-primary)' : 'var(--text-secondary)';
+    btnEn.style.fontWeight = lang === 'en' ? '600' : '500';
+    btnEn.style.boxShadow  = lang === 'en' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+  }
+  if (currentModalReport) renderModalContent();
 }
 
 function closeDetailModal(e) {
@@ -1070,6 +1149,67 @@ async function promptAddClient() {
   } catch(e) { showToast(e.message || 'Failed', 'error'); }
 }
 
+// ── Role-based UI visibility ──────────────────────────────────────────────────
+async function applyRoleUI() {
+  try {
+    const r = await fetch('/api/session');
+    const s = await r.json();
+    
+    // Update top right user info
+    const nameEl = document.getElementById('user-profile-name');
+    if (nameEl) {
+      nameEl.textContent = s.displayName || s.username;
+      nameEl.style.display = 'inline-block';
+    }
+
+    if (s.role === 'engineer') {
+      // Hide management-only controls
+      document.querySelectorAll('.data-mgmt-only').forEach(el => el.style.display = 'none');
+      // Show engineer-only controls
+      document.querySelectorAll('.data-eng-only').forEach(el => el.style.display = '');
+      // Update empty state message
+      const emptyEl = document.getElementById('client-list-empty');
+      if (emptyEl) emptyEl.innerHTML = 'No assigned projects yet.<br><span>You will appear here once a PM assigns you to a project. You can also request access below.</span>';
+    }
+  } catch(e) {}
+}
+
+// ── Request Access to Project (engineer → PM) ─────────────────────────────────
+async function openRequestAccess() {
+  document.getElementById('ra-message').value = '';
+  document.getElementById('ra-err').style.display = 'none';
+  const sel = document.getElementById('ra-project');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  document.getElementById('modal-request-access').classList.add('open');
+  try {
+    const projects = await fetch('/api/projects/all').then(r => r.json());
+    sel.innerHTML = '<option value="">— Select project —</option>' +
+      projects.map(p => `<option value="${p.id}">[${p.client_name}] ${p.name} (${p.project_type?.toUpperCase()})</option>`).join('');
+  } catch(e) { sel.innerHTML = '<option value="">Failed to load projects</option>'; }
+}
+
+async function submitRequestAccess() {
+  const project_id = document.getElementById('ra-project').value;
+  const message    = document.getElementById('ra-message').value.trim();
+  const errEl      = document.getElementById('ra-err');
+  errEl.style.display = 'none';
+  if (!project_id) { errEl.textContent = 'Please select a project.'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('ra-btn');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/project-access-requests', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ project_id: Number(project_id), message }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    document.getElementById('modal-request-access').classList.remove('open');
+    showToast('Request sent to PM/Manager!', 'success');
+  } catch(e) { errEl.textContent = e.message; errEl.style.display = 'block'; }
+  finally { btn.disabled = false; }
+}
+
+
 async function renameClient(e, id, currentName) {
   e.stopPropagation();
   const name = prompt('New name:', currentName);
@@ -1125,8 +1265,101 @@ async function selectProject(project) {
   renderProjectList();
   document.getElementById('findings-col-title').textContent = project.name;
   setCol('findings', true);
+  
+  // Show and populate report links panel
+  document.getElementById('project-reports-panel').style.display = 'block';
+  document.getElementById('inp-report-en').value = project.link_report_en || '';
+  document.getElementById('inp-report-id').value = project.link_report_id || '';
+  
+  // Update report complete buttons
+  const btnInit = document.getElementById('btn-finish-initial');
+  if (btnInit) {
+    if (project.initial_report_status === 'completed') {
+      btnInit.disabled = true;
+      btnInit.innerText = 'Completed ✓';
+      btnInit.style.background = '#22c55e';
+    } else {
+      btnInit.disabled = false;
+      btnInit.innerText = 'Finish Initial Report';
+      btnInit.style.background = '#6366f1';
+    }
+  }
+  const btnFinal = document.getElementById('btn-finish-final');
+  if (btnFinal) {
+    if (project.final_report_status === 'completed') {
+      btnFinal.disabled = true;
+      btnFinal.innerText = 'Completed ✓';
+      btnFinal.style.background = '#22c55e';
+    } else {
+      btnFinal.disabled = false;
+      btnFinal.innerText = 'Finish Final Report';
+      btnFinal.style.background = '#8b5cf6';
+    }
+  }
+  
   updateBreadcrumb();
   await refreshFindings();
+}
+
+async function saveReportLinks() {
+  if (!clientsState.selectedProject) return;
+  const link_report_en = document.getElementById('inp-report-en').value.trim();
+  const link_report_id = document.getElementById('inp-report-id').value.trim();
+  const btn = document.getElementById('btn-save-reports');
+  const oldText = btn.textContent;
+  
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  try {
+    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/reports`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ link_report_en, link_report_id })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    showToast('Report links saved!', 'success');
+    clientsState.selectedProject.link_report_en = data.link_report_en;
+    clientsState.selectedProject.link_report_id = data.link_report_id;
+  } catch (e) {
+    showToast(e.message || 'Failed to save links', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
+async function markReportComplete(type) {
+  if (!clientsState.selectedProject) return;
+  const btnId = type === 'initial' ? 'btn-finish-initial' : 'btn-finish-final';
+  const btn = document.getElementById(btnId);
+  const oldText = btn.innerText;
+  const oldBg = btn.style.background;
+  btn.disabled = true;
+  btn.innerText = 'Finishing...';
+  
+  const payload = {};
+  if (type === 'initial') payload.initial_report_status = 'completed';
+  if (type === 'final') payload.final_report_status = 'completed';
+
+  try {
+    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('Failed to complete report');
+    showToast(`${type === 'initial' ? 'Initial' : 'Final'} Report marked as completed!`, 'success');
+    btn.innerText = 'Completed ✓';
+    btn.style.background = '#22c55e';
+    if (type === 'initial') clientsState.selectedProject.initial_report_status = 'completed';
+    if (type === 'final') clientsState.selectedProject.final_report_status = 'completed';
+  } catch (err) {
+    showToast(err.message, 'error');
+    btn.disabled = false;
+    btn.innerText = oldText;
+    btn.style.background = oldBg;
+  }
 }
 
 async function refreshFindings() {
@@ -1286,3 +1519,48 @@ function generateProjectReport() {
 }
 
 // ── DOCX Report ──
+
+// ── Engineer Change Password ──────────────────────────────────────────────────
+function openEngineerChangePassword() {
+  document.getElementById('eng-pw-old').value = '';
+  document.getElementById('eng-pw-new').value = '';
+  document.getElementById('eng-pw-confirm').value = '';
+  const errEl = document.getElementById('eng-pw-err');
+  if (errEl) { errEl.style.display = 'none'; errEl.textContent = ''; }
+  document.getElementById('eng-pw-modal').classList.add('open');
+}
+
+async function submitEngineerChangePassword() {
+  const oldPw = document.getElementById('eng-pw-old').value;
+  const newPw = document.getElementById('eng-pw-new').value;
+  const confirmPw = document.getElementById('eng-pw-confirm').value;
+  const errEl = document.getElementById('eng-pw-err');
+  errEl.style.display = 'none';
+
+  if (!oldPw) { errEl.textContent = 'Current password is required.'; errEl.style.display = 'block'; return; }
+  if (!newPw || newPw.length < 8) { errEl.textContent = 'New password must be at least 8 characters.'; errEl.style.display = 'block'; return; }
+  if (newPw !== confirmPw) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('eng-pw-btn');
+  btn.disabled = true;
+  try {
+    // Get current user ID
+    const sessionRes = await fetch('/api/session');
+    const session = await sessionRes.json();
+    if (!session.authenticated) throw new Error('Not logged in');
+
+    const res = await fetch(`/api/users/${session.userId}/password`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_password: oldPw, new_password: newPw })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to change password');
+
+    document.getElementById('eng-pw-modal').classList.remove('open');
+    showToast('Password changed successfully!', 'success');
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally { btn.disabled = false; }
+}

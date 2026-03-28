@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>VulnVault — Management Portal</title>
+  <meta name="description" content="VulnVault management portal for PM, Manager, and Admin roles." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #080b14;
+      --sidebar-bg: #0d1117;
+      --card: #111827;
+      --card-hover: #161f30;
+      --border: rgba(148,163,184,0.1);
+      --text: #f0f4ff;
+      --muted: #94a3b8;
+      --accent: #6366f1;
+      --accent2: #06b6d4;
+      --green: #22c55e;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+      --radius: 12px;
+      --sidebar-w: 240px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: var(--sidebar-w);
+      min-height: 100vh;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      z-index: 100;
+    }
+    .sidebar-logo {
+      display: flex; align-items: center; gap: 10px;
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+    }
+    .logo-icon svg { width: 18px; height: 18px; }
+    .logo-text { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; }
+    .logo-badge { font-size: 9px; font-weight: 700; color: var(--accent); background: rgba(99,102,241,0.15); border-radius: 4px; padding: 2px 6px; letter-spacing: 0.05em; }
+
+    .sidebar-nav { padding: 12px 10px; flex: 1; }
+    .nav-section { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.1em; padding: 12px 10px 6px; text-transform: uppercase; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 9px; margin-bottom: 2px;
+      font-size: 13px; font-weight: 500; color: var(--muted);
+      cursor: pointer; transition: all 0.15s; border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+    .nav-item.active { background: rgba(99,102,241,0.15); color: var(--accent); font-weight: 600; }
+    .nav-badge {
+      margin-left: auto; font-size: 10px; font-weight: 700;
+      background: var(--red); color: white; border-radius: 10px; padding: 1px 7px;
+    }
+
+    .sidebar-footer {
+      padding: 14px 10px;
+      border-top: 1px solid var(--border);
+    }
+    .user-card {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 9px;
+      background: rgba(255,255,255,0.04);
+    }
+    .user-avatar {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 700; color: white; flex-shrink: 0;
+    }
+    .user-info { min-width: 0; flex: 1; }
+    .user-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { font-size: 11px; color: var(--muted); text-transform: capitalize; }
+    .logout-btn {
+      background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px;
+      transition: color 0.15s; flex-shrink: 0;
+    }
+    .logout-btn:hover { color: var(--red); }
+    .logout-btn svg { width: 16px; height: 16px; }
+
+    /* ── Main ── */
+    #main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
+    .topbar {
+      padding: 22px 32px 0;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .page-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
+    .page-sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Client Group Cards ── */
+    .client-group {
+      margin-bottom: 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+      background: rgba(255,255,255,0.02);
+    }
+    .client-group:hover { box-shadow: 0 4px 24px rgba(0,0,0,0.35); }
+    .client-group-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer; user-select: none;
+      transition: background 0.15s;
+    }
+    .client-group-header:hover { background: rgba(255,255,255,0.04); }
+    .cg-arrow {
+      width: 16px; height: 16px;
+      transition: transform 0.25s ease;
+      flex-shrink: 0;
+      color: var(--muted);
+    }
+    .client-group-table {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+      border-top: 0 solid var(--border);
+    }
+    .client-group-table.open {
+      max-height: 4000px;
+      border-top-width: 1px;
+    }
+
+    /* ── Sections ── */
+    .section { display: none; padding: 28px 32px 40px; }
+    .section.active { display: block; }
+
+    /* ── KPI Cards ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px,1fr)); gap: 16px; margin-bottom: 28px; }
+    .kpi-card {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 20px 22px; position: relative; overflow: hidden;
+    }
+    .kpi-card::before {
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(99,102,241,0.05), transparent);
+    }
+    .kpi-label { font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; }
+    .kpi-value { font-size: 32px; font-weight: 800; letter-spacing: -0.04em; }
+    .kpi-sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+    /* ── Tables ── */
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .section-heading { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+    .btn-primary {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 16px; border-radius: 9px;
+      background: var(--accent); color: white;
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      border: none; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-primary:hover { background: #4f51d8; box-shadow: 0 4px 16px rgba(99,102,241,0.35); }
+    .btn-primary svg { width: 14px; height: 14px; }
+
+    .table-wrap { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    thead tr { border-bottom: 1px solid var(--border); }
+    th { padding: 12px 16px; text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; }
+    td { padding: 13px 16px; font-size: 13px; border-bottom: 1px solid rgba(148,163,184,0.06); }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr { transition: background 0.1s; }
+    tbody tr:hover { background: var(--card-hover); }
+
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 3px 9px; border-radius: 20px;
+      font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    }
+    .badge-web    { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .badge-api    { background: rgba(6,182,212,0.15);  color: #67e8f9; }
+    .badge-mobile { background: rgba(251,146,60,0.15); color: #fdba74; }
+    .badge-admin   { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+    .badge-manager { background: rgba(168,85,247,0.15); color: #d8b4fe; }
+    .badge-pm      { background: rgba(6,182,212,0.15);  color: #67e8f9; }
+    .badge-engineer{ background: rgba(34,197,94,0.15);  color: #86efac; }
+    .badge-pending  { background: rgba(245,158,11,0.15); color: #fcd34d; }
+    .badge-approved { background: rgba(34,197,94,0.15);  color: #86efac; }
+    .badge-rejected { background: rgba(239,68,68,0.15);  color: #fca5a5; }
+
+    .icon-btn {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      padding: 6px; border-radius: 7px; transition: all 0.15s;
+    }
+    .icon-btn:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+    .icon-btn svg { width: 15px; height: 15px; display: block; }
+
+    .approve-btn {
+      background: rgba(34,197,94,0.12); border: none; cursor: pointer;
+      color: var(--green); padding: 5px 12px; border-radius: 7px;
+      font-size: 12px; font-weight: 600; font-family: inherit; transition: all 0.15s; margin-right: 6px;
+    }
+    .approve-btn:hover { background: rgba(34,197,94,0.25); }
+    .reject-btn {
+      background: rgba(239,68,68,0.12); border: none; cursor: pointer;
+      color: var(--red); padding: 5px 12px; border-radius: 7px;
+      font-size: 12px; font-weight: 600; font-family: inherit; transition: all 0.15s;
+    }
+    .reject-btn:hover { background: rgba(239,68,68,0.25); }
+
+    .empty-state { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
+    .empty-state svg { width: 40px; height: 40px; margin-bottom: 12px; opacity: 0.4; }
+
+    /* ── Modal ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+      z-index: 999; align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: #13192a; border: 1px solid var(--border); border-radius: 18px;
+      padding: 32px; width: 100%; max-width: 440px;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.6);
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:none; } }
+    .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 24px; }
+    .form-group { margin-bottom: 18px; }
+    .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+    .form-group input, .form-group select {
+      width: 100%; padding: 11px 14px; border-radius: 10px;
+      border: 1px solid var(--border); background: #0f172a;
+      color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+    }
+    .form-group input:focus, .form-group select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .form-group select option { background: #0f172a; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
+    .modal-actions .btn-primary { flex: 1; justify-content: center; }
+    .btn-ghost {
+      flex: 1; padding: 9px 16px; border-radius: 9px;
+      background: rgba(255,255,255,0.06); color: var(--text);
+      font-size: 13px; font-weight: 600; font-family: inherit;
+      border: none; cursor: pointer; transition: background 0.15s;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.1); }
+    .modal-err { font-size: 12px; color: var(--red); margin-top: 10px; display: none; }
+    .modal-err.show { display: block; }
+
+    /* ── Toast ── */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+    .toast {
+      background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 18px; font-size: 13px; font-weight: 500;
+      display: flex; align-items: center; gap: 10px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+      animation: toastIn 0.3s ease;
+    }
+    @keyframes toastIn { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+    .toast.success .ti { color: var(--green); }
+    .toast.error   .ti { color: var(--red); }
+    .ti { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* ── Finding count table ── */
+    .finding-count { font-weight: 700; font-size: 15px; }
+    .finding-count.high { color: #f87171; }
+    .finding-count.mid  { color: #fbbf24; }
+    .finding-count.low  { color: #86efac; }
+    .finding-count.zero { color: var(--muted); }
+
+    /* ── Tabs ── */
+    .tab-btn {
+      padding: 7px 16px; border-radius: 7px; border: none; cursor: pointer;
+      font-size: 12px; font-weight: 600; font-family: inherit;
+      background: none; color: var(--muted); transition: all 0.15s;
+    }
+    .tab-btn.active { background: var(--accent); color: white; }
+    .tab-btn:hover:not(.active) { color: var(--text); }
+
+    /* ── Refresh button ── */
+    .btn-refresh {
+      background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+      border-radius: 8px; padding: 7px 9px; cursor: pointer; color: var(--muted);
+      transition: all 0.15s; display: flex; align-items: center;
+    }
+    .btn-refresh:hover { background: rgba(255,255,255,0.1); color: var(--text); }
+    .btn-refresh svg { width: 14px; height: 14px; display: block; }
+    .btn-refresh.spinning svg { animation: spin 0.6s linear infinite; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ── -->
+<nav id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    </div>
+    <div>
+      <div class="logo-text">VulnVault</div>
+      <div class="logo-badge">PORTAL</div>
+    </div>
+  </div>
+
+  <div class="sidebar-nav">
+    <div class="nav-section">Overview</div>
+    <button class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" onclick="navigate('projects')" id="nav-projects">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+      Clients
+    </button>
+    <button class="nav-item" onclick="navigate('actlog')" id="nav-actlog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      Activity Log
+    </button>
+
+    <div class="nav-section">Management</div>
+    <button class="nav-item" onclick="navigate('users')" id="nav-users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      Users
+    </button>
+    <button class="nav-item" onclick="navigate('requests')" id="nav-requests">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+      Access Requests
+      <span class="nav-badge" id="req-badge" style="display:none">0</span>
+    </button>
+  </div>
+
+  <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-top:1px solid var(--border);">
+    <div id="user-name" style="font-size:12px;font-weight:600;color:#94a3b8;background:rgba(255,255,255,0.04);padding:6px 12px;border-radius:20px;text-transform:lowercase;border:1px solid rgba(255,255,255,0.05);"></div>
+    <button class="logout-btn" onclick="doLogout()" title="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<main id="main">
+
+  <!-- Dashboard -->
+  <section class="section active" id="section-dashboard">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Dashboard</div>
+        <div class="page-sub">Overview of all projects and findings across clients.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-dashboard" onclick="doRefresh('dashboard')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 0">
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Total Clients</div><div class="kpi-value" id="kpi-clients">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Projects</div><div class="kpi-value" id="kpi-projects">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Total Findings</div><div class="kpi-value" id="kpi-findings">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Engineers</div><div class="kpi-value" id="kpi-engineers">—</div></div>
+      </div>
+
+      <div class="section-header"><div class="section-heading">Upcoming Deadlines</div></div>
+      <div id="deadline-timeline"><div class="empty-state">Loading…</div></div>
+    </div>
+  </section>
+
+  <!-- Activity Log -->
+  <section class="section" id="section-actlog">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Activity Log</div>
+        <div class="page-sub">Comprehensive audit trail for User, Project, and Client actions.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-actlog" onclick="doRefresh('actlog')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    
+    <div style="padding: 24px 32px 0">
+      <div style="display:flex;gap:16px;border-bottom:1px solid rgba(148,163,184,0.1);padding-bottom:16px;margin-bottom:24px">
+        <button class="tab-btn active" id="tab-log-all" onclick="loadActivityLog()">All Logs</button>
+        <button class="tab-btn" id="tab-log-user" onclick="loadActivityLog('user')">User Access</button>
+        <button class="tab-btn" id="tab-log-crud" onclick="loadActivityLog('crud')">Data CRUD</button>
+        <button class="tab-btn" id="tab-log-project_request" onclick="loadActivityLog('project_request')">Project Requests</button>
+      </div>
+    </div>
+
+    <div style="padding:0 32px 40px">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Time</th><th>Action By</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+          <tbody id="actlog-tbody"><tr><td colspan="5"><div class="empty-state">Loading…</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Clients / Projects -->
+  <section class="section" id="section-projects">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Clients</div>
+        <div class="page-sub">All clients and their projects. Click a client to expand, click a project to view findings.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-projects" onclick="doRefresh('projects')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 0">
+      <div class="section-header">
+        <div class="section-heading">All Clients</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input id="projects-search" type="search" placeholder="Search client or project…" oninput="filterProjects()" style="padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;width:220px" />
+          <button class="btn-primary" style="background:rgba(255,255,255,0.08);color:var(--text)" onclick="openCreateClient()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Client
+          </button>
+          <button class="btn-primary" onclick="openCreateProject()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Project
+          </button>
+        </div>
+      </div>
+      <div id="projects-accordion"><div class="empty-state">Loading…</div></div>
+    </div>
+  </section>
+
+  <!-- Users -->
+  <section class="section" id="section-users">
+    <div class="topbar">
+      <div>
+        <div class="page-title">User Management</div>
+        <div class="page-sub">Create, view, and delete users.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-users" onclick="doRefresh('users')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 0">
+      <div class="section-header">
+        <div class="section-heading">All Users</div>
+        <button class="btn-primary" onclick="openCreateUser()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add User
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="5"><div class="empty-state">Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Access Requests -->
+  <section class="section" id="section-requests">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Access Requests</div>
+        <div class="page-sub">Engineer requests to join projects or view another engineer's data.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-requests" onclick="doRefresh('requests')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 0">
+      <div class="section-header" style="margin-bottom:12px">
+        <div style="display:flex;gap:4px;background:rgba(255,255,255,0.05);border-radius:10px;padding:4px">
+          <button class="tab-btn active" id="tab-project" onclick="switchTab('project')">Project Requests</button>
+          <button class="tab-btn" id="tab-data" onclick="switchTab('data')">Data Access Requests</button>
+        </div>
+        <span id="req-total-badge" style="font-size:12px;color:var(--muted)"></span>
+      </div>
+      <div class="table-wrap" id="project-req-wrap">
+        <table>
+          <thead><tr><th>Engineer</th><th>Client</th><th>Project</th><th>Message</th><th>Date</th><th>Action</th></tr></thead>
+          <tbody id="project-requests-tbody">
+            <tr><td colspan="6"><div class="empty-state">Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap" id="data-req-wrap" style="display:none">
+        <table>
+          <thead><tr><th>Requester</th><th>Requesting Access To</th><th>Date</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="requests-tbody">
+            <tr><td colspan="5"><div class="empty-state">Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ── Add Client Modal ── -->
+<div class="modal-overlay" id="modal-create-client" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Add New Client</div>
+    <div class="form-group">
+      <label>Client Name *</label>
+      <input id="cc-name" placeholder="e.g. PT Contoh Digital" />
+    </div>
+    <div class="modal-err" id="cc-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-create-client').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="submitCreateClient()" id="cc-btn" style="justify-content:center">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create Project Modal ── -->
+<div class="modal-overlay" id="modal-create-project" onclick="closeModal(event)">
+  <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
+    <div class="modal-title">New Project</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Client *</label>
+        <select id="cp-client"><option value="">— Select client —</option></select>
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Project Name *</label>
+        <input id="cp-name" placeholder="e.g. Web App Pentest Q2 2025" />
+      </div>
+      <div class="form-group">
+        <label>Project Type *</label>
+        <select id="cp-type">
+          <option value="web">Web</option>
+          <option value="api">API</option>
+          <option value="mobile">Mobile</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Assign PIC</label>
+        <select id="cp-engineer"><option value="">— Not assigned —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Assign Assist</label>
+        <select id="cp-assist"><option value="">— Not assigned —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Kickoff Date (Start)</label>
+        <input id="cp-kickoff" type="date" />
+      </div>
+      <div class="form-group">
+        <label>Initial Report Date</label>
+        <input id="cp-initial" type="date" />
+      </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label>Final Report Date</label>
+        <input id="cp-final" type="date" />
+      </div>
+    </div>
+    <div class="modal-err" id="cp-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-create-project').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="submitCreateProject()" id="cp-btn" style="justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create Project
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Finding Detail Modal ── -->
+<div class="modal-overlay" id="modal-findings" onclick="closeModal(event)">
+  <div class="modal" style="max-width:700px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px">
+      <div class="modal-title" id="findings-modal-title" style="margin:0">Findings</div>
+      <button class="btn-ghost" style="flex:none;padding:6px 14px;font-size:12px" onclick="document.getElementById('modal-findings').classList.remove('open')">Close</button>
+    </div>
+    <div id="findings-modal-body">
+      <div class="empty-state">Loading…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Create User Modal ── -->
+<div class="modal-overlay" id="modal-create-user" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Add New User</div>
+    <div class="form-group">
+      <label>Display Name *</label>
+      <input id="cu-name" placeholder="e.g. John Doe" />
+    </div>
+    <div class="form-group">
+      <label>Username *</label>
+      <input id="cu-username" placeholder="e.g. johndoe" />
+    </div>
+    <div class="form-group">
+      <label>Role *</label>
+      <select id="cu-role">
+        <option value="engineer">Engineer</option>
+        <option value="pm">PM</option>
+        <option value="manager">Manager</option>
+        <option value="admin" id="admin-opt" style="display:none">Admin</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Password *</label>
+      <input id="cu-password" type="password" placeholder="Minimum 8 characters" />
+    </div>
+    <div class="modal-err" id="cu-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-create-user').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="submitCreateUser()" id="cu-btn" style="justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Create User
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Change Password Modal ── -->
+<div class="modal-overlay" id="modal-change-password" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-title">Change Password</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px" id="cpw-user-info"></div>
+    <div class="form-group">
+      <label>New Password *</label>
+      <input id="cpw-password" type="password" placeholder="Minimum 8 characters" />
+    </div>
+    <div class="form-group">
+      <label>Confirm New Password *</label>
+      <input id="cpw-confirm" type="password" placeholder="Re-enter new password" />
+    </div>
+    <div class="modal-err" id="cpw-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-change-password').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" onclick="submitChangePassword()" id="cpw-btn" style="justify-content:center">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        Update Password
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast Container ── -->
+<div id="toast-container"></div>
+
+<script>
+let currentUser = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async function init() {
+  try {
+    const r = await fetch('/api/session');
+    const s = await r.json();
+    if (!s.authenticated || ['engineer'].includes(s.role)) {
+      window.location.replace(s.authenticated ? '/' : '/login.html');
+      return;
+    }
+    currentUser = s;
+    document.getElementById('user-name').textContent  = s.displayName || s.username;
+
+    // Show admin-only user option
+    if (s.role === 'admin') {
+      document.getElementById('admin-opt').style.display = '';
+    }
+
+    loadDashboard();
+    loadPendingCount();
+  } catch {
+    window.location.replace('/login.html');
+  }
+})();
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function navigate(section) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('section-' + section).classList.add('active');
+  document.getElementById('nav-' + section).classList.add('active');
+
+  if (section === 'users')    loadUsers();
+  if (section === 'projects') loadProjects();
+  if (section === 'requests') loadRequests();
+  if (section === 'actlog')   loadActivityLog();
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────────
+let _clientsCache = [];
+
+async function loadDashboard() {
+  try {
+    const rows = await apiFetch('/api/clients/full');
+    _clientsCache = rows;
+    const clientIds = new Set(); let totalProjects = 0; let totalFindings = 0;
+    rows.forEach(r => { clientIds.add(r.client_id); if (r.project_id) { totalProjects++; totalFindings += (r.finding_count||0); } });
+    document.getElementById('kpi-clients').textContent  = clientIds.size;
+    document.getElementById('kpi-projects').textContent = totalProjects;
+    document.getElementById('kpi-findings').textContent = totalFindings;
+    try {
+      const users = await apiFetch('/api/users');
+      document.getElementById('kpi-engineers').textContent = users.filter(u => u.role === 'engineer').length;
+    } catch { document.getElementById('kpi-engineers').textContent = '—'; }
+    renderDeadlineTimeline(rows.filter(r => r.project_id));
+  } catch(e) {
+    const el = document.getElementById('deadline-timeline');
+    if (el) el.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
+    showToast('Dashboard error: ' + e.message, 'error');
+  }
+}
+
+function renderDeadlineTimeline(projects) {
+  const el = document.getElementById('deadline-timeline');
+  if (!el) return;
+  if (!projects.length) { el.innerHTML = '<div class="empty-state">No projects yet.</div>'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Group by client
+  const clientMap = {};
+  projects.forEach(p => {
+    if (!clientMap[p.client_name]) clientMap[p.client_name] = [];
+    clientMap[p.client_name].push(p);
+  });
+
+  // Sort projects within each group: dated first by date, then no-date
+  Object.keys(clientMap).forEach(c => {
+    clientMap[c].sort((a, b) => {
+      if (!a.final_report_date && !b.final_report_date) return 0;
+      if (!a.final_report_date) return 1;
+      if (!b.final_report_date) return -1;
+      return new Date(a.final_report_date) - new Date(b.final_report_date);
+    });
+  });
+
+  const phaseTag = p => {
+    if (p.final_report_status === 'completed')
+      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(34,197,94,0.18);color:#4ade80;font-weight:700;letter-spacing:0.3px">Final</span>`;
+    if (p.initial_report_status === 'completed')
+      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(99,102,241,0.2);color:#a5b4fc;font-weight:700;letter-spacing:0.3px">Initial</span>`;
+    return '';
+  };
+
+  const projectRow = p => {
+    const hasDue = !!p.final_report_date;
+    let statusHtml, barColor, pct;
+    if (hasDue) {
+      const due = new Date(p.final_report_date);
+      const daysLeft = Math.ceil((due - today) / 86400000);
+      const isCompleted = p.final_report_status === 'completed';
+      const overdue = !isCompleted && daysLeft < 0;
+      const urgent  = !isCompleted && !overdue && daysLeft <= 7;
+      barColor = isCompleted ? '#22c55e' : overdue ? '#f87171' : urgent ? '#fb923c' : '#6366f1';
+      pct = isCompleted ? 100 : Math.max(5, Math.min(95, 100 - (daysLeft / 60) * 100));
+      statusHtml = isCompleted
+        ? `<div style="font-size:12px;font-weight:700;color:#22c55e">&#10003; Completed</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
+        : overdue
+          ? `<div style="font-size:12px;font-weight:700;color:#f87171">&#9888; ${Math.abs(daysLeft)}d overdue</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
+          : daysLeft === 0
+            ? `<div style="font-size:12px;font-weight:700;color:#fb923c">Due today</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
+            : `<div style="font-size:12px;font-weight:700;color:${barColor}">${daysLeft}d left</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`;
+    } else {
+      barColor = 'rgba(255,255,255,0.08)'; pct = 0;
+      statusHtml = `<div style="font-size:11px;color:var(--muted)">No deadline</div>`;
+    }
+
+    return `
+      <div style="display:grid;grid-template-columns:1fr 160px 100px;align-items:center;gap:16px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
+        <div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+            <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.project_name)}</span>
+            ${phaseTag(p)}
+          </div>
+          <div style="font-size:10px;color:var(--muted)">PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name || '—')}</span></div>
+        </div>
+        <div>
+          <div style="position:relative;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden">
+            <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.4s"></div>
+          </div>
+        </div>
+        <div style="text-align:right">${statusHtml}</div>
+      </div>`;
+  };
+
+  el.innerHTML = Object.entries(clientMap).map(([clientName, projs]) => `
+    <div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.015);margin-bottom:14px;">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(99,102,241,0.08);border-bottom:1px solid rgba(255,255,255,0.06);">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${esc(clientName).charAt(0).toUpperCase()}</div>
+        <span style="font-size:13px;font-weight:700;color:#e2e8f0">${esc(clientName)}</span>
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:8px">${projs.length} project${projs.length > 1 ? 's' : ''}</span>
+      </div>
+      <div>${projs.map(p => projectRow(p)).join('')}</div>
+    </div>`).join('');
+}
+
+
+
+function countColor(n) {
+  if (!n || n === 0) return 'zero';
+  if (n <= 3) return 'low';
+  if (n <= 10) return 'mid';
+  return 'high';
+}
+
+const fmt = d => d ? new Date(d).toLocaleDateString('id-ID',{day:'numeric',month:'short',year:'numeric'}) : '—';
+
+function renderClientGroups(containerId, rows, showActions) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const groups = {};
+  rows.forEach(r => {
+    if (!groups[r.client_id]) groups[r.client_id] = { id: r.client_id, name: r.client_name, projects: [] };
+    if (r.project_id) groups[r.client_id].projects.push(r);
+  });
+  if (!Object.keys(groups).length) {
+    container.innerHTML = '<div class="empty-state">No clients yet. Click Add Client to get started.</div>'; return;
+  }
+  container.innerHTML = Object.values(groups).map(g => {
+    const totalF = g.projects.reduce((s,p)=>s+(p.finding_count||0),0);
+    const pid = 'cg-'+g.id;
+    const actionsHtml = showActions ? `
+      <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
+        <button class="icon-btn" onclick="renameClientPortal(${g.id},'${esc(g.name)}')" title="Rename" style="color:var(--muted)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="icon-btn" onclick="deleteClientPortal(${g.id},'${esc(g.name)}')" title="Delete">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+        </button>
+      </div>` : '';
+    return `
+    <div class="client-group">
+      <div class="client-group-header" onclick="toggleGroup('${pid}')">
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;font-weight:700">
+          <svg id="arr-${g.id}" class="cg-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 6 15 12 9 18"/></svg>
+          ${esc(g.name)}
+        </div>
+        <div style="display:flex;align-items:center;gap:14px">
+          <span class="cg-meta">${g.projects.length} project${g.projects.length!==1?'s':''} &bull; <span class="finding-count ${countColor(totalF)}" style="font-size:12px">${totalF}</span> finding${totalF!==1?'s':''}</span>
+          ${actionsHtml}
+        </div>
+      </div>
+      <div class="client-group-table" id="${pid}">
+        ${g.projects.length===0
+          ? `<div style="padding:20px 24px;color:var(--muted);font-size:13px">No projects yet. Click <strong style="color:var(--text)">New Project</strong> above to add one.</div>`
+          : `<table style="width:100%;border-collapse:collapse">
+          <thead><tr style="border-bottom:1px solid var(--border)">
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Project</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Type</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Engineer</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Kickoff</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Initial Report</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Final Report</th>
+            <th style="padding:10px 20px;text-align:left;font-size:11px;letter-spacing:.06em;font-weight:600;color:var(--muted);text-transform:uppercase">Findings</th>
+            ${showActions?'<th></th>':''}
+          </tr></thead>
+          <tbody>${g.projects.map(p=>`
+            <tr style="cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.06);transition:background 0.1s"
+                onclick="openFindings(${p.project_id},'${esc(p.project_name)}', '${esc(p.engineer_name||'—')}', '${esc(p.assist_engineer_name||'')}', '${esc(p.link_report_en||'')}', '${esc(p.link_report_id||'')}')"
+                onmouseover="this.style.background='rgba(255,255,255,0.04)'"
+                onmouseout="this.style.background=''">
+              <td style="padding:13px 20px;font-weight:600;font-size:13px">${esc(p.project_name)}</td>
+              <td style="padding:13px 20px"><span class="badge badge-${p.project_type}">${(p.project_type||'web').toUpperCase()}</span></td>
+              <td style="padding:13px 20px;font-size:13px;color:var(--muted)">
+                <div style="font-weight:600;color:var(--text)">${esc(p.engineer_name||'—')} <span style="font-weight:400;font-size:11px;color:var(--muted)">(PIC)</span></div>
+                ${p.assist_engineer_name ? `<div style="font-size:11px;margin-top:4px">${esc(p.assist_engineer_name)} <span style="color:var(--muted)">(Assist)</span></div>` : ''}
+              </td>
+              <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.kickoff_date)}</td>
+              <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.initial_report_date)}</td>
+              <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.final_report_date)}</td>
+              <td style="padding:13px 20px"><span class="finding-count ${countColor(p.finding_count||0)}">${p.finding_count||0}</span></td>
+              ${showActions?`<td style="padding:8px 12px" onclick="event.stopPropagation()">
+                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},'${esc(p.project_name)}',${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="icon-btn" onclick="deleteProjectPortal(${p.project_id},'${esc(p.project_name)}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+              </td>`:''}
+            </tr>`).join('')}</tbody>
+        </table>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleGroup(id) {
+  const el = document.getElementById(id);
+  const arr = document.getElementById('arr-'+id.replace('cg-',''));
+  if (!el) return;
+  const isOpen = el.classList.contains('open');
+  el.classList.toggle('open');
+  if (arr) arr.style.transform = isOpen ? '' : 'rotate(90deg)';
+}
+
+// ── Clients / Projects accordion ──────────────────────────────────────────────
+let _allClientsCache = [];
+
+async function loadProjects() {
+  const acc = document.getElementById('projects-accordion');
+  acc.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const rows = await apiFetch('/api/clients/full');
+    _allClientsCache = rows;
+    renderClientGroups('projects-accordion', rows, true);
+  } catch(e) { acc.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`; showToast('Clients error: ' + e.message, 'error'); }
+}
+
+function filterProjects() {
+  const q = (document.getElementById('projects-search')?.value||'').toLowerCase();
+  let rows = _allClientsCache;
+  if (q) rows = rows.filter(r =>
+    r.client_name?.toLowerCase().includes(q)||
+    r.project_name?.toLowerCase().includes(q)||
+    r.engineer_name?.toLowerCase().includes(q)
+  );
+  renderClientGroups('projects-accordion', rows, true);
+}
+
+// PM/Manager: inline rename client
+async function renameClientPortal(id, currentName) {
+  const name = prompt('New client name:', currentName);
+  if (!name || !name.trim() || name.trim()===currentName) return;
+  try {
+    await apiFetch(`/api/clients/${id}`, 'PUT', { name: name.trim() });
+    showToast('Client renamed', 'success');
+    loadProjects(); loadDashboard();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// PM/Manager: delete client
+async function deleteClientPortal(id, name) {
+  if (!confirm(`Delete client "${name}" and ALL its projects? This cannot be undone.`)) return;
+  try {
+    await apiFetch(`/api/clients/${id}`, 'DELETE');
+    showToast('Client deleted','success');
+    loadProjects(); loadDashboard();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// PM/Manager: delete project
+async function deleteProjectPortal(id, name) {
+  if (!confirm(`Delete project "${name}"?`)) return;
+  try {
+    await apiFetch(`/api/projects/${id}`, 'DELETE');
+    showToast('Project deleted','success');
+    loadProjects(); loadDashboard();
+  } catch(e) { showToast(e.message,'error'); }
+}
+
+// PM/Manager: edit project (assign engineer / dates)
+async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId) {
+  // Build a quick modal using existing modal-create-project but pre-filled
+  // Reuse the create-project modal as an edit modal  
+  const modal = document.getElementById('modal-create-project');
+  document.getElementById('modal-create-project-title') && (document.getElementById('modal-create-project-title').textContent = 'Edit Project');
+  
+  // Load engineers
+  const engSel = document.getElementById('cp-engineer');
+  const assistSel = document.getElementById('cp-assist');
+  const clientSel = document.getElementById('cp-client');
+  try {
+    const engs = await apiFetch('/api/users/engineers');
+    const optionsHtmlPIC = '<option value="">— Not assigned —</option>' + 
+      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(currentEngineerId)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+    const optionsHtmlAssist = '<option value="">— Not assigned —</option>' + 
+      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(currentAssistId)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+    
+    engSel.innerHTML = optionsHtmlPIC;
+    if(assistSel) assistSel.innerHTML = optionsHtmlAssist;
+  } catch { 
+    engSel.innerHTML = '<option value="">Failed to load</option>'; 
+    if(assistSel) assistSel.innerHTML = '<option value="">Failed to load</option>'; 
+  }
+
+  document.getElementById('cp-name').value = projectName;
+  clientSel.disabled = true;
+
+  const btn = document.getElementById('cp-btn');
+  btn.innerHTML = 'Save Changes';
+  btn.onclick = async () => {
+    const assigned_engineer_id = engSel.value || null;
+    const assist_engineer_id = (assistSel && assistSel.value) || null;
+    const kickoff_date = document.getElementById('cp-kickoff').value || null;
+    const initial_report_date = document.getElementById('cp-initial').value || null;
+    const final_report_date = document.getElementById('cp-final').value || null;
+    btn.disabled = true;
+    try {
+      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: projectName, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date });
+      modal.classList.remove('open');
+      showToast('Project updated!', 'success');
+      loadProjects(); loadDashboard();
+    } catch(e) {
+      const errEl = document.getElementById('cp-err');
+      errEl.textContent = e.message; errEl.classList.add('show');
+    } finally { btn.disabled = false; }
+  };
+  modal.classList.add('open');
+}
+
+// ── Create Project ────────────────────────────────────────────────────────────
+async function openCreateProject() {
+  // Reset form and reset modal state incase it was polluted by editProjectPortal
+  document.getElementById('modal-create-project-title') && (document.getElementById('modal-create-project-title').textContent = 'New Project');
+  const clientSel = document.getElementById('cp-client');
+  clientSel.disabled = false;
+  const btn = document.getElementById('cp-btn');
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Project`;
+  btn.onclick = submitCreateProject;
+
+  ['cp-name','cp-kickoff','cp-initial','cp-final'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cp-type').value = 'web';
+  document.getElementById('cp-err').classList.remove('show');
+
+  // Load clients into select
+  try {
+    const clients = await apiFetch('/api/clients');
+    clientSel.innerHTML = '<option value="">— Select client —</option>' +
+      clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  } catch { clientSel.innerHTML = '<option value="">Failed to load clients</option>'; }
+
+  // Load engineers into select
+  const engSel = document.getElementById('cp-engineer');
+  const assistSel = document.getElementById('cp-assist');
+  try {
+    const engs = await apiFetch('/api/users/engineers');
+    const options = '<option value="">— Not assigned —</option>' +
+      engs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
+    engSel.innerHTML = options;
+    if (assistSel) assistSel.innerHTML = options;
+  } catch { 
+    engSel.innerHTML = '<option value="">Failed to load engineers</option>'; 
+    if (assistSel) assistSel.innerHTML = '<option value="">Failed to load engineers</option>'; 
+  }
+
+  document.getElementById('modal-create-project').classList.add('open');
+}
+
+async function submitCreateProject() {
+  const clientId   = document.getElementById('cp-client').value;
+  const name       = document.getElementById('cp-name').value.trim();
+  const project_type = document.getElementById('cp-type').value;
+  const assigned_engineer_id = document.getElementById('cp-engineer').value || null;
+  const assistSel  = document.getElementById('cp-assist');
+  const assist_engineer_id = (assistSel && assistSel.value) || null;
+  const kickoff_date        = document.getElementById('cp-kickoff').value || null;
+  const initial_report_date = document.getElementById('cp-initial').value || null;
+  const final_report_date   = document.getElementById('cp-final').value || null;
+  const errEl = document.getElementById('cp-err');
+  errEl.classList.remove('show');
+
+  if (!clientId) { errEl.textContent = 'Please select a client.'; errEl.classList.add('show'); return; }
+  if (!name)     { errEl.textContent = 'Project name is required.'; errEl.classList.add('show'); return; }
+
+  const btn = document.getElementById('cp-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
+      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date
+    });
+    document.getElementById('modal-create-project').classList.remove('open');
+    showToast('Project created!', 'success');
+    loadProjects(); loadDashboard();
+    // auto-expand the client group
+    const clGrp = document.getElementById('cg-'+clientId);
+    if (clGrp && clGrp.style.display==='none') toggleGroup('cg-'+clientId);
+  } catch(e) {
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+
+// ── Finding Detail ────────────────────────────────────────────────────────────
+const SEV_ORDER = { Critical:0, High:1, Medium:2, Low:3, Info:4 };
+const SEV_COLOR = { Critical:'#f87171', High:'#fb923c', Medium:'#fbbf24', Low:'#86efac', Info:'#94a3b8' };
+
+async function openFindings(projectId, projectName, picName, assistName, linkEn, linkId) {
+  document.getElementById('findings-modal-title').textContent = `${projectName} — Findings`;
+  document.getElementById('findings-modal-body').innerHTML = '<div class="empty-state">Loading…</div>';
+  document.getElementById('modal-findings').classList.add('open');
+  try {
+    const findings = await apiFetch(`/api/projects/${projectId}/findings`);
+    const body = document.getElementById('findings-modal-body');
+    if (!findings.length) {
+      body.innerHTML = '<div class="empty-state">No findings in this project yet.</div>'; return;
+    }
+    findings.sort((a,b) => (SEV_ORDER[a.severity]??9) - (SEV_ORDER[b.severity]??9));
+    
+    // Summary counts
+    const counts = {};
+    findings.forEach(f => { counts[f.severity] = (counts[f.severity]||0)+1; });
+    const summaryHtml = Object.entries(counts).map(([s,n]) =>
+      `<span style="background:${SEV_COLOR[s]}22;color:${SEV_COLOR[s]};padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700">${s}: ${n}</span>`
+    ).join('');
+
+    // Extra Data rendering
+    let reportLinksHtml = '';
+    if (linkEn || linkId) {
+      reportLinksHtml = `<div style="display:flex;gap:8px;margin-bottom:20px">`;
+      if (linkEn) reportLinksHtml += `<a href="${linkEn}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report EN</a>`;
+      if (linkId) reportLinksHtml += `<a href="${linkId}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report ID</a>`;
+      reportLinksHtml += `</div>`;
+    }
+
+    let engineersHtml = `<div style="font-size:13px;color:var(--muted);margin-bottom:16px">PIC: <span style="font-weight:600;color:var(--text)">${picName}</span>${assistName ? ` <span style="margin:0 6px opacity:0.3">|</span> Assist: <span style="font-weight:600;color:var(--text)">${assistName}</span>` : ''}</div>`;
+
+    body.innerHTML = `
+      ${engineersHtml}
+      ${reportLinksHtml}
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Executive Summary</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px">${summaryHtml}</div>
+      
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Finding List</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${findings.map(f => `
+          <div style="display:flex;align-items:center;gap:12px;background:rgba(255,255,255,0.02);padding:10px 16px;border-radius:8px;border-left:3px solid ${SEV_COLOR[f.severity]}">
+            <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${SEV_COLOR[f.severity]}22;color:${SEV_COLOR[f.severity]};min-width:60px;text-align:center">${f.severity}</span>
+            <span style="font-size:14px;font-weight:500;color:var(--text)">${esc(f.name)}</span>
+          </div>`).join('')}
+      </div>`;
+  } catch(e) {
+    document.getElementById('findings-modal-body').innerHTML = `<div class="empty-state">${e.message}</div>`;
+  }
+}
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+async function loadUsers() {
+  try {
+    const users = await apiFetch('/api/users');
+    const tbody = document.getElementById('users-tbody');
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No users yet.</div></td></tr>'; return; }
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td style="font-weight:600">${esc(u.display_name)}</td>
+        <td style="color:var(--muted)">@${esc(u.username)}</td>
+        <td><span class="badge badge-${u.role}">${u.role}</span></td>
+        <td style="color:var(--muted);font-size:12px">${new Date(u.created_at).toLocaleDateString()}</td>
+        <td style="display:flex;gap:4px;align-items:center">
+          <button class="icon-btn" onclick="openChangePassword(${u.id},'${esc(u.display_name)}')" title="Change Password" style="color:var(--muted)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          </button>
+          ${u.id !== currentUser?.userId ? `<button class="icon-btn" onclick="deleteUser(${u.id},'${esc(u.display_name)}')" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
+          </button>` : '<span style="color:var(--muted);font-size:11px">You</span>'}
+        </td>
+      </tr>`).join('');
+  } catch(e) {
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="5"><div class="empty-state">${e.message}</div></td></tr>`;
+  }
+}
+
+function openCreateUser() {
+  ['cu-name','cu-username','cu-password'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cu-role').value = 'engineer';
+  document.getElementById('cu-err').classList.remove('show');
+  document.getElementById('modal-create-user').classList.add('open');
+}
+
+async function submitCreateUser() {
+  const display_name = document.getElementById('cu-name').value.trim();
+  const username     = document.getElementById('cu-username').value.trim();
+  const role         = document.getElementById('cu-role').value;
+  const password     = document.getElementById('cu-password').value;
+  const errEl        = document.getElementById('cu-err');
+  errEl.classList.remove('show');
+
+  if (!display_name || !username || !password) {
+    errEl.textContent = 'All fields are required.'; errEl.classList.add('show'); return;
+  }
+  if (password.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.'; errEl.classList.add('show'); return;
+  }
+
+  const btn = document.getElementById('cu-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/users', 'POST', { username, display_name, role, password });
+    document.getElementById('modal-create-user').classList.remove('open');
+    showToast('User created successfully', 'success');
+    loadUsers();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+
+// ── Change Password (PM/Manager resets any user) ──────────────────────────────
+let _cpwUserId = null;
+function openChangePassword(userId, displayName) {
+  _cpwUserId = userId;
+  document.getElementById('cpw-user-info').textContent = `Resetting password for: ${displayName}`;
+  document.getElementById('cpw-password').value = '';
+  document.getElementById('cpw-confirm').value = '';
+  document.getElementById('cpw-err').classList.remove('show');
+  document.getElementById('modal-change-password').classList.add('open');
+}
+
+async function submitChangePassword() {
+  const newPw = document.getElementById('cpw-password').value;
+  const confirm = document.getElementById('cpw-confirm').value;
+  const errEl = document.getElementById('cpw-err');
+  errEl.classList.remove('show');
+
+  if (!newPw || newPw.length < 8) {
+    errEl.textContent = 'Password must be at least 8 characters.'; errEl.classList.add('show'); return;
+  }
+  if (newPw !== confirm) {
+    errEl.textContent = 'Passwords do not match.'; errEl.classList.add('show'); return;
+  }
+
+  const btn = document.getElementById('cpw-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/users/${_cpwUserId}/password`, 'PATCH', { new_password: newPw });
+    document.getElementById('modal-change-password').classList.remove('open');
+    showToast('Password updated successfully!', 'success');
+  } catch(e) {
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+
+// ── Add Client ────────────────────────────────────────────────────────────────
+function openCreateClient() {
+  document.getElementById('cc-name').value = '';
+  document.getElementById('cc-err').classList.remove('show');
+  document.getElementById('modal-create-client').classList.add('open');
+}
+
+async function submitCreateClient() {
+  const name = document.getElementById('cc-name').value.trim();
+  const errEl = document.getElementById('cc-err');
+  errEl.classList.remove('show');
+  if (!name) { errEl.textContent = 'Client name is required.'; errEl.classList.add('show'); return; }
+  const btn = document.getElementById('cc-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/clients', 'POST', { name });
+    document.getElementById('modal-create-client').classList.remove('open');
+    showToast('Client created!', 'success');
+    loadDashboard(); loadProjects();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+
+// ── Activity Log ───────────────────────────────────────────────────────────────
+let _currentLogType = null;
+async function loadActivityLog(type = null) {
+  _currentLogType = type;
+  document.querySelectorAll('[id^="tab-log-"]').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-log-' + (type || 'all')).classList.add('active');
+
+  const q = type ? `?type=${encodeURIComponent(type)}` : '';
+  try {
+    const rows = await apiFetch('/api/activity-log' + q);
+    const tbody = document.getElementById('actlog-tbody');
+    if (!rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No activity recorded for this category.</div></td></tr>'; return;
+    }
+    const ac = {
+      'create_project':'#10b981', 'delete_project':'#ef4444', 'edit_project':'#3b82f6',
+      'create_client':'#10b981', 'delete_client':'#ef4444', 'rename_client':'#3b82f6',
+      'create_user':'#10b981', 'delete_user':'#ef4444',
+      'approve_request':'#10b981', 'reject_request':'#ef4444'
+    };
+    const cColor = a => ac[a] || 'var(--text)';
+    
+    tbody.innerHTML = rows.map(r => {
+      let target = [];
+      if(r.engineer_name) target.push(`Eng: ${esc(r.engineer_name)}`);
+      if(r.project_name) target.push(`Proj: ${esc(r.project_name)}`);
+      if(r.client_name) target.push(`Client: ${esc(r.client_name)}`);
+      return `
+      <tr>
+        <td style="font-size:12px;color:var(--muted)">${new Date(r.created_at).toLocaleString('id-ID')}</td>
+        <td style="font-weight:600">${esc(r.actor_name||'System')}</td>
+        <td><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${cColor(r.action)}15;color:${cColor(r.action)}">${r.action?.toUpperCase().replace(/_/g,' ')}</span></td>
+        <td style="font-size:12px;color:var(--muted)">${target.join('<br>')||'—'}</td>
+        <td style="font-size:12px;color:var(--text);max-width:300px;white-space:normal;line-height:1.4">${esc(r.details||'—')}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    document.getElementById('actlog-tbody').innerHTML = `<tr><td colspan="5">${e.message}</td></tr>`;
+  }
+}
+
+// ── Refresh ────────────────────────────────────────────────────────────────────
+async function doRefresh(section) {
+  const btn = document.getElementById('refresh-'+section);
+  if (btn) btn.classList.add('spinning');
+  try {
+    if (section==='dashboard') await loadDashboard();
+    if (section==='projects')  { await loadProjects(); filterProjects(); }
+    if (section==='users')     await loadUsers();
+    if (section==='requests')  await loadRequests();
+    if (section==='actlog')    await loadActivityLog(_currentLogType);
+  } finally {
+    if (btn) setTimeout(()=>btn.classList.remove('spinning'), 500);
+  }
+}
+
+// ── Access Requests ───────────────────────────────────────────────────────────
+let _currentTab = 'project';
+
+function switchTab(tab) {
+  _currentTab = tab;
+  document.getElementById('tab-project').classList.toggle('active', tab === 'project');
+  document.getElementById('tab-data').classList.toggle('active', tab === 'data');
+  document.getElementById('project-req-wrap').style.display = tab === 'project' ? '' : 'none';
+  document.getElementById('data-req-wrap').style.display = tab === 'data' ? '' : 'none';
+}
+
+async function loadRequests() {
+  // Load project access requests
+  try {
+    const reqs = await apiFetch('/api/project-access-requests');
+    const tbody = document.getElementById('project-requests-tbody');
+    if (!reqs.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No pending project access requests.</div></td></tr>';
+    } else {
+      tbody.innerHTML = reqs.map(r => `
+        <tr>
+          <td style="font-weight:600">${esc(r.engineer_name || 'Engineer')}</td>
+          <td style="color:var(--muted)">${esc(r.client_name)}</td>
+          <td style="font-weight:600">${esc(r.project_name)}</td>
+          <td style="color:var(--muted);font-size:12px">${esc(r.message || '—')}</td>
+          <td style="color:var(--muted);font-size:12px">${new Date(r.created_at).toLocaleDateString()}</td>
+          <td>
+            ${r.status === 'pending' ? `
+              <button class="approve-btn" onclick="reviewProjectRequest(${r.id},'approved')">Approve</button>
+              <button class="reject-btn" onclick="reviewProjectRequest(${r.id},'rejected')">Reject</button>
+            ` : `<span class="badge badge-${r.status}">${r.status}</span>`}
+          </td>
+        </tr>`).join('');
+    }
+  } catch(e) { document.getElementById('project-requests-tbody').innerHTML = `<tr><td colspan="6">${e.message}</td></tr>`; }
+
+  // Load data access requests
+  try {
+    const reqs = await apiFetch('/api/access-requests');
+    const tbody = document.getElementById('requests-tbody');
+    if (!reqs.length) {
+      tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No data access requests.</div></td></tr>';
+      document.getElementById('req-badge').style.display = 'none';
+    } else {
+      tbody.innerHTML = reqs.map(r => `
+        <tr>
+          <td style="font-weight:600">${esc(r.requester_name || 'Engineer')}</td>
+          <td style="color:var(--muted)">${esc(r.target_name)}</td>
+          <td style="color:var(--muted);font-size:12px">${new Date(r.created_at).toLocaleDateString()}</td>
+          <td><span class="badge badge-${r.status}">${r.status}</span></td>
+          <td>
+            ${r.status === 'pending' ? `
+              <button class="approve-btn" onclick="reviewRequest(${r.id},'approved')">Approve</button>
+              <button class="reject-btn" onclick="reviewRequest(${r.id},'rejected')">Reject</button>
+            ` : '—'}
+          </td>
+        </tr>`).join('');
+    }
+  } catch(e) { document.getElementById('requests-tbody').innerHTML = `<tr><td colspan="5">${e.message}</td></tr>`; }
+}
+
+async function reviewProjectRequest(id, status) {
+  try {
+    await apiFetch(`/api/project-access-requests/${id}`, 'PATCH', { status });
+    showToast(status === 'approved' ? 'Request approved — engineer assigned!' : 'Request rejected', status === 'approved' ? 'success' : 'error');
+    loadRequests(); loadPendingCount();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function reviewRequest(id, status) {
+  try {
+    await apiFetch(`/api/access-requests/${id}`, 'PATCH', { status });
+    showToast(`Request ${status}`, 'success');
+    loadRequests(); loadPendingCount();
+  } catch(e) { showToast(e.message, 'error'); }
+}
+
+async function loadPendingCount() {
+  try {
+    const [reqs, projReqs] = await Promise.all([
+      apiFetch('/api/access-requests').catch(() => []),
+      apiFetch('/api/project-access-requests').catch(() => [])
+    ]);
+    const p1 = Array.isArray(reqs) ? reqs.filter(r => r.status === 'pending').length : 0;
+    const p2 = Array.isArray(projReqs) ? projReqs.filter(r => r.status === 'pending').length : 0;
+    const pending = p1 + p2;
+    const badge = document.getElementById('req-badge');
+    if (pending > 0) { badge.textContent = pending; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+  } catch {}
+}
+
+// ── Logout ────────────────────────────────────────────────────────────────────
+async function doLogout() {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.replace('/login.html');
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function closeModal(e) {
+  if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
+}
+
+async function apiFetch(url, method = 'GET', body = null) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+  return j;
+}
+
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg, type = 'success') {
+  const container = document.getElementById('toast-container');
+  const icon = type === 'success'
+    ? '<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>'
+    : '<svg class="ti" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `${icon}<span>${esc(msg)}</span>`;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+</script>
+</body>
+</html>

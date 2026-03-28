@@ -95,7 +95,7 @@
   <div class="mesh"></div>
   <div class="card">
     <h1>VulnVault</h1>
-    <p class="sub">Sign in to open the app. Credentials are set on the server (<code style="font-size:11px;color:#64748b">APP_LOGIN_*</code>).</p>
+    <p class="sub">Sign in to VulnVault — your secure vulnerability management platform.</p>
     <div class="err" id="err"></div>
     <form id="form">
       <label for="user">Username</label>
@@ -111,7 +111,8 @@
         const r = await fetch('/api/session');
         const j = await r.json();
         if (j.authenticated) {
-          window.location.replace('/');
+          const mgmtRoles = ['admin','manager','pm'];
+          window.location.replace(mgmtRoles.includes(j.role) ? '/portal.html' : '/');
           return;
         }
       } catch (_) {}
@@ -138,7 +139,8 @@
             err.classList.add('show');
             return;
           }
-          window.location.replace('/');
+          const mgmtRoles = ['admin','manager','pm'];
+          window.location.replace(mgmtRoles.includes(data.role) ? '/portal.html' : '/');
         } catch {
           err.textContent = 'Network error';
           err.classList.add('show');
