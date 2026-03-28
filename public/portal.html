@@ -872,7 +872,7 @@ function renderClientGroups(containerId, rows, showActions) {
               <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.final_report_date)}</td>
               <td style="padding:13px 20px" class="col-findings">${p.project_type === 'phishing' ? '<span style="font-size:11px;color:var(--muted)">—</span>' : `<span class="finding-count ${countColor(p.finding_count||0)}">${p.finding_count||0}</span>`}</td>
               ${showActions?`<td style="padding:8px 12px" onclick="event.stopPropagation()">
-                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},'${esc(p.project_name)}',${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},'${esc(p.project_name)}',${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'},'${p.project_type||'web'}')" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button class="icon-btn" onclick="deleteProjectPortal(${p.project_id},'${esc(p.project_name)}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
               </td>`:''}
             </tr>`).join('')}</tbody>
@@ -947,16 +947,21 @@ async function deleteProjectPortal(id, name) {
 }
 
 // PM/Manager: edit project (assign engineer / dates)
-async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId) {
+async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId, currentProjectType) {
   // Build a quick modal using existing modal-create-project but pre-filled
   // Reuse the create-project modal as an edit modal  
   const modal = document.getElementById('modal-create-project');
   document.getElementById('modal-create-project-title') && (document.getElementById('modal-create-project-title').textContent = 'Edit Project');
   
+  // Set project type
+  document.getElementById('cp-type').value = currentProjectType || 'web';
+
   // Load engineers
   const engSel = document.getElementById('cp-engineer');
   const assistSel = document.getElementById('cp-assist');
   const clientSel = document.getElementById('cp-client');
+  document.getElementById('cp-name').value = projectName;
+  clientSel.disabled = true;
   try {
     const engs = await apiFetch('/api/users/engineers');
     const optionsHtmlPIC = '<option value="">— Not assigned —</option>' + 
@@ -977,6 +982,7 @@ async function editProjectPortal(projectId, projectName, currentEngineerId, curr
   const btn = document.getElementById('cp-btn');
   btn.innerHTML = 'Save Changes';
   btn.onclick = async () => {
+    const project_type = document.getElementById('cp-type').value;
     const assigned_engineer_id = engSel.value || null;
     const assist_engineer_id = (assistSel && assistSel.value) || null;
     const kickoff_date = document.getElementById('cp-kickoff').value || null;
@@ -984,7 +990,7 @@ async function editProjectPortal(projectId, projectName, currentEngineerId, curr
     const final_report_date = document.getElementById('cp-final').value || null;
     btn.disabled = true;
     try {
-      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: projectName, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date });
+      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: document.getElementById('cp-name').value.trim(), project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date });
       modal.classList.remove('open');
       showToast('Project updated!', 'success');
       loadProjects(); loadDashboard();

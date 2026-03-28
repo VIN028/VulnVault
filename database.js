@@ -687,18 +687,19 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, callback) {
+function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
        name = ?,
+       project_type = ?,
        assigned_engineer_id = ?,
        assist_engineer_id = ?,
        kickoff_date = ?,
        initial_report_date = ?,
        final_report_date = ?
      WHERE id = ?`,
-    [name, assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, id],
+    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
