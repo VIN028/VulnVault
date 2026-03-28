@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+.env
+*.db
+*.sqlite
+uploads/*
+.DS_Store
+templateReport
+README.md

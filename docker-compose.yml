@@ -1,0 +1,18 @@
+services:
+  vulnvault:
+    build: .
+    container_name: vulnvault
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - SESSION_SECRET=${SESSION_SECRET:-change-me-to-a-random-string-at-least-16-chars}
+      - DB_DIR=/app/data
+    volumes:
+      - vulnvault-data:/app/data
+      - vulnvault-uploads:/app/uploads
+
+volumes:
+  vulnvault-data:
+  vulnvault-uploads:

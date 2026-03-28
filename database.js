@@ -2,7 +2,8 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-const DB_PATH = path.join(__dirname, 'vulnerabilities.db');
+const DB_DIR = process.env.DB_DIR || __dirname;
+const DB_PATH = path.join(DB_DIR, 'vulnerabilities.db');
 const SALT_ROUNDS = 10;
 const DEFAULT_PASSWORD = 'Cisometric123@';
 
