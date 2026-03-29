@@ -1117,7 +1117,7 @@ function renderAllocationChart() {
       if (barsStartingHere.length) {
         label = barsStartingHere.map(b => {
           const span = b.endIdx - b.startIdx + 1;
-          const name = escA(b.p.project_name || b.p.client_name);
+          const name = escA((b.p.client_name ? b.p.client_name + ' — ' : '') + (b.p.project_name || ''));
           return span >= 2 ? `<span class="gantt-bar-label" title="${name}">${name}</span>` : '';
         }).join('');
       }
@@ -1148,7 +1148,7 @@ function renderAllocationChart() {
               return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">→ ${dayStr}</span>`;
             }
             // If fills the full week, show abbreviated name
-            const name = escA(b.p.project_name || b.p.client_name);
+            const name = escA((b.p.client_name ? b.p.client_name + ' — ' : '') + (b.p.project_name || ''));
             return `<span class="gantt-bar-label" title="${name}">${name}</span>`;
           }).join('');
         }
