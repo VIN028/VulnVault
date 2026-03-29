@@ -253,16 +253,18 @@ function getDashboardSummary(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name,
            p.id AS project_id, p.name AS project_name,
-           p.project_type, p.assigned_engineer_id,
+           p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
            u.display_name AS engineer_name,
+           u2.display_name AS assist_engineer_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
     FROM clients c
     JOIN projects p ON p.client_id = c.id
-    LEFT JOIN users u ON u.id = p.assigned_engineer_id
+    LEFT JOIN users u  ON u.id  = p.assigned_engineer_id
+    LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
     ORDER BY c.name, p.name
   `, callback);
 }

@@ -370,6 +370,86 @@
       .date-filter { width: 100%; }
       .btn-primary { font-size: 12px !important; padding: 8px 12px !important; }
     }
+
+    /* ── Resource Allocation Gantt ── */
+    .gantt-controls {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+    }
+    .gantt-quarter-select {
+      padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); font-size: 13px; font-family: inherit;
+      outline: none; cursor: pointer; min-width: 160px;
+    }
+    .gantt-legend { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+    .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .gantt-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+    .gantt-outer {
+      overflow-x: auto; border-radius: var(--radius);
+      border: 1px solid var(--border); background: var(--card);
+    }
+    .gantt-table {
+      width: max-content; min-width: 100%; border-collapse: collapse;
+    }
+    /* Month header */
+    .gantt-month-row th {
+      padding: 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+      text-transform: uppercase; color: var(--text); text-align: center;
+      background: rgba(99,102,241,0.12); border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+    .gantt-month-row th:first-child { text-align: left; padding-left: 16px; }
+    /* Week header */
+    .gantt-week-row th {
+      padding: 7px 0; font-size: 10px; font-weight: 600; color: var(--muted);
+      text-align: center; background: var(--card); border-bottom: 1px solid var(--border);
+      border-right: 1px solid rgba(148,163,184,0.06);
+      min-width: 56px; white-space: nowrap;
+    }
+    .gantt-week-row th:first-child { text-align: left; padding-left: 16px; min-width: 180px; }
+
+    /* Engineer rows */
+    .gantt-eng-row { border-bottom: 1px solid rgba(148,163,184,0.06); }
+    .gantt-eng-row:last-child { border-bottom: none; }
+    .gantt-eng-row:hover { background: rgba(255,255,255,0.02); }
+    .gantt-eng-name {
+      padding: 0 16px; font-size: 13px; font-weight: 600; white-space: nowrap;
+      vertical-align: middle; min-width: 180px; position: sticky; left: 0;
+      background: var(--card); z-index: 2; border-right: 1px solid var(--border);
+    }
+    .gantt-eng-num {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 20px; height: 20px; border-radius: 50%;
+      background: rgba(99,102,241,0.15); color: #a5b4fc;
+      font-size: 10px; font-weight: 700; margin-right: 8px; flex-shrink: 0;
+    }
+    /* Week cell */
+    .gantt-cell {
+      height: 42px; min-width: 56px; padding: 3px;
+      border-right: 1px solid rgba(148,163,184,0.06);
+      vertical-align: middle; position: relative;
+    }
+    .gantt-cell-inner {
+      width: 100%; height: 100%; border-radius: 6px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 600; overflow: hidden;
+      transition: opacity 0.15s;
+    }
+    /* Colors */
+    .gantt-cell-inner.free   { background: rgba(34,197,94,0.15);  color: #4ade80; }
+    .gantt-cell-inner.busy   { background: rgba(245,158,11,0.25);  color: #fcd34d; }
+    .gantt-cell-inner.full   { background: rgba(239,68,68,0.25);   color: #f87171; }
+    /* Bar label - spans across cells via absolute, handled via JS overlay approach */
+    .gantt-bar-label {
+      font-size: 10px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+      padding: 0 4px; pointer-events: none;
+    }
+    /* today marker */
+    .gantt-cell.today-col .gantt-cell-inner { outline: 2px solid rgba(99,102,241,0.5); }
+    .gantt-empty-state {
+      text-align: center; padding: 48px; color: var(--muted); font-size: 14px;
+    }
   </style>
 </head>
 <body>
@@ -410,6 +490,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
       Access Requests
       <span class="nav-badge" id="req-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-item" onclick="navigate('allocation')" id="nav-allocation">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/></svg>
+      Resource Allocation
     </button>
   </div>
 
@@ -608,6 +692,36 @@
     </div>
   </section>
 
+  <!-- Resource Allocation -->
+  <section class="section" id="section-allocation">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Resource Allocation</div>
+        <div class="page-sub">Engineer workload view — week-by-week across the selected quarter.</div>
+      </div>
+      <button class="btn-refresh" onclick="loadAllocation()" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 40px">
+      <div class="gantt-controls">
+        <select id="gantt-quarter-select" class="gantt-quarter-select" onchange="renderAllocationChart()">
+          <option value="">Loading quarters…</option>
+        </select>
+        <div class="gantt-legend">
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(34,197,94,0.35)"></div>Free</div>
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(245,158,11,0.5)"></div>1 Project</div>
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(239,68,68,0.5)"></div>2+ Projects (Full)</div>
+        </div>
+      </div>
+      <div class="gantt-outer">
+        <div id="gantt-chart-body">
+          <div class="gantt-empty-state">Loading allocation data…</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
 </main>
 
 <!-- ── Add Client Modal ── -->
@@ -794,10 +908,218 @@ function navigate(section) {
   document.getElementById('section-' + section).classList.add('active');
   document.getElementById('nav-' + section).classList.add('active');
 
-  if (section === 'users')    loadUsers();
-  if (section === 'projects') loadProjects();
-  if (section === 'requests') loadRequests();
-  if (section === 'actlog')   loadActivityLog();
+  if (section === 'users')      loadUsers();
+  if (section === 'projects')   loadProjects();
+  if (section === 'requests')   loadRequests();
+  if (section === 'actlog')     loadActivityLog();
+  if (section === 'allocation') loadAllocation();
+}
+
+// ── Resource Allocation ────────────────────────────────────────────────────────
+let _allocationRows = [];
+
+async function loadAllocation() {
+  document.getElementById('gantt-chart-body').innerHTML =
+    '<div class="gantt-empty-state">Loading…</div>';
+  try {
+    _allocationRows = await apiFetch('/api/dashboard/summary');
+    buildQuarterOptions(_allocationRows);
+    renderAllocationChart();
+  } catch(e) {
+    document.getElementById('gantt-chart-body').innerHTML =
+      `<div class="gantt-empty-state">Error: ${e.message}</div>`;
+  }
+}
+
+function buildQuarterOptions(rows) {
+  // Collect all quarter-years that have at least one project overlapping
+  const quarters = new Set();
+  const today = new Date();
+
+  rows.forEach(r => {
+    const dates = [r.kickoff_date, r.initial_report_date, r.final_report_date].filter(Boolean);
+    dates.forEach(d => {
+      const dt = new Date(d);
+      if (!isNaN(dt.getTime())) {
+        const y = dt.getFullYear();
+        const q = Math.floor(dt.getMonth() / 3) + 1;
+        quarters.add(`${y}-Q${q}`);
+      }
+    });
+  });
+
+  // Always include current quarter
+  const curQ = Math.floor(today.getMonth() / 3) + 1;
+  quarters.add(`${today.getFullYear()}-Q${curQ}`);
+
+  const sorted = [...quarters].sort();
+  const sel = document.getElementById('gantt-quarter-select');
+  const curVal = `${today.getFullYear()}-Q${curQ}`;
+  sel.innerHTML = sorted.map(q =>
+    `<option value="${q}" ${q === curVal ? 'selected' : ''}>${quarterLabel(q)}</option>`
+  ).join('');
+}
+
+function quarterLabel(key) {
+  const [year, q] = key.split('-');
+  const months = { Q1:'Jan – Mar', Q2:'Apr – Jun', Q3:'Jul – Sep', Q4:'Oct – Dec' };
+  return `${q} ${year}  (${months[q]})`;
+}
+
+// Build array of {year, month(0-indexed), weekOfMonth(1-based), monday Date} for a quarter
+function buildWeeks(quarterKey) {
+  const [year, q] = quarterKey.split('-');
+  const qNum = Number(q.replace('Q',''));
+  const startMonth = (qNum - 1) * 3;           // 0-indexed month
+  const endMonth   = startMonth + 2;
+
+  // Start from first Monday on or before the 1st of startMonth
+  const qStart = new Date(Number(year), startMonth, 1);
+  // Move back to previous Monday (or stay if already Monday)
+  const dayOfWeek = qStart.getDay() || 7; // 1=Mon..7=Sun
+  qStart.setDate(qStart.getDate() - (dayOfWeek - 1));
+
+  const qEnd = new Date(Number(year), endMonth + 1, 0); // last day of quarter
+
+  const weeks = [];
+  let cur = new Date(qStart);
+  while (cur <= qEnd) {
+    const weekEnd = new Date(cur); weekEnd.setDate(cur.getDate() + 6);
+    // Only include weeks that overlap the quarter months
+    const displayMonth = cur.getMonth() >= startMonth && cur.getMonth() <= endMonth
+      ? cur.getMonth()
+      : weekEnd.getMonth() >= startMonth && weekEnd.getMonth() <= endMonth
+        ? weekEnd.getMonth()
+        : -1;
+    if (displayMonth >= 0) {
+      weeks.push({
+        monday: new Date(cur),
+        sunday: weekEnd,
+        month: displayMonth,
+        label: `W${weeks.filter(w => w.month === displayMonth).length + 1}`,
+      });
+    }
+    cur.setDate(cur.getDate() + 7);
+  }
+  return weeks;
+}
+
+function renderAllocationChart() {
+  const quarterKey = document.getElementById('gantt-quarter-select').value;
+  if (!quarterKey) return;
+
+  const weeks = buildWeeks(quarterKey);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const rows = _allocationRows;
+
+  // ── Build engineer → projects map ──────────────────────────────────────────
+  const engMap = new Map(); // engineerId → { name, projects:[] }
+
+  rows.forEach(r => {
+    if (r.assigned_engineer_id && r.engineer_name) {
+      if (!engMap.has(r.assigned_engineer_id))
+        engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
+      engMap.get(r.assigned_engineer_id).projects.push({ ...r, role: 'PIC' });
+    }
+    if (r.assist_engineer_id && r.assist_engineer_name) {
+      if (!engMap.has(r.assist_engineer_id))
+        engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
+      engMap.get(r.assist_engineer_id).projects.push({ ...r, role: 'Assist' });
+    }
+  });
+
+  if (!engMap.size) {
+    document.getElementById('gantt-chart-body').innerHTML =
+      '<div class="gantt-empty-state">No engineers assigned to any projects.</div>';
+    return;
+  }
+
+  // ── Month grouping for header ───────────────────────────────────────────────
+  const monthNames = ['January','February','March','April','May','June',
+                      'July','August','September','October','November','December'];
+  const monthGroups = [];
+  let curMonth = -1, curCount = 0;
+  weeks.forEach(w => {
+    if (w.month !== curMonth) {
+      if (curCount) monthGroups.push({ month: curMonth, count: curCount });
+      curMonth = w.month; curCount = 1;
+    } else curCount++;
+  });
+  if (curCount) monthGroups.push({ month: curMonth, count: curCount });
+
+  // ── Build table HTML ────────────────────────────────────────────────────────
+  let html = `<table class="gantt-table">
+  <thead>
+    <tr class="gantt-month-row">
+      <th>Engineer</th>
+      ${monthGroups.map(g => `<th colspan="${g.count}">${monthNames[g.month]}</th>`).join('')}
+    </tr>
+    <tr class="gantt-week-row">
+      <th>Name</th>
+      ${weeks.map(w => `<th>${w.label}</th>`).join('')}
+    </tr>
+  </thead>
+  <tbody>`;
+
+  let idx = 0;
+  engMap.forEach((eng, engId) => {
+    idx++;
+
+    // For each week, compute active project count and which projects span it
+    const weekData = weeks.map(w => {
+      const active = eng.projects.filter(p => {
+        if (!p.kickoff_date || !p.final_report_date) return false;
+        const ks = new Date(p.kickoff_date); ks.setHours(0,0,0,0);
+        const fe = new Date(p.final_report_date); fe.setHours(23,59,59,999);
+        return ks <= w.sunday && fe >= w.monday;
+      });
+      return { active, count: active.length };
+    });
+
+    // For each project that spans this engineer, find start/end week indices
+    const projectBars = [];
+    eng.projects.forEach(p => {
+      if (!p.kickoff_date || !p.final_report_date) return;
+      const ks = new Date(p.kickoff_date); ks.setHours(0,0,0,0);
+      const fe = new Date(p.final_report_date); fe.setHours(23,59,59,999);
+      const startIdx = weeks.findIndex(w => w.monday <= fe && w.sunday >= ks);
+      const endIdx   = weeks.map((w,i) => (w.monday <= fe && w.sunday >= ks) ? i : -1)
+                            .filter(i => i >= 0).pop();
+      if (startIdx >= 0) projectBars.push({ p, startIdx, endIdx });
+    });
+
+    html += `<tr class="gantt-eng-row">
+      <td class="gantt-eng-name">
+        <span class="gantt-eng-num">${idx}</span>${eng.name}
+      </td>`;
+
+    weeks.forEach((w, wi) => {
+      const { count, active } = weekData[wi];
+      const colorClass = count === 0 ? 'free' : count === 1 ? 'busy' : 'full';
+      const isToday = today >= w.monday && today <= w.sunday;
+
+      // Find project bar that starts at this week (to render label)
+      const barsStartingHere = projectBars.filter(b => b.startIdx === wi);
+      let label = '';
+      if (barsStartingHere.length) {
+        // Show first project name truncated
+        label = barsStartingHere.map(b => {
+          const span = b.endIdx - b.startIdx + 1;
+          const name = b.p.client_name || b.p.project_name;
+          return span >= 2 ? `<span class="gantt-bar-label" title="${name}">${name}</span>` : '';
+        }).join('');
+      }
+
+      html += `<td class="gantt-cell${isToday ? ' today-col' : ''}">
+        <div class="gantt-cell-inner ${colorClass}">${label}</div>
+      </td>`;
+    });
+
+    html += `</tr>`;
+  });
+
+  html += `</tbody></table>`;
+  document.getElementById('gantt-chart-body').innerHTML = html;
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
