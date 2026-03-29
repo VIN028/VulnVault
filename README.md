@@ -13,6 +13,11 @@ VulnVault is an internal security tool for managing penetration testing workflow
 - **Ask AI** — Upload screenshots from security tools (Burp Suite, Shodan, etc.) and let AI identify the vulnerability
 - **Multi-model support** — Choose from Gemini 3.1 Pro, 3 Flash, 2.5 Pro/Flash, and legacy models
 
+### 📝 Manual Finding & Editing
+- **Manual Finding Creation** — Add vulnerabilities to the library without AI, with full field support
+- **POC with Image Paste** — Attach Proof of Concept text and screenshots (paste Ctrl+V or click to upload)
+- **Edit Findings** — Modify any existing finding directly from the detail view (name, severity, description, POC, screenshots, etc.)
+
 ### 👥 Multi-Role Access Control
 | Role | Access |
 |------|--------|
@@ -27,9 +32,13 @@ VulnVault is an internal security tool for managing penetration testing workflow
 - **Deadline tracking** — Kickoff, initial report, and final report dates with visual timeline
 - **Report status tracking** — Initial and Final report phase completion badges
 - **Report link management** — Attach English and Indonesian report URLs
+- **Resource links** — PM can attach external links (Drive, docs, working folders) per project, visible to engineers
 
 ### 📊 Management Portal
 - **Dashboard** — KPI overview with client-grouped deadline timeline
+- **Backlog tracking** — Projects without kickoff or with future kickoff dates are grouped in a Backlog section
+- **Date range filters** — Filter dashboard and clients list by date range
+- **Notification system** — Real-time bell notifications for access requests, report completion, and report link updates (30s auto-polling)
 - **Activity Log** — Full audit trail for user, CRUD, and project request actions
 - **User Management** — Create users, reset passwords, delete with cascade cleanup
 - **Access Requests** — Engineers request project access; PM/Manager approve or reject
@@ -38,8 +47,13 @@ VulnVault is an internal security tool for managing penetration testing workflow
 - HMAC-signed session cookies with timing-safe comparison
 - Bcrypt password hashing (10 rounds)
 - Role-based API middleware on all endpoints
+- Rate limiting on login endpoint (5 attempts/minute/IP)
 - XSS-safe HTML report generation
 - Parameterized SQL queries throughout
+
+### 📱 Responsive Design
+- Fully responsive clients table and header (flex-wrap/overflow-x)
+- Mobile-friendly management portal
 
 ---
 
@@ -69,6 +83,17 @@ node server.js
 
 Open `http://localhost:3000` in your browser.
 
+### Docker Deployment
+
+```bash
+docker compose up -d --build
+```
+
+To update on VPS:
+```bash
+git pull && docker compose up -d --build
+```
+
 ### Default Accounts
 
 | Username | Password | Role |
@@ -84,12 +109,13 @@ Open `http://localhost:3000` in your browser.
 ## 🏗️ Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
+|-------|-----------:|
 | **Backend** | Node.js + Express |
 | **Database** | SQLite3 |
 | **Auth** | HMAC cookies + bcryptjs |
 | **AI** | Google Gemini API (`@google/generative-ai`) |
 | **Upload** | Multer (image uploads) |
+| **Rate Limiting** | express-rate-limit |
 | **Frontend** | Vanilla HTML/CSS/JS (dark theme) |
 
 ---
@@ -103,6 +129,8 @@ VulnVault/
 ├── auth.js            # Authentication middleware (HMAC sessions)
 ├── package.json
 ├── .env.example       # Environment template
+├── Dockerfile         # Docker build configuration
+├── docker-compose.yml # Docker Compose setup
 ├── public/
 │   ├── index.html     # Engineer app (library, AI generator, ask AI)
 │   ├── portal.html    # Management portal (dashboard, users, projects)
@@ -129,9 +157,11 @@ VulnVault/
 
 The app features a modern dark theme with:
 - Glassmorphism sidebar navigation
-- Client-grouped deadline timeline with status badges
+- Client-grouped deadline timeline with status badges & backlog section
 - Bilingual (EN/ID) toggle on generated reports
 - Multi-image POC upload with drag, click, or Ctrl+V paste
+- Notification bell with unread badge
+- Resource links panel for project documentation
 
 ---
 
