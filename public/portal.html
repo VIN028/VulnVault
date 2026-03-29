@@ -917,12 +917,16 @@ function navigate(section) {
 
 // ── Resource Allocation ────────────────────────────────────────────────────────
 let _allocationRows = [];
+let _allEngineers = [];
 
 async function loadAllocation() {
   document.getElementById('gantt-chart-body').innerHTML =
     '<div class="gantt-empty-state">Loading…</div>';
   try {
-    _allocationRows = await apiFetch('/api/dashboard/summary');
+    [_allocationRows, _allEngineers] = await Promise.all([
+      apiFetch('/api/dashboard/summary'),
+      apiFetch('/api/users/engineers'),
+    ]);
     buildQuarterOptions(_allocationRows);
     renderAllocationChart();
   } catch(e) {
@@ -932,7 +936,6 @@ async function loadAllocation() {
 }
 
 function buildQuarterOptions(rows) {
-  // Collect all quarter-years that have at least one project overlapping
   const quarters = new Set();
   const today = new Date();
 
@@ -966,26 +969,27 @@ function quarterLabel(key) {
   return `${q} ${year}  (${months[q]})`;
 }
 
-// Build array of {year, month(0-indexed), weekOfMonth(1-based), monday Date} for a quarter
+// Safe HTML attribute / text escape
+function escA(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function buildWeeks(quarterKey) {
   const [year, q] = quarterKey.split('-');
   const qNum = Number(q.replace('Q',''));
-  const startMonth = (qNum - 1) * 3;           // 0-indexed month
+  const startMonth = (qNum - 1) * 3;
   const endMonth   = startMonth + 2;
 
-  // Start from first Monday on or before the 1st of startMonth
   const qStart = new Date(Number(year), startMonth, 1);
-  // Move back to previous Monday (or stay if already Monday)
-  const dayOfWeek = qStart.getDay() || 7; // 1=Mon..7=Sun
+  const dayOfWeek = qStart.getDay() || 7;
   qStart.setDate(qStart.getDate() - (dayOfWeek - 1));
 
-  const qEnd = new Date(Number(year), endMonth + 1, 0); // last day of quarter
+  const qEnd = new Date(Number(year), endMonth + 1, 0);
 
   const weeks = [];
   let cur = new Date(qStart);
   while (cur <= qEnd) {
     const weekEnd = new Date(cur); weekEnd.setDate(cur.getDate() + 6);
-    // Only include weeks that overlap the quarter months
     const displayMonth = cur.getMonth() >= startMonth && cur.getMonth() <= endMonth
       ? cur.getMonth()
       : weekEnd.getMonth() >= startMonth && weekEnd.getMonth() <= endMonth
@@ -1012,7 +1016,7 @@ function renderAllocationChart() {
   const today = new Date(); today.setHours(0,0,0,0);
   const rows = _allocationRows;
 
-  // ── Build engineer → projects map ──────────────────────────────────────────
+  // ── Build engineer → projects map (from dashboard data) ────────────────────
   const engMap = new Map(); // engineerId → { name, projects:[] }
 
   rows.forEach(r => {
@@ -1028,9 +1032,15 @@ function renderAllocationChart() {
     }
   });
 
+  // ── Add free engineers (no project assignments at all) ──────────────────────
+  _allEngineers.forEach(e => {
+    if (!engMap.has(e.id))
+      engMap.set(e.id, { name: e.display_name, projects: [] });
+  });
+
   if (!engMap.size) {
     document.getElementById('gantt-chart-body').innerHTML =
-      '<div class="gantt-empty-state">No engineers assigned to any projects.</div>';
+      '<div class="gantt-empty-state">No engineers found.</div>';
     return;
   }
 
@@ -1047,6 +1057,11 @@ function renderAllocationChart() {
   });
   if (curCount) monthGroups.push({ month: curMonth, count: curCount });
 
+  // ── Sort: engineers with projects first, then free ──────────────────────────
+  const sortedEngs = [...engMap.entries()].sort((a, b) =>
+    b[1].projects.length - a[1].projects.length || a[1].name.localeCompare(b[1].name)
+  );
+
   // ── Build table HTML ────────────────────────────────────────────────────────
   let html = `<table class="gantt-table">
   <thead>
@@ -1061,11 +1076,8 @@ function renderAllocationChart() {
   </thead>
   <tbody>`;
 
-  let idx = 0;
-  engMap.forEach((eng, engId) => {
-    idx++;
-
-    // For each week, compute active project count and which projects span it
+  sortedEngs.forEach(([engId, eng], idx) => {
+    // For each week, compute active project count
     const weekData = weeks.map(w => {
       const active = eng.projects.filter(p => {
         if (!p.kickoff_date || !p.final_report_date) return false;
@@ -1076,7 +1088,7 @@ function renderAllocationChart() {
       return { active, count: active.length };
     });
 
-    // For each project that spans this engineer, find start/end week indices
+    // Find start/end week index for each project bar
     const projectBars = [];
     eng.projects.forEach(p => {
       if (!p.kickoff_date || !p.final_report_date) return;
@@ -1084,30 +1096,62 @@ function renderAllocationChart() {
       const fe = new Date(p.final_report_date); fe.setHours(23,59,59,999);
       const startIdx = weeks.findIndex(w => w.monday <= fe && w.sunday >= ks);
       const endIdx   = weeks.map((w,i) => (w.monday <= fe && w.sunday >= ks) ? i : -1)
-                            .filter(i => i >= 0).pop();
+                            .filter(i => i >= 0).pop() ?? -1;
       if (startIdx >= 0) projectBars.push({ p, startIdx, endIdx });
     });
 
     html += `<tr class="gantt-eng-row">
       <td class="gantt-eng-name">
-        <span class="gantt-eng-num">${idx}</span>${eng.name}
+        <span class="gantt-eng-num">${idx + 1}</span>${escA(eng.name)}
       </td>`;
 
     weeks.forEach((w, wi) => {
-      const { count, active } = weekData[wi];
+      const { count } = weekData[wi];
       const colorClass = count === 0 ? 'free' : count === 1 ? 'busy' : 'full';
       const isToday = today >= w.monday && today <= w.sunday;
 
-      // Find project bar that starts at this week (to render label)
-      const barsStartingHere = projectBars.filter(b => b.startIdx === wi);
       let label = '';
+
+      // Project name label at the START of each bar (span ≥ 2 weeks)
+      const barsStartingHere = projectBars.filter(b => b.startIdx === wi);
       if (barsStartingHere.length) {
-        // Show first project name truncated
         label = barsStartingHere.map(b => {
           const span = b.endIdx - b.startIdx + 1;
-          const name = b.p.client_name || b.p.project_name;
+          const name = escA(b.p.client_name || b.p.project_name);
           return span >= 2 ? `<span class="gantt-bar-label" title="${name}">${name}</span>` : '';
         }).join('');
+      }
+
+      // End-date label on the LAST week of a bar if project ends before that week's Sunday (partial week)
+      const barsEndingHere = projectBars.filter(b => b.endIdx === wi && b.startIdx !== wi);
+      if (!label && barsEndingHere.length) {
+        label = barsEndingHere.map(b => {
+          const fe = new Date(b.p.final_report_date);
+          fe.setHours(0,0,0,0);
+          // Only show if it ends before Sunday (partial week)
+          if (fe < w.sunday) {
+            const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+            return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">→ ${dayStr}</span>`;
+          }
+          return '';
+        }).filter(Boolean).join('');
+      }
+
+      // Single-week bar with partial end: show end date directly
+      if (!label) {
+        const singleBars = projectBars.filter(b => b.startIdx === wi && b.endIdx === wi);
+        if (singleBars.length) {
+          label = singleBars.map(b => {
+            const fe = new Date(b.p.final_report_date); fe.setHours(0,0,0,0);
+            if (fe < w.sunday) {
+              const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+              return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">→ ${dayStr}</span>`;
+            }
+            // If fills the full week, show abbreviated name
+            const name = escA(b.p.client_name || b.p.project_name);
+            return `<span class="gantt-bar-label" title="${name}">${name}</span>`;
+          }).join('');
+        }
       }
 
       html += `<td class="gantt-cell${isToday ? ' today-col' : ''}">
