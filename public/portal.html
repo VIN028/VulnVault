@@ -293,6 +293,83 @@
     .btn-refresh svg { width: 14px; height: 14px; display: block; }
     .btn-refresh.spinning svg { animation: spin 0.6s linear infinite; }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* ── Notification Bell ── */
+    .notif-wrapper { position: relative; }
+    .notif-bell {
+      background: none; border: none; cursor: pointer; color: var(--muted); padding: 6px;
+      position: relative; transition: color 0.15s;
+    }
+    .notif-bell:hover { color: var(--text); }
+    .notif-bell svg { width: 18px; height: 18px; display: block; }
+    .notif-badge {
+      position: absolute; top: 1px; right: 1px;
+      width: 16px; height: 16px; border-radius: 50%; background: var(--red);
+      font-size: 9px; font-weight: 700; color: white;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .notif-dropdown {
+      display: none; position: absolute; bottom: 42px; left: 0;
+      width: 340px; max-height: 380px; overflow-y: auto;
+      background: #13192a; border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.6); z-index: 200;
+      animation: slideUp 0.2s ease;
+    }
+    .notif-dropdown.open { display: block; }
+    .notif-dropdown-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border);
+      font-size: 13px; font-weight: 700;
+    }
+    .notif-mark-read {
+      background: none; border: none; cursor: pointer; font-family: inherit;
+      font-size: 11px; font-weight: 600; color: var(--accent); transition: opacity 0.15s;
+    }
+    .notif-mark-read:hover { opacity: 0.8; }
+    .notif-item {
+      padding: 12px 16px; border-bottom: 1px solid rgba(148,163,184,0.06);
+      transition: background 0.1s;
+    }
+    .notif-item:hover { background: rgba(255,255,255,0.03); }
+    .notif-item.unread { border-left: 3px solid var(--accent); }
+    .notif-item-title { font-size: 12px; font-weight: 600; margin-bottom: 2px; }
+    .notif-item-msg { font-size: 11px; color: var(--muted); line-height: 1.5; }
+    .notif-item-time { font-size: 10px; color: rgba(148,163,184,0.6); margin-top: 4px; }
+    .notif-empty { padding: 32px; text-align: center; color: var(--muted); font-size: 12px; }
+
+    /* ── Date Range Filter ── */
+    .date-filter {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--muted);
+    }
+    .date-filter input[type="date"] {
+      padding: 5px 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: #0f172a; color: var(--text); font-size: 12px; font-family: inherit;
+      outline: none;
+    }
+    .date-filter input[type="date"]:focus { border-color: var(--accent); }
+    .date-filter-clear {
+      background: none; border: none; cursor: pointer; color: var(--muted);
+      font-size: 11px; font-weight: 600; font-family: inherit; transition: color 0.15s;
+    }
+    .date-filter-clear:hover { color: var(--red); }
+
+    /* ── Responsive Clients Table + Header ── */
+    .client-group-table table { min-width: 800px; }
+    .client-group-table.open { overflow-x: auto; }
+    .section-header { flex-wrap: wrap; gap: 12px; }
+    @media (max-width: 1200px) {
+      .section-header > div { flex-wrap: wrap; gap: 8px !important; }
+      .section-header > div input[type="search"] { width: 160px !important; min-width: 120px; }
+      .date-filter { flex-wrap: wrap; }
+    }
+    @media (max-width: 768px) {
+      .section-header { flex-direction: column; align-items: flex-start !important; }
+      .section-header > div { width: 100%; }
+      .section-header > div input[type="search"] { width: 100% !important; flex: 1; }
+      .date-filter { width: 100%; }
+      .btn-primary { font-size: 12px !important; padding: 8px 12px !important; }
+    }
   </style>
 </head>
 <body>
@@ -338,9 +415,24 @@
 
   <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-top:1px solid var(--border);">
     <div id="user-name" style="font-size:12px;font-weight:600;color:#94a3b8;background:rgba(255,255,255,0.04);padding:6px 12px;border-radius:20px;text-transform:lowercase;border:1px solid rgba(255,255,255,0.05);"></div>
-    <button class="logout-btn" onclick="doLogout()" title="Sign out">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-    </button>
+    <div style="display:flex;align-items:center;gap:4px">
+      <div class="notif-wrapper">
+        <button class="notif-bell" onclick="toggleNotifDropdown()" title="Notifications">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+          <span class="notif-badge" id="notif-count" style="display:none">0</span>
+        </button>
+        <div class="notif-dropdown" id="notif-dropdown">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button class="notif-mark-read" onclick="markAllRead()">Mark all read</button>
+          </div>
+          <div id="notif-list"><div class="notif-empty">No notifications</div></div>
+        </div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()" title="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
   </div>
 </nav>
 
@@ -366,7 +458,16 @@
         <div class="kpi-card"><div class="kpi-label">Engineers</div><div class="kpi-value" id="kpi-engineers">—</div></div>
       </div>
 
-      <div class="section-header"><div class="section-heading">Upcoming Deadlines</div></div>
+      <div class="section-header">
+        <div class="section-heading">Upcoming Deadlines</div>
+        <div class="date-filter">
+          <span>From</span>
+          <input type="date" id="dash-date-from" onchange="applyDashboardFilter()">
+          <span>To</span>
+          <input type="date" id="dash-date-to" onchange="applyDashboardFilter()">
+          <button class="date-filter-clear" onclick="clearDashboardFilter()">Clear</button>
+        </div>
+      </div>
       <div id="deadline-timeline"><div class="empty-state">Loading…</div></div>
     </div>
   </section>
@@ -417,6 +518,13 @@
       <div class="section-header">
         <div class="section-heading">All Clients</div>
         <div style="display:flex;gap:10px;align-items:center">
+          <div class="date-filter">
+            <span>From</span>
+            <input type="date" id="client-date-from" onchange="filterProjects()">
+            <span>To</span>
+            <input type="date" id="client-date-to" onchange="filterProjects()">
+            <button class="date-filter-clear" onclick="clearClientDateFilter()">Clear</button>
+          </div>
           <input id="projects-search" type="search" placeholder="Search client or project…" oninput="filterProjects()" style="padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;width:220px" />
           <button class="btn-primary" style="background:rgba(255,255,255,0.08);color:var(--text)" onclick="openCreateClient()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -560,6 +668,10 @@
         <label>Final Report Date</label>
         <input id="cp-final" type="date" />
       </div>
+      <div class="form-group" style="grid-column:1/-1">
+        <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
+        <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
+      </div>
     </div>
     <div class="modal-err" id="cp-err"></div>
     <div class="modal-actions">
@@ -689,27 +801,52 @@ function navigate(section) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
-let _clientsCache = [];
+let _dashboardRows = [];
 
 async function loadDashboard() {
   try {
-    const rows = await apiFetch('/api/clients/full');
-    _clientsCache = rows;
-    const clientIds = new Set(); let totalProjects = 0; let totalFindings = 0;
-    rows.forEach(r => { clientIds.add(r.client_id); if (r.project_id) { totalProjects++; totalFindings += (r.finding_count||0); } });
-    document.getElementById('kpi-clients').textContent  = clientIds.size;
-    document.getElementById('kpi-projects').textContent = totalProjects;
-    document.getElementById('kpi-findings').textContent = totalFindings;
-    try {
-      const users = await apiFetch('/api/users');
-      document.getElementById('kpi-engineers').textContent = users.filter(u => u.role === 'engineer').length;
-    } catch { document.getElementById('kpi-engineers').textContent = '—'; }
-    renderDeadlineTimeline(rows.filter(r => r.project_id));
+    const rows = await apiFetch('/api/dashboard/summary');
+    _dashboardRows = rows;
+    applyDashboardFilter();
   } catch(e) {
     const el = document.getElementById('deadline-timeline');
     if (el) el.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
     showToast('Dashboard error: ' + e.message, 'error');
   }
+}
+
+function applyDashboardFilter() {
+  const from = document.getElementById('dash-date-from')?.value || '';
+  const to   = document.getElementById('dash-date-to')?.value || '';
+  let rows = _dashboardRows;
+  if (from || to) {
+    rows = rows.filter(r => {
+      const d = r.kickoff_date || r.initial_report_date || r.final_report_date;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
+  const clientIds = new Set();
+  let totalProjects = 0, totalFindings = 0;
+  rows.forEach(r => { if (r.project_id) { clientIds.add(r.client_id); totalProjects++; totalFindings += (r.finding_count||0); }});
+  document.getElementById('kpi-clients').textContent  = clientIds.size;
+  document.getElementById('kpi-projects').textContent = totalProjects;
+  document.getElementById('kpi-findings').textContent = totalFindings;
+  if (!_dashboardRows._engLoaded) {
+    apiFetch('/api/users').then(users => {
+      document.getElementById('kpi-engineers').textContent = users.filter(u => u.role === 'engineer').length;
+      _dashboardRows._engLoaded = true;
+    }).catch(() => { document.getElementById('kpi-engineers').textContent = '—'; });
+  }
+  renderDeadlineTimeline(rows.filter(r => r.project_id));
+}
+
+function clearDashboardFilter() {
+  document.getElementById('dash-date-from').value = '';
+  document.getElementById('dash-date-to').value = '';
+  applyDashboardFilter();
 }
 
 function renderDeadlineTimeline(projects) {
@@ -719,28 +856,21 @@ function renderDeadlineTimeline(projects) {
 
   const today = new Date(); today.setHours(0,0,0,0);
 
-  // Group by client
-  const clientMap = {};
-  projects.forEach(p => {
-    if (!clientMap[p.client_name]) clientMap[p.client_name] = [];
-    clientMap[p.client_name].push(p);
-  });
-
-  // Sort projects within each group: dated first by date, then no-date
-  Object.keys(clientMap).forEach(c => {
-    clientMap[c].sort((a, b) => {
-      if (!a.final_report_date && !b.final_report_date) return 0;
-      if (!a.final_report_date) return 1;
-      if (!b.final_report_date) return -1;
-      return new Date(a.final_report_date) - new Date(b.final_report_date);
-    });
-  });
+  // Split into backlog (no kickoff or kickoff in future) vs active (kickoff today or past)
+  const backlogProjects = projects.filter(p => !p.kickoff_date || new Date(p.kickoff_date) > today);
+  const activeProjects  = projects.filter(p => p.kickoff_date && new Date(p.kickoff_date) <= today);
 
   const phaseTag = p => {
-    if (p.final_report_status === 'completed')
-      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(34,197,94,0.18);color:#4ade80;font-weight:700;letter-spacing:0.3px">Final</span>`;
-    if (p.initial_report_status === 'completed')
-      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(99,102,241,0.2);color:#a5b4fc;font-weight:700;letter-spacing:0.3px">Initial</span>`;
+    if (p.final_report_status === 'completed') {
+      const completedDate = p.final_completed_at ? ` • ${fmt(p.final_completed_at)}` : '';
+      const byName = p.final_completed_by ? ` by ${esc(p.final_completed_by)}` : '';
+      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(34,197,94,0.18);color:#4ade80;font-weight:700;letter-spacing:0.3px" title="Final Report completed${byName}${completedDate}">Final ✓</span>`;
+    }
+    if (p.initial_report_status === 'completed') {
+      const completedDate = p.initial_completed_at ? ` • ${fmt(p.initial_completed_at)}` : '';
+      const byName = p.initial_completed_by ? ` by ${esc(p.initial_completed_by)}` : '';
+      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(99,102,241,0.2);color:#a5b4fc;font-weight:700;letter-spacing:0.3px" title="Initial Report completed${byName}${completedDate}">Initial ✓</span>`;
+    }
     return '';
   };
 
@@ -755,8 +885,10 @@ function renderDeadlineTimeline(projects) {
       const urgent  = !isCompleted && !overdue && daysLeft <= 7;
       barColor = isCompleted ? '#22c55e' : overdue ? '#f87171' : urgent ? '#fb923c' : '#6366f1';
       pct = isCompleted ? 100 : Math.max(5, Math.min(95, 100 - (daysLeft / 60) * 100));
+      const completedByName = isCompleted ? (p.final_completed_by || '') : '';
+      const completedAt = isCompleted && p.final_completed_at ? fmt(p.final_completed_at) : '';
       statusHtml = isCompleted
-        ? `<div style="font-size:12px;font-weight:700;color:#22c55e">&#10003; Completed</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
+        ? `<div style="font-size:12px;font-weight:700;color:#22c55e">&#10003; Completed</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${completedAt || fmt(p.final_report_date)}${completedByName ? ` • by ${esc(completedByName)}` : ''}</div>`
         : overdue
           ? `<div style="font-size:12px;font-weight:700;color:#f87171">&#9888; ${Math.abs(daysLeft)}d overdue</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
           : daysLeft === 0
@@ -785,15 +917,68 @@ function renderDeadlineTimeline(projects) {
       </div>`;
   };
 
-  el.innerHTML = Object.entries(clientMap).map(([clientName, projs]) => `
-    <div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.015);margin-bottom:14px;">
-      <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(99,102,241,0.08);border-bottom:1px solid rgba(255,255,255,0.06);">
-        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${esc(clientName).charAt(0).toUpperCase()}</div>
-        <span style="font-size:13px;font-weight:700;color:#e2e8f0">${esc(clientName)}</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:8px">${projs.length} project${projs.length > 1 ? 's' : ''}</span>
+  const backlogRow = p => `
+    <div style="display:grid;grid-template-columns:1fr 100px;align-items:center;gap:16px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.project_name)}</span>
+          <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;letter-spacing:0.3px">${(p.project_type||'web').toUpperCase()}</span>
+        </div>
+        <div style="font-size:10px;color:var(--muted)">
+          Client: <span style="color:#c4cfe0;font-weight:500">${esc(p.client_name)}</span>
+          ${p.engineer_name ? ` · PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name)}</span>` : ''}
+        </div>
       </div>
-      <div>${projs.map(p => projectRow(p)).join('')}</div>
-    </div>`).join('');
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#fbbf24;font-weight:600">${p.kickoff_date ? 'Kickoff: ' + fmt(p.kickoff_date) : 'Awaiting kickoff'}</div>
+      </div>
+    </div>`;
+
+  // ── Build HTML ──
+  let html = '';
+
+  // Backlog section (always on top)
+  if (backlogProjects.length) {
+    html += `
+      <div style="border:1px solid rgba(251,191,36,0.2);border-radius:12px;overflow:hidden;background:rgba(251,191,36,0.03);margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(251,191,36,0.08);border-bottom:1px solid rgba(251,191,36,0.15);">
+          <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">📋</div>
+          <span style="font-size:13px;font-weight:700;color:#fbbf24">Backlog</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(251,191,36,0.1);padding:2px 8px;border-radius:8px">${backlogProjects.length} project${backlogProjects.length > 1 ? 's' : ''}</span>
+        </div>
+        <div>${backlogProjects.map(p => backlogRow(p)).join('')}</div>
+      </div>`;
+  }
+
+  // Active projects grouped by client
+  if (activeProjects.length) {
+    const clientMap = {};
+    activeProjects.forEach(p => {
+      if (!clientMap[p.client_name]) clientMap[p.client_name] = [];
+      clientMap[p.client_name].push(p);
+    });
+    Object.keys(clientMap).forEach(c => {
+      clientMap[c].sort((a, b) => {
+        if (!a.final_report_date && !b.final_report_date) return 0;
+        if (!a.final_report_date) return 1;
+        if (!b.final_report_date) return -1;
+        return new Date(a.final_report_date) - new Date(b.final_report_date);
+      });
+    });
+
+    html += Object.entries(clientMap).map(([clientName, projs]) => `
+      <div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.015);margin-bottom:14px;">
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(99,102,241,0.08);border-bottom:1px solid rgba(255,255,255,0.06);">
+          <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${esc(clientName).charAt(0).toUpperCase()}</div>
+          <span style="font-size:13px;font-weight:700;color:#e2e8f0">${esc(clientName)}</span>
+          <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:8px">${projs.length} project${projs.length > 1 ? 's' : ''}</span>
+        </div>
+        <div>${projs.map(p => projectRow(p)).join('')}</div>
+      </div>`).join('');
+  }
+
+  if (!html) html = '<div class="empty-state">No projects yet.</div>';
+  el.innerHTML = html;
 }
 
 
@@ -858,7 +1043,7 @@ function renderClientGroups(containerId, rows, showActions) {
           </tr></thead>
           <tbody>${g.projects.map(p=>`
             <tr style="cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.06);transition:background 0.1s"
-                onclick="openFindings(${p.project_id},'${esc(p.project_name)}', '${esc(p.engineer_name||'—')}', '${esc(p.assist_engineer_name||'')}', '${esc(p.link_report_en||'')}', '${esc(p.link_report_id||'')}')"
+                onclick="openFindings(${p.project_id},'${esc(p.project_name)}', '${esc(p.engineer_name||'—')}', '${esc(p.assist_engineer_name||'')}', '${esc(p.link_report_en||'')}', '${esc(p.link_report_id||'')}', ${JSON.stringify(p.project_links||'').replace(/"/g,'&quot;')})"
                 onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                 onmouseout="this.style.background=''">
               <td style="padding:13px 20px;font-weight:600;font-size:13px">${esc(p.project_name)}</td>
@@ -872,7 +1057,7 @@ function renderClientGroups(containerId, rows, showActions) {
               <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.final_report_date)}</td>
               <td style="padding:13px 20px" class="col-findings">${p.project_type === 'phishing' ? '<span style="font-size:11px;color:var(--muted)">—</span>' : `<span class="finding-count ${countColor(p.finding_count||0)}">${p.finding_count||0}</span>`}</td>
               ${showActions?`<td style="padding:8px 12px" onclick="event.stopPropagation()">
-                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},'${esc(p.project_name)}',${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'},'${p.project_type||'web'}')" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},'${esc(p.project_name)}',${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'},'${p.project_type||'web'}', ${JSON.stringify(p.project_links||'').replace(/"/g,'&quot;')})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                 <button class="icon-btn" onclick="deleteProjectPortal(${p.project_id},'${esc(p.project_name)}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
               </td>`:''}
             </tr>`).join('')}</tbody>
@@ -906,13 +1091,30 @@ async function loadProjects() {
 
 function filterProjects() {
   const q = (document.getElementById('projects-search')?.value||'').toLowerCase();
+  const from = document.getElementById('client-date-from')?.value || '';
+  const to   = document.getElementById('client-date-to')?.value || '';
   let rows = _allClientsCache;
   if (q) rows = rows.filter(r =>
     r.client_name?.toLowerCase().includes(q)||
     r.project_name?.toLowerCase().includes(q)||
     r.engineer_name?.toLowerCase().includes(q)
   );
+  if (from || to) {
+    rows = rows.filter(r => {
+      const d = r.kickoff_date || r.initial_report_date || r.final_report_date;
+      if (!d) return false;
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    });
+  }
   renderClientGroups('projects-accordion', rows, true);
+}
+
+function clearClientDateFilter() {
+  document.getElementById('client-date-from').value = '';
+  document.getElementById('client-date-to').value = '';
+  filterProjects();
 }
 
 // PM/Manager: inline rename client
@@ -947,7 +1149,7 @@ async function deleteProjectPortal(id, name) {
 }
 
 // PM/Manager: edit project (assign engineer / dates)
-async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId, currentProjectType) {
+async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId, currentProjectType, currentProjectLinks) {
   // Build a quick modal using existing modal-create-project but pre-filled
   // Reuse the create-project modal as an edit modal  
   const modal = document.getElementById('modal-create-project');
@@ -955,6 +1157,9 @@ async function editProjectPortal(projectId, projectName, currentEngineerId, curr
   
   // Set project type
   document.getElementById('cp-type').value = currentProjectType || 'web';
+
+  // Populate existing project links
+  populateProjectLinks(currentProjectLinks);
 
   // Load engineers
   const engSel = document.getElementById('cp-engineer');
@@ -988,9 +1193,10 @@ async function editProjectPortal(projectId, projectName, currentEngineerId, curr
     const kickoff_date = document.getElementById('cp-kickoff').value || null;
     const initial_report_date = document.getElementById('cp-initial').value || null;
     const final_report_date = document.getElementById('cp-final').value || null;
+    const project_links = getProjectLinksFromForm();
     btn.disabled = true;
     try {
-      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: document.getElementById('cp-name').value.trim(), project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date });
+      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: document.getElementById('cp-name').value.trim(), project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links });
       modal.classList.remove('open');
       showToast('Project updated!', 'success');
       loadProjects(); loadDashboard();
@@ -1015,6 +1221,7 @@ async function openCreateProject() {
   ['cp-name','cp-kickoff','cp-initial','cp-final'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('cp-type').value = 'web';
   document.getElementById('cp-err').classList.remove('show');
+  document.getElementById('cp-links-container').innerHTML = '';
 
   // Load clients into select
   try {
@@ -1059,8 +1266,9 @@ async function submitCreateProject() {
   const btn = document.getElementById('cp-btn');
   btn.disabled = true;
   try {
+    const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
-      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date
+      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links
     });
     document.getElementById('modal-create-project').classList.remove('open');
     showToast('Project created!', 'success');
@@ -1077,16 +1285,42 @@ async function submitCreateProject() {
 const SEV_ORDER = { Critical:0, High:1, Medium:2, Low:3, Info:4 };
 const SEV_COLOR = { Critical:'#f87171', High:'#fb923c', Medium:'#fbbf24', Low:'#86efac', Info:'#94a3b8' };
 
-async function openFindings(projectId, projectName, picName, assistName, linkEn, linkId) {
+async function openFindings(projectId, projectName, picName, assistName, linkEn, linkId, projectLinksJson) {
   document.getElementById('findings-modal-title').textContent = `${projectName} — Findings`;
   document.getElementById('findings-modal-body').innerHTML = '<div class="empty-state">Loading…</div>';
   document.getElementById('modal-findings').classList.add('open');
   try {
     const findings = await apiFetch(`/api/projects/${projectId}/findings`);
     const body = document.getElementById('findings-modal-body');
-    if (!findings.length) {
-      body.innerHTML = '<div class="empty-state">No findings in this project yet.</div>'; return;
+
+    // Always show engineer info
+    let engineersHtml = `<div style="font-size:13px;color:var(--muted);margin-bottom:16px">PIC: <span style="font-weight:600;color:var(--text)">${picName}</span>${assistName ? ` <span style="margin:0 6px;opacity:0.3">|</span> Assist: <span style="font-weight:600;color:var(--text)">${assistName}</span>` : ''}</div>`;
+
+    // Resource links from PM
+    let resourceLinksHtml = '';
+    try {
+      const plinks = projectLinksJson ? (typeof projectLinksJson === 'string' ? JSON.parse(projectLinksJson) : projectLinksJson) : null;
+      if (plinks && Array.isArray(plinks) && plinks.length) {
+        resourceLinksHtml = `<div style="margin-bottom:16px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">📁 Resource Links</div><div style="display:flex;flex-wrap:wrap;gap:8px">${plinks.map(l =>
+          `<a href="${l.url}" target="_blank" style="padding:6px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:12px;color:#fbbf24;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(251,191,36,0.15)'" onmouseout="this.style.background='rgba(251,191,36,0.08)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>${l.label||'Link'}</a>`
+        ).join('')}</div></div>`;
+      }
+    } catch {}
+
+    // Always show report links if present
+    let reportLinksHtml = '';
+    if (linkEn || linkId) {
+      reportLinksHtml = `<div style="display:flex;gap:8px;margin-bottom:20px">`;
+      if (linkEn) reportLinksHtml += `<a href="${linkEn}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report EN</a>`;
+      if (linkId) reportLinksHtml += `<a href="${linkId}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report ID</a>`;
+      reportLinksHtml += `</div>`;
     }
+
+    if (!findings.length) {
+      body.innerHTML = `${engineersHtml}${resourceLinksHtml}${reportLinksHtml}<div class="empty-state">No findings in this project yet.</div>`;
+      return;
+    }
+
     findings.sort((a,b) => (SEV_ORDER[a.severity]??9) - (SEV_ORDER[b.severity]??9));
     
     // Summary counts
@@ -1096,19 +1330,9 @@ async function openFindings(projectId, projectName, picName, assistName, linkEn,
       `<span style="background:${SEV_COLOR[s]}22;color:${SEV_COLOR[s]};padding:4px 12px;border-radius:20px;font-size:11px;font-weight:700">${s}: ${n}</span>`
     ).join('');
 
-    // Extra Data rendering
-    let reportLinksHtml = '';
-    if (linkEn || linkId) {
-      reportLinksHtml = `<div style="display:flex;gap:8px;margin-bottom:20px">`;
-      if (linkEn) reportLinksHtml += `<a href="${linkEn}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report EN</a>`;
-      if (linkId) reportLinksHtml += `<a href="${linkId}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report ID</a>`;
-      reportLinksHtml += `</div>`;
-    }
-
-    let engineersHtml = `<div style="font-size:13px;color:var(--muted);margin-bottom:16px">PIC: <span style="font-weight:600;color:var(--text)">${picName}</span>${assistName ? ` <span style="margin:0 6px opacity:0.3">|</span> Assist: <span style="font-weight:600;color:var(--text)">${assistName}</span>` : ''}</div>`;
-
     body.innerHTML = `
       ${engineersHtml}
+      ${resourceLinksHtml}
       ${reportLinksHtml}
       <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px">Executive Summary</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:28px">${summaryHtml}</div>
@@ -1399,6 +1623,39 @@ async function doLogout() {
   window.location.replace('/login.html');
 }
 
+// ── Project Link Helpers ──────────────────────────────────────────────────────
+function addProjectLink(label = '', url = '') {
+  const container = document.getElementById('cp-links-container');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  row.innerHTML = `
+    <input type="text" placeholder="Label (e.g. Working Folder)" value="${esc(label)}" style="width:140px;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input,#0f172a);color:var(--text);font-size:12px;font-family:inherit;outline:none" class="cp-link-label" />
+    <input type="url" placeholder="https://..." value="${esc(url)}" style="flex:1;padding:7px 10px;border-radius:6px;border:1px solid var(--border);background:var(--bg-input,#0f172a);color:var(--text);font-size:12px;font-family:inherit;outline:none" class="cp-link-url" />
+    <button type="button" onclick="this.parentElement.remove()" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:16px;padding:4px;line-height:1" title="Remove">✕</button>`;
+  container.appendChild(row);
+}
+
+function getProjectLinksFromForm() {
+  const rows = document.querySelectorAll('#cp-links-container > div');
+  const links = [];
+  rows.forEach(r => {
+    const label = r.querySelector('.cp-link-label')?.value?.trim() || '';
+    const url = r.querySelector('.cp-link-url')?.value?.trim() || '';
+    if (url) links.push({ label: label || 'Link', url });
+  });
+  return links.length ? links : null;
+}
+
+function populateProjectLinks(linksJson) {
+  const container = document.getElementById('cp-links-container');
+  container.innerHTML = '';
+  if (!linksJson) return;
+  try {
+    const links = typeof linksJson === 'string' ? JSON.parse(linksJson) : linksJson;
+    if (Array.isArray(links)) links.forEach(l => addProjectLink(l.label || '', l.url || ''));
+  } catch {}
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function closeModal(e) {
   if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
@@ -1429,6 +1686,70 @@ function showToast(msg, type = 'success') {
   container.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
+
+// ── Notification System ───────────────────────────────────────────────────────
+let _notifOpen = false;
+
+function toggleNotifDropdown() {
+  const dd = document.getElementById('notif-dropdown');
+  _notifOpen = !_notifOpen;
+  dd.classList.toggle('open', _notifOpen);
+  if (_notifOpen) loadNotifications();
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  if (_notifOpen && !e.target.closest('.notif-wrapper')) {
+    _notifOpen = false;
+    document.getElementById('notif-dropdown').classList.remove('open');
+  }
+});
+
+function timeAgo(dateStr) {
+  const s = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function loadNotifications() {
+  try {
+    const notifs = await apiFetch('/api/notifications');
+    const unread = notifs.filter(n => !n.is_read).length;
+    const badge = document.getElementById('notif-count');
+    if (unread > 0) { badge.textContent = unread; badge.style.display = ''; }
+    else { badge.style.display = 'none'; }
+
+    const list = document.getElementById('notif-list');
+    if (!notifs.length) {
+      list.innerHTML = '<div class="notif-empty">No notifications yet</div>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => `
+      <div class="notif-item ${n.is_read ? '' : 'unread'}">
+        <div class="notif-item-title">${esc(n.title)}</div>
+        ${n.message ? `<div class="notif-item-msg">${esc(n.message)}</div>` : ''}
+        <div class="notif-item-time">${timeAgo(n.created_at)}</div>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('notif-list').innerHTML = `<div class="notif-empty">Error: ${e.message}</div>`;
+  }
+}
+
+async function markAllRead() {
+  try {
+    await apiFetch('/api/notifications/read', 'PATCH');
+    document.getElementById('notif-count').style.display = 'none';
+    document.querySelectorAll('.notif-item.unread').forEach(el => el.classList.remove('unread'));
+  } catch {}
+}
+
+// Poll for new notifications every 30s
+setInterval(() => { loadNotifications(); }, 30000);
+// Initial load
+setTimeout(() => { loadNotifications(); }, 1000);
 </script>
 </body>
 </html>

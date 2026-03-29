@@ -82,6 +82,11 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN link_report_id TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN initial_report_status TEXT DEFAULT 'pending'`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN final_report_status TEXT DEFAULT 'pending'`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN initial_completed_by TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN final_completed_by TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN initial_completed_at TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN final_completed_at TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN project_links TEXT`, () => {});
   });
 
   db.run(`
@@ -97,6 +102,8 @@ function initializeDb() {
   setTimeout(initProjectAccessRequests, 200);
   // Initialize activity log table
   setTimeout(initActivityLog, 300);
+  // Initialize notifications table
+  setTimeout(initNotifications, 400);
 
 
   db.run(`
@@ -249,6 +256,8 @@ function getDashboardSummary(callback) {
            p.project_type, p.assigned_engineer_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
+           p.initial_completed_by, p.final_completed_by,
+           p.initial_completed_at, p.final_completed_at,
            u.display_name AS engineer_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
     FROM clients c
@@ -278,7 +287,7 @@ function getClientsWithProjects(callback) {
            p.initial_report_status, p.final_report_status,
            p.assigned_engineer_id,
            p.assist_engineer_id,
-           p.link_report_en, p.link_report_id,
+           p.link_report_en, p.link_report_id, p.project_links,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -513,6 +522,19 @@ function saveVulnerability(data, callback) {
   );
 }
 
+function updateVulnerability(id, data, callback) {
+  const db = getDb();
+  const { name, description, affected_items, impact, recommendation, poc, screenshot_path, severity } = data;
+  db.run(
+    `UPDATE vulnerabilities SET name=?, description=?, affected_items=?, impact=?, recommendation=?, poc=?, screenshot_path=?, severity=? WHERE id=?`,
+    [name, description || null, affected_items || null, impact || null, recommendation || null, poc || null, screenshot_path || null, severity || 'Medium', id],
+    function(err) {
+      if (err) return callback(err);
+      callback(null, { changes: this.changes });
+    }
+  );
+}
+
 function deleteVulnerability(id, callback) {
   const db = getDb();
   db.run('DELETE FROM vulnerabilities WHERE id = ?', [id], function (err) {
@@ -566,7 +588,7 @@ function getProjectsByClient(clientId, callback) {
             p.assigned_engineer_id, p.assist_engineer_id, p.kickoff_date,
             p.initial_report_date, p.final_report_date,
             p.initial_report_status, p.final_report_status,
-            p.link_report_en, p.link_report_id,
+            p.link_report_en, p.link_report_id, p.project_links,
             p.created_at,
             u.display_name AS engineer_name,
             u2.display_name AS assist_engineer_name
@@ -584,11 +606,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date } = opts || {};
+  const { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [clientId, name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null],
+    `INSERT INTO projects (client_id, name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [clientId, name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -687,7 +709,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, callback) {
+function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
@@ -697,9 +719,10 @@ function updateProject(id, { name, project_type, assigned_engineer_id, assist_en
        assist_engineer_id = ?,
        kickoff_date = ?,
        initial_report_date = ?,
-       final_report_date = ?
+       final_report_date = ?,
+       project_links = ?
      WHERE id = ?`,
-    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, id],
+    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -716,7 +739,7 @@ function updateProjectReports(id, { link_report_en, link_report_id }, callback) 
 }
 
 function updateProjectReportStatus(id, statuses, callback) {
-  const { initial_report_status, final_report_status } = statuses;
+  const { initial_report_status, final_report_status, initial_completed_by, final_completed_by, initial_completed_at, final_completed_at } = statuses;
   let updates = [];
   let params = [];
   if (initial_report_status) {
@@ -726,6 +749,22 @@ function updateProjectReportStatus(id, statuses, callback) {
   if (final_report_status) {
     updates.push('final_report_status = ?');
     params.push(final_report_status);
+  }
+  if (initial_completed_by) {
+    updates.push('initial_completed_by = ?');
+    params.push(initial_completed_by);
+  }
+  if (final_completed_by) {
+    updates.push('final_completed_by = ?');
+    params.push(final_completed_by);
+  }
+  if (initial_completed_at) {
+    updates.push('initial_completed_at = ?');
+    params.push(initial_completed_at);
+  }
+  if (final_completed_at) {
+    updates.push('final_completed_at = ?');
+    params.push(final_completed_at);
   }
   if (updates.length === 0) return callback(null, { changes: 0 });
   
@@ -776,6 +815,55 @@ function getProjectFullVulnerabilities(projectId, callback) {
   );
 }
 
+// ─── Notifications ────────────────────────────────────────────────────────────
+function initNotifications() {
+  getDb().run(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+function createNotification({ userId, type, title, message }, callback) {
+  getDb().run(
+    'INSERT INTO notifications (user_id, type, title, message) VALUES (?,?,?,?)',
+    [userId, type, title, message || null],
+    callback || (() => {})
+  );
+}
+
+/** Notify all management users (admin, manager, pm) */
+function notifyManagement({ type, title, message }, callback) {
+  const db = getDb();
+  db.all("SELECT id FROM users WHERE role IN ('admin','manager','pm')", [], (err, rows) => {
+    if (err || !rows?.length) return (callback || (() => {}))();
+    const stmt = db.prepare('INSERT INTO notifications (user_id, type, title, message) VALUES (?,?,?,?)');
+    for (const r of rows) stmt.run([r.id, type, title, message || null]);
+    stmt.finalize(callback || (() => {}));
+  });
+}
+
+function getNotifications(userId, callback) {
+  getDb().all(
+    'SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+    [userId], callback
+  );
+}
+
+function markNotificationsRead(userId, callback) {
+  getDb().run(
+    'UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0',
+    [userId],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
 module.exports = {
   getDb,
   // Vulnerabilities
@@ -783,6 +871,7 @@ module.exports = {
   getAllVulnerabilities,
   getVulnerabilityById,
   saveVulnerability,
+  updateVulnerability,
   deleteVulnerability,
   searchVulnerabilities,
   countVulnerabilities,
@@ -831,5 +920,10 @@ module.exports = {
   // User management extras
   getUserById,
   changePassword,
+  // Notifications
+  createNotification,
+  notifyManagement,
+  getNotifications,
+  markNotificationsRead,
 };
 

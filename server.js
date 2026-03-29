@@ -22,9 +22,18 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+const rateLimit = require('express-rate-limit');
+
 // ─── Auth (public) ───────────────────────────────────────────────────────────
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,       // 1 minute window
+  max: 5,                     // 5 attempts per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 1 minute before trying again.' },
+});
 app.get('/api/session', (req, res) => auth.sessionStatus(req, res));
-app.post('/api/login', (req, res) => auth.login(req, res));
+app.post('/api/login', loginLimiter, (req, res) => auth.login(req, res));
 app.post('/api/logout', (req, res) => auth.logout(req, res));
 
 // Everything under /api below requires a valid session cookie (except routes above)
@@ -261,13 +270,12 @@ app.patch('/api/project-access-requests/:id', auth.requireRole('admin', 'manager
   }
   db.updateProjectAccessRequest({ id: Number(req.params.id), status, reviewedBy: req.session.userId }, (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Write activity log
-    db.getProjectAccessRequests({}, (e2, pending) => {
-      // find the request that was just updated by re-fetching via project-access endpoint
-    });
-    // Log the action (best-effort)
+    // Log the action + send notification to engineer
     db.getDb().get(
-      'SELECT par.engineer_id, par.project_id FROM project_access_requests par WHERE par.id=?',
+      `SELECT par.engineer_id, par.project_id, p.name AS project_name
+       FROM project_access_requests par
+       JOIN projects p ON p.id = par.project_id
+       WHERE par.id=?`,
       [Number(req.params.id)],
       (e, row) => {
         if (row) {
@@ -278,6 +286,13 @@ app.patch('/api/project-access-requests/:id', auth.requireRole('admin', 'manager
             projectId: row.project_id,
             action: status,
             details: `Project access request ${status} by ${req.session.username}`
+          });
+          // Notify the requesting engineer
+          db.createNotification({
+            userId: row.engineer_id,
+            type: 'access_request',
+            title: status === 'approved' ? 'Access Request Approved' : 'Access Request Rejected',
+            message: `Your request to join project "${row.project_name}" has been ${status} by ${req.session.displayName || req.session.username}.`
           });
         }
       }
@@ -292,6 +307,21 @@ app.get('/api/activity-log', auth.requireRole('admin','manager','pm'), (req, res
   db.getActivityLog(type, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
+  });
+});
+
+// ─── Notifications ────────────────────────────────────────────────────────────
+app.get('/api/notifications', (req, res) => {
+  db.getNotifications(req.session.userId, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.patch('/api/notifications/read', (req, res) => {
+  db.markNotificationsRead(req.session.userId, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true });
   });
 });
 
@@ -338,6 +368,20 @@ app.post('/api/vulnerabilities', (req, res) => {
       });
     }
   );
+});
+
+app.put('/api/vulnerabilities/:id', (req, res) => {
+  const id = Number(req.params.id);
+  const { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path } = req.body;
+  if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
+  db.updateVulnerability(id, { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Vulnerability not found' });
+    db.getVulnerabilityById(id, (err2, row) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json(row);
+    });
+  });
 });
 
 app.delete('/api/vulnerabilities/:id', (req, res) => {
@@ -445,13 +489,13 @@ app.post('/api/clients/:clientId/projects', (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date } = req.body;
+  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
   }
   if (!trimName) return res.status(400).json({ error: 'Project name is required' });
-  db.createProject(clientId, trimName, { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, (err, result) => {
+  db.createProject(clientId, trimName, { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -571,10 +615,10 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date } = req.body;
+  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
-  db.updateProject(id, { name: trimName, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date }, (err, result) => {
+  db.updateProject(id, { name: trimName, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
@@ -590,6 +634,16 @@ app.patch('/api/projects/:id/reports', auth.requireRole('engineer', 'admin', 'ma
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated report links for project ID ${id}` });
+    // Notify management when report links are saved
+    db.getProjectById(id, (e, proj) => {
+      if (!e && proj) {
+        db.notifyManagement({
+          type: 'report_links',
+          title: '📎 Report Links Updated',
+          message: `${req.session.displayName || req.session.username} updated report links for "${proj.name}".`
+        });
+      }
+    });
     res.json({ id, link_report_en, link_report_id });
   });
 });
@@ -599,7 +653,19 @@ app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'man
   const { initial_report_status, final_report_status } = req.body;
   if (!initial_report_status && !final_report_status) return res.json({ ok: true });
 
-  db.updateProjectReportStatus(id, { initial_report_status, final_report_status }, (err, result) => {
+  // Build completed_by + completed_at updates
+  const completedBy = {};
+  const now = new Date().toISOString();
+  if (initial_report_status === 'completed') {
+    completedBy.initial_completed_by = req.session.displayName || req.session.username;
+    completedBy.initial_completed_at = now;
+  }
+  if (final_report_status === 'completed') {
+    completedBy.final_completed_by = req.session.displayName || req.session.username;
+    completedBy.final_completed_at = now;
+  }
+
+  db.updateProjectReportStatus(id, { initial_report_status, final_report_status, ...completedBy }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
 
@@ -616,6 +682,12 @@ app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'man
             action: 'report_completed',
             details: msg
           }, () => {});
+          // Notify all management
+          db.notifyManagement({
+            type: 'report_completed',
+            title: initial_report_status === 'completed' ? '📋 Initial Report Completed' : '📗 Final Report Completed',
+            message: `${req.session.displayName || req.session.username} completed the ${initial_report_status === 'completed' ? 'Initial' : 'Final'} Report for "${proj.name}".`
+          });
         }
       }
     });

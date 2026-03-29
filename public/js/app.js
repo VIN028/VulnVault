@@ -1271,6 +1271,20 @@ async function selectProject(project) {
   document.getElementById('inp-report-en').value = project.link_report_en || '';
   document.getElementById('inp-report-id').value = project.link_report_id || '';
   
+  // Show resource links from PM
+  const rlContainer = document.getElementById('project-resource-links');
+  const rlList = document.getElementById('resource-links-list');
+  try {
+    const links = project.project_links ? JSON.parse(project.project_links) : null;
+    if (links && Array.isArray(links) && links.length) {
+      rlContainer.style.display = 'block';
+      rlList.innerHTML = links.map(l => `<a href="${l.url}" target="_blank" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:8px;color:#a5b4fc;font-size:12px;font-weight:500;text-decoration:none;transition:background 0.2s" onmouseover="this.style.background='rgba(99,102,241,0.15)'" onmouseout="this.style.background='rgba(99,102,241,0.08)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>${l.label || 'Link'}</a>`).join('');
+    } else {
+      rlContainer.style.display = 'none';
+      rlList.innerHTML = '';
+    }
+  } catch { rlContainer.style.display = 'none'; }
+  
   // Update report complete buttons
   const btnInit = document.getElementById('btn-finish-initial');
   if (btnInit) {
@@ -1573,3 +1587,218 @@ async function submitEngineerChangePassword() {
     errEl.style.display = 'block';
   } finally { btn.disabled = false; }
 }
+
+// ── Engineer Notification System ──────────────────────────────────────────────
+let _engNotifOpen = false;
+
+function toggleNotifDropdownEng() {
+  const dd = document.getElementById('eng-notif-dropdown');
+  _engNotifOpen = !_engNotifOpen;
+  dd.style.display = _engNotifOpen ? 'block' : 'none';
+  if (_engNotifOpen) loadNotificationsEng();
+}
+
+document.addEventListener('click', e => {
+  if (_engNotifOpen && !e.target.closest('.notif-wrapper')) {
+    _engNotifOpen = false;
+    document.getElementById('eng-notif-dropdown').style.display = 'none';
+  }
+});
+
+function timeAgoEng(dateStr) {
+  const s = Math.floor((Date.now() - new Date(dateStr + 'Z').getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  return Math.floor(s/86400) + 'd ago';
+}
+
+async function loadNotificationsEng() {
+  try {
+    const res = await fetch('/api/notifications');
+    if (!res.ok) return;
+    const notifs = await res.json();
+    const unread = notifs.filter(n => !n.is_read).length;
+    const badge = document.getElementById('eng-notif-count');
+    if (badge) {
+      if (unread > 0) { badge.textContent = unread; badge.style.display = 'flex'; }
+      else { badge.style.display = 'none'; }
+    }
+
+    const list = document.getElementById('eng-notif-list');
+    if (!notifs.length) {
+      list.innerHTML = '<div style="padding:24px;text-align:center;color:#94a3b8;font-size:12px">No notifications yet</div>';
+      return;
+    }
+    const escN = s => s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') : '';
+    list.innerHTML = notifs.map(n => `
+      <div style="padding:10px 14px;border-bottom:1px solid rgba(148,163,184,0.06);${!n.is_read ? 'border-left:3px solid #6366f1;' : ''}">
+        <div style="font-size:12px;font-weight:600;color:#f0f4ff;margin-bottom:2px">${escN(n.title)}</div>
+        ${n.message ? `<div style="font-size:11px;color:#94a3b8;line-height:1.5">${escN(n.message)}</div>` : ''}
+        <div style="font-size:10px;color:rgba(148,163,184,0.5);margin-top:3px">${timeAgoEng(n.created_at)}</div>
+      </div>
+    `).join('');
+  } catch {}
+}
+
+async function markAllReadEng() {
+  try {
+    await fetch('/api/notifications/read', { method: 'PATCH', headers: { 'Content-Type': 'application/json' } });
+    const badge = document.getElementById('eng-notif-count');
+    if (badge) badge.style.display = 'none';
+    loadNotificationsEng();
+  } catch {}
+}
+
+// Poll for notifications every 30s
+setInterval(loadNotificationsEng, 30000);
+setTimeout(loadNotificationsEng, 1500);
+
+// ── Manual Finding ────────────────────────────────────────────────────────────
+let mfScreenshotPaths = [];
+let mfEditingId = null; // null = create, number = edit
+
+function openManualFindingModal() {
+  mfEditingId = null;
+  ['mf-name','mf-affected'].forEach(id => document.getElementById(id).value = '');
+  ['mf-description','mf-recommendation','mf-poc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mf-severity').value = 'Medium';
+  document.getElementById('mf-err').style.display = 'none';
+  document.getElementById('mf-screenshot-input').value = '';
+  mfScreenshotPaths = [];
+  renderMfThumbnails();
+  // Reset modal title/button for create mode
+  document.querySelector('#modal-manual-finding div > div:first-child').textContent = 'Add Manual Finding';
+  document.getElementById('mf-btn').textContent = 'Create Finding';
+  document.getElementById('modal-manual-finding').classList.add('open');
+}
+
+function openEditFinding() {
+  if (!currentModalReport) return;
+  const v = currentModalReport;
+  mfEditingId = currentDetailId;
+  // Pre-fill fields
+  document.getElementById('mf-name').value = v.name || '';
+  document.getElementById('mf-severity').value = v.severity || 'Medium';
+  document.getElementById('mf-description').value = v.description || '';
+  document.getElementById('mf-affected').value = v.affected_items || '';
+  document.getElementById('mf-recommendation').value = v.recommendation || '';
+  document.getElementById('mf-poc').value = v.poc || '';
+  document.getElementById('mf-err').style.display = 'none';
+  document.getElementById('mf-screenshot-input').value = '';
+  // Pre-fill screenshots
+  mfScreenshotPaths = parseScreenshots(v.screenshot_path);
+  renderMfThumbnails();
+  // Update modal title/button for edit mode
+  document.querySelector('#modal-manual-finding div > div:first-child').textContent = 'Edit Finding';
+  document.getElementById('mf-btn').textContent = 'Save Changes';
+  // Close detail modal, open edit modal
+  document.getElementById('detail-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  document.getElementById('modal-manual-finding').classList.add('open');
+}
+
+async function uploadMfScreenshot(file) {
+  const formData = new FormData();
+  formData.append('screenshot', file);
+  try {
+    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    mfScreenshotPaths.push(data.path);
+    renderMfThumbnails();
+    showToast('Screenshot added', 'success');
+  } catch(e) {
+    showToast('Failed to upload: ' + e.message, 'error');
+  }
+}
+
+function renderMfThumbnails() {
+  const area = document.getElementById('mf-screenshots-area');
+  const placeholder = document.getElementById('mf-screenshots-placeholder');
+  // Remove old thumbnails
+  area.querySelectorAll('.mf-thumb').forEach(el => el.remove());
+  if (mfScreenshotPaths.length) {
+    placeholder.style.display = 'none';
+    mfScreenshotPaths.forEach((p, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'mf-thumb';
+      thumb.style.cssText = 'position:relative;width:72px;height:72px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.1)';
+      thumb.innerHTML = `<img src="${p}" style="width:100%;height:100%;object-fit:cover" /><button onclick="event.stopPropagation();removeMfScreenshot(${i})" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:#f87171;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>`;
+      area.appendChild(thumb);
+    });
+  } else {
+    placeholder.style.display = 'block';
+  }
+}
+
+function removeMfScreenshot(idx) {
+  mfScreenshotPaths.splice(idx, 1);
+  renderMfThumbnails();
+}
+
+function handleMfFileSelect(event) {
+  const files = event.target.files;
+  for (const file of files) {
+    if (file.type.startsWith('image/')) uploadMfScreenshot(file);
+  }
+}
+
+// Paste handler for POC screenshots
+document.addEventListener('paste', (e) => {
+  const modal = document.getElementById('modal-manual-finding');
+  if (!modal || !modal.classList.contains('open')) return;
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (file) uploadMfScreenshot(file);
+    }
+  }
+});
+
+async function submitManualFinding() {
+  const name = document.getElementById('mf-name').value.trim();
+  const severity = document.getElementById('mf-severity').value;
+  const description = document.getElementById('mf-description').value.trim();
+  const affected_items = document.getElementById('mf-affected').value.trim();
+  const recommendation = document.getElementById('mf-recommendation').value.trim();
+  const poc = document.getElementById('mf-poc').value.trim();
+  const errEl = document.getElementById('mf-err');
+  errEl.style.display = 'none';
+
+  if (!name) { errEl.textContent = 'Finding name is required.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('mf-btn');
+  btn.disabled = true;
+  const payload = {
+    name, severity, description, affected_items, recommendation, poc,
+    screenshot_path: mfScreenshotPaths.length ? JSON.stringify(mfScreenshotPaths) : null
+  };
+
+  try {
+    const isEdit = mfEditingId !== null;
+    const url = isEdit ? `/api/vulnerabilities/${mfEditingId}` : '/api/vulnerabilities';
+    const method = isEdit ? 'PUT' : 'POST';
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to save finding');
+    document.getElementById('modal-manual-finding').classList.remove('open');
+    showToast(isEdit ? 'Finding updated!' : 'Finding created!', 'success');
+    loadVulnerabilities();
+    // If editing, re-open detail modal with updated data
+    if (isEdit) {
+      setTimeout(() => openDetail(mfEditingId), 300);
+    }
+  } catch(e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+  } finally { btn.disabled = false; }
+}
+
