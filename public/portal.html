@@ -1366,6 +1366,8 @@ function renderClientGroups(containerId, rows, showActions) {
     if (!groups[r.client_id]) groups[r.client_id] = { id: r.client_id, name: r.client_name, projects: [] };
     if (r.project_id) groups[r.client_id].projects.push(r);
   });
+  // Persist client id→name map so _renameClient/_deleteClient can find names
+  Object.values(groups).forEach(g => { _clientNameMap[g.id] = g.name; });
   if (!Object.keys(groups).length) {
     container.innerHTML = '<div class="empty-state">No clients yet. Click Add Client to get started.</div>'; return;
   }
@@ -1444,7 +1446,8 @@ function toggleGroup(id) {
 
 // ── Clients / Projects accordion ──────────────────────────────────────────────
 let _allClientsCache = [];
-let _allUsersCache = [];
+let _allUsersCache   = [];
+let _clientNameMap   = {};  // client_id → client_name
 
 async function loadProjects() {
   const acc = document.getElementById('projects-accordion');
@@ -1766,16 +1769,14 @@ function _deleteProject(pid) {
   if (p) deleteProjectPortal(p.project_id, p.project_name);
 }
 function _renameClient(cid) {
-  // Find first row for this client to get the name
-  const c = _allClientsCache.find(x => x.client_id === cid);
-  const name = c ? c.client_name : '';
+  const name = _clientNameMap[cid] || '';
   renameClientPortal(cid, name);
 }
 function _deleteClient(cid) {
-  const c = _allClientsCache.find(x => x.client_id === cid);
-  const name = c ? c.client_name : '';
+  const name = _clientNameMap[cid] || '';
   deleteClientPortal(cid, name);
 }
+
 
 function openCreateUser() {
   ['cu-name','cu-username','cu-password'].forEach(id => document.getElementById(id).value = '');
