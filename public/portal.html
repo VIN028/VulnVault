@@ -1374,10 +1374,10 @@ function renderClientGroups(containerId, rows, showActions) {
     const pid = 'cg-'+g.id;
     const actionsHtml = showActions ? `
       <div style="display:flex;gap:4px" onclick="event.stopPropagation()">
-        <button class="icon-btn" onclick="renameClientPortal(${g.id},${jsa(g.name)})" title="Rename" style="color:var(--muted)">
+        <button class="icon-btn" onclick="_renameClient(${g.id})" title="Rename" style="color:var(--muted)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         </button>
-        <button class="icon-btn" onclick="deleteClientPortal(${g.id},${jsa(g.name)})" title="Delete">
+        <button class="icon-btn" onclick="_deleteClient(${g.id})" title="Delete">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
         </button>
       </div>` : '';
@@ -1409,7 +1409,7 @@ function renderClientGroups(containerId, rows, showActions) {
           </tr></thead>
           <tbody>${g.projects.map(p=>`
             <tr style="cursor:pointer;border-bottom:1px solid rgba(148,163,184,0.06);transition:background 0.1s"
-                onclick="openFindings(${p.project_id},${jsa(p.project_name)},${jsa(p.engineer_name||'—')},${jsa(p.assist_engineer_name||'')},${jsa(p.link_report_en||'')},${jsa(p.link_report_id||'')},${jsa(p.project_links||'')})"
+                onclick="_openFindings(${p.project_id})"
                 onmouseover="this.style.background='rgba(255,255,255,0.04)'"
                 onmouseout="this.style.background=''">
               <td style="padding:13px 20px;font-weight:600;font-size:13px">${esc(p.project_name)}</td>
@@ -1423,8 +1423,8 @@ function renderClientGroups(containerId, rows, showActions) {
               <td style="padding:13px 20px;font-size:12px;color:var(--muted)">${fmt(p.final_report_date)}</td>
               <td style="padding:13px 20px" class="col-findings">${p.project_type === 'phishing' ? '<span style="font-size:11px;color:var(--muted)">—</span>' : `<span class="finding-count ${countColor(p.finding_count||0)}">${p.finding_count||0}</span>`}</td>
               ${showActions?`<td style="padding:8px 12px" onclick="event.stopPropagation()">
-                <button class="icon-btn" onclick="editProjectPortal(${p.project_id},${jsa(p.project_name)},${p.assigned_engineer_id||'null'},${p.assist_engineer_id||'null'},${jsa(p.project_type||'web')},${jsa(p.project_links||'')})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                <button class="icon-btn" onclick="deleteProjectPortal(${p.project_id},${jsa(p.project_name)})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                <button class="icon-btn" onclick="_editProject(${p.project_id})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                <button class="icon-btn" onclick="_deleteProject(${p.project_id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
               </td>`:''}
             </tr>`).join('')}</tbody>
         </table>`}
@@ -1444,6 +1444,7 @@ function toggleGroup(id) {
 
 // ── Clients / Projects accordion ──────────────────────────────────────────────
 let _allClientsCache = [];
+let _allUsersCache = [];
 
 async function loadProjects() {
   const acc = document.getElementById('projects-accordion');
@@ -1720,6 +1721,7 @@ async function openFindings(projectId, projectName, picName, assistName, linkEn,
 async function loadUsers() {
   try {
     const users = await apiFetch('/api/users');
+    _allUsersCache = users;
     const tbody = document.getElementById('users-tbody');
     if (!users.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No users yet.</div></td></tr>'; return; }
     tbody.innerHTML = users.map(u => `
@@ -1729,17 +1731,50 @@ async function loadUsers() {
         <td><span class="badge badge-${u.role}">${u.role}</span></td>
         <td style="color:var(--muted);font-size:12px">${new Date(u.created_at).toLocaleDateString()}</td>
         <td style="display:flex;gap:4px;align-items:center">
-          <button class="icon-btn" onclick="openChangePassword(${u.id},${jsa(u.display_name)})" title="Change Password" style="color:var(--muted)">
+          <button class="icon-btn" onclick="_openChangePw(${u.id})" title="Change Password" style="color:var(--muted)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           </button>
-          ${u.id !== currentUser?.userId ? `<button class="icon-btn" onclick="deleteUser(${u.id},${jsa(u.display_name)})" title="Delete">
+          ${u.id !== currentUser?.userId ? `<button class="icon-btn" onclick="_deleteUser(${u.id})" title="Delete">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
           </button>` : '<span style="color:var(--muted);font-size:11px">You</span>'}
         </td>
       </tr>`).join('');
   } catch(e) {
-    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="5"><div class="empty-state">${e.message}</div></td></tr>`;
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="5"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
   }
+}
+
+// ── ID-only click helpers (never embed user data in onclick strings) ──────────
+function _openChangePw(uid) {
+  const u = _allUsersCache.find(x => x.id === uid);
+  if (u) openChangePassword(uid, u.display_name);
+}
+function _deleteUser(uid) {
+  const u = _allUsersCache.find(x => x.id === uid);
+  if (u) deleteUser(uid, u.display_name);
+}
+function _openFindings(pid) {
+  const p = _allClientsCache.find(x => x.project_id === pid);
+  if (p) openFindings(p.project_id, p.project_name, p.engineer_name||'—', p.assist_engineer_name||'', p.link_report_en||'', p.link_report_id||'', p.project_links||'');
+}
+function _editProject(pid) {
+  const p = _allClientsCache.find(x => x.project_id === pid);
+  if (p) editProjectPortal(p.project_id, p.project_name, p.assigned_engineer_id||null, p.assist_engineer_id||null, p.project_type||'web', p.project_links||'');
+}
+function _deleteProject(pid) {
+  const p = _allClientsCache.find(x => x.project_id === pid);
+  if (p) deleteProjectPortal(p.project_id, p.project_name);
+}
+function _renameClient(cid) {
+  // Find first row for this client to get the name
+  const c = _allClientsCache.find(x => x.client_id === cid);
+  const name = c ? c.client_name : '';
+  renameClientPortal(cid, name);
+}
+function _deleteClient(cid) {
+  const c = _allClientsCache.find(x => x.client_id === cid);
+  const name = c ? c.client_name : '';
+  deleteClientPortal(cid, name);
 }
 
 function openCreateUser() {
