@@ -695,6 +695,26 @@ app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'man
   });
 });
 
+// Start Retest — PM/Manager only
+app.post('/api/projects/:id/retest', requireAuth, (req, res) => {
+  if (!['pm','admin','manager'].includes(req.session?.role)) return res.status(403).json({ error: 'PM/Manager only' });
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid project id' });
+  const { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date } = req.body;
+  if (!retest_start_date || !retest_end_date) return res.status(400).json({ error: 'Retest start and end dates are required' });
+  db.startRetest(id, { retest_pic_id: retest_pic_id || null, retest_assist_id: retest_assist_id || null, retest_start_date, retest_end_date }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+    db.getProjectById(id, (err2, proj) => {
+      if (!err2 && proj) {
+        db.writeActivityLog({ type: 'project', actorId: req.session.userId, projectId: id, action: 'start_retest', details: `Retest started for project "${proj.name}"` }, () => {});
+        db.notifyManagement({ type: 'retest_started', title: '🔁 Retest Started', message: `PM started retest for "${proj.name}". Final report expected ${retest_end_date}.` });
+      }
+    });
+    res.json({ ok: true });
+  });
+});
+
 // Full vulnerability details for a project
 app.get('/api/projects/:projectId/findings', (req, res) => {
   const projectId = Number(req.params.projectId);

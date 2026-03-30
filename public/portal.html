@@ -382,7 +382,7 @@
     }
     .gantt-legend { display: flex; align-items: center; gap: 12px; margin-left: auto; }
     .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-    .gantt-legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+    .gantt-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
 
     .gantt-outer {
       overflow-x: auto; border-radius: var(--radius);
@@ -393,60 +393,95 @@
     }
     /* Month header */
     .gantt-month-row th {
-      padding: 10px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
-      text-transform: uppercase; color: var(--text); text-align: center;
-      background: rgba(99,102,241,0.12); border-bottom: 1px solid var(--border);
-      border-right: 1px solid var(--border);
+      padding: 11px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #a5b4fc; text-align: center;
+      background: rgba(99,102,241,0.1); border-bottom: 1px solid rgba(99,102,241,0.2);
+      border-right: 1px solid rgba(99,102,241,0.15);
     }
-    .gantt-month-row th:first-child { text-align: left; padding-left: 16px; }
-    /* Week header */
+    .gantt-month-row th:first-child { text-align: left; padding-left: 20px; }
+    /* Week sub-header */
     .gantt-week-row th {
-      padding: 7px 0; font-size: 10px; font-weight: 600; color: var(--muted);
-      text-align: center; background: var(--card); border-bottom: 1px solid var(--border);
-      border-right: 1px solid rgba(148,163,184,0.06);
-      min-width: 56px; white-space: nowrap;
+      padding: 6px 0; font-size: 10px; font-weight: 600; color: var(--muted);
+      text-align: center; background: rgba(15,23,42,0.6);
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid rgba(148,163,184,0.07);
+      min-width: 64px; white-space: nowrap; letter-spacing: 0.04em;
     }
-    .gantt-week-row th:first-child { text-align: left; padding-left: 16px; min-width: 180px; }
+    .gantt-week-row th:first-child { text-align: left; padding-left: 20px; min-width: 190px; }
 
     /* Engineer rows */
-    .gantt-eng-row { border-bottom: 1px solid rgba(148,163,184,0.06); }
+    .gantt-eng-row { border-bottom: 1px solid rgba(148,163,184,0.07); transition: background 0.1s; }
     .gantt-eng-row:last-child { border-bottom: none; }
-    .gantt-eng-row:hover { background: rgba(255,255,255,0.02); }
+    .gantt-eng-row:hover { background: rgba(255,255,255,0.025); }
     .gantt-eng-name {
-      padding: 0 16px; font-size: 13px; font-weight: 600; white-space: nowrap;
-      vertical-align: middle; min-width: 180px; position: sticky; left: 0;
-      background: var(--card); z-index: 2; border-right: 1px solid var(--border);
+      padding: 0 20px; font-size: 13px; font-weight: 600; white-space: nowrap;
+      vertical-align: middle; min-width: 190px; position: sticky; left: 0;
+      background: var(--card); z-index: 2;
+      border-right: 1px solid rgba(99,102,241,0.18);
     }
+    .gantt-eng-row:hover .gantt-eng-name { background: rgba(15,20,40,1); }
     .gantt-eng-num {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 20px; height: 20px; border-radius: 50%;
+      width: 22px; height: 22px; border-radius: 50%;
       background: rgba(99,102,241,0.15); color: #a5b4fc;
-      font-size: 10px; font-weight: 700; margin-right: 8px; flex-shrink: 0;
+      font-size: 10px; font-weight: 700; margin-right: 10px; flex-shrink: 0;
     }
     /* Week cell */
     .gantt-cell {
-      height: 42px; min-width: 56px; padding: 3px;
-      border-right: 1px solid rgba(148,163,184,0.06);
+      height: 54px; min-width: 64px; padding: 4px;
+      border-right: 1px solid rgba(148,163,184,0.07);
       vertical-align: middle; position: relative;
     }
+    /* Allow label to overflow rightward from starting cell */
+    .gantt-cell.bar-start { overflow: visible; z-index: 1; }
     .gantt-cell-inner {
-      width: 100%; height: 100%; border-radius: 6px;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 10px; font-weight: 600; overflow: hidden;
-      transition: opacity 0.15s;
+      width: 100%; height: 100%; border-radius: 7px;
+      display: flex; align-items: center;
+      font-size: 11px; font-weight: 600; overflow: hidden;
+      transition: filter 0.15s;
     }
+    .gantt-cell-inner:hover { filter: brightness(1.15); }
     /* Colors */
-    .gantt-cell-inner.free   { background: rgba(34,197,94,0.15);  color: #4ade80; }
-    .gantt-cell-inner.busy   { background: rgba(245,158,11,0.25);  color: #fcd34d; }
-    .gantt-cell-inner.full   { background: rgba(239,68,68,0.25);   color: #f87171; }
-    /* Bar label - spans across cells via absolute, handled via JS overlay approach */
+    .gantt-cell-inner.free   {
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.18);
+    }
+    .gantt-cell-inner.busy   {
+      background: linear-gradient(135deg, rgba(245,158,11,0.3), rgba(251,146,60,0.25));
+      border: 1px solid rgba(245,158,11,0.35);
+      color: #fcd34d;
+    }
+    .gantt-cell-inner.full   {
+      background: linear-gradient(135deg, rgba(239,68,68,0.3), rgba(220,38,38,0.25));
+      border: 1px solid rgba(239,68,68,0.35);
+      color: #fca5a5;
+    }
+    /* Retest bar — purple */
+    .gantt-cell-inner.retest {
+      background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(99,102,241,0.25));
+      border: 1px solid rgba(139,92,246,0.45);
+      color: #c4b5fd;
+    }
+    /* Bar label - overflows right for long bars */
     .gantt-bar-label {
-      font-size: 10px; font-weight: 600; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; max-width: 100%;
-      padding: 0 4px; pointer-events: none;
+      font-size: 11px; font-weight: 700; white-space: nowrap;
+      overflow: visible; text-overflow: clip;
+      padding: 0 10px; pointer-events: none; line-height: 1.3;
+      color: inherit; letter-spacing: 0.01em;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .gantt-bar-label .bar-project {
+      display: block; font-size: 11px; font-weight: 700;
+    }
+    .gantt-bar-label .bar-role {
+      display: block; font-size: 9px; font-weight: 500;
+      opacity: 0.75; margin-top: 2px;
     }
     /* today marker */
-    .gantt-cell.today-col .gantt-cell-inner { outline: 2px solid rgba(99,102,241,0.5); }
+    .gantt-cell.today-col .gantt-cell-inner {
+      outline: 2px solid rgba(99,102,241,0.6);
+      outline-offset: -2px;
+    }
     .gantt-empty-state {
       text-align: center; padding: 48px; color: var(--muted); font-size: 14px;
     }
@@ -722,8 +757,9 @@
         </select>
         <div class="gantt-legend">
           <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(34,197,94,0.35)"></div>Free</div>
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(245,158,11,0.5)"></div>1 Project</div>
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(239,68,68,0.5)"></div>2+ Projects (Full)</div>
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(245,158,11,0.5)"></div>Assessment</div>
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(139,92,246,0.5)"></div>Retest</div>
+          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(239,68,68,0.5)"></div>2+ Projects</div>
         </div>
       </div>
       <div class="gantt-outer">
@@ -748,6 +784,45 @@
     <div class="modal-actions">
       <button class="btn-ghost" onclick="document.getElementById('modal-create-client').classList.remove('open')">Cancel</button>
       <button class="btn-primary" onclick="submitCreateClient()" id="cc-btn" style="justify-content:center">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Start Retest Modal ── -->
+<div class="modal-overlay" id="modal-retest" onclick="closeModal(event)">
+  <div class="modal" style="max-width:480px" onclick="event.stopPropagation()">
+    <h3 class="modal-title">🔁 Start Retest</h3>
+    <p style="color:var(--muted);font-size:12px;margin:-16px 0 20px">Assign engineer(s) for retest and set the retest timeline. Final Report date will be set automatically.</p>
+    <input type="hidden" id="rt-project-id">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div class="form-group" style="margin:0">
+        <label>PIC Retest *</label>
+        <select id="rt-pic"></select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Assist Retest</label>
+        <select id="rt-assist"></select>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+      <div class="form-group" style="margin:0">
+        <label>Retest Start *</label>
+        <input type="date" id="rt-start">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Final Report Date *</label>
+        <input type="date" id="rt-end">
+      </div>
+    </div>
+    <div id="rt-mandays-preview" style="display:none;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:12px 16px;margin-bottom:20px">
+      <span style="font-size:11px;color:var(--muted)">Retest mandays:</span>
+      <span id="rt-mandays-val" style="font-size:14px;font-weight:700;color:#a78bfa;margin-left:8px">—</span>
+      <span style="font-size:11px;color:var(--muted)"> hari kerja</span>
+    </div>
+    <div class="modal-err" id="rt-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-retest').classList.remove('open')">Cancel</button>
+      <button class="btn-primary" id="rt-btn" onclick="submitRetest()" style="background:linear-gradient(135deg,#7c3aed,#6366f1)">🔁 Start Retest</button>
     </div>
   </div>
 </div>
@@ -875,10 +950,7 @@
         </div>
         <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
       </div>
-      <div class="form-group" style="grid-column:1/-1">
-        <label>Final Report Date</label>
-        <input id="cp-final" type="date" />
-      </div>
+      <!-- Final report date is set automatically when PM starts retest -->
       <div class="form-group" style="grid-column:1/-1">
         <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
         <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
@@ -1117,15 +1189,31 @@ function renderAllocationChart() {
   const engMap = new Map(); // engineerId → { name, projects:[] }
 
   rows.forEach(r => {
-    if (r.assigned_engineer_id && r.engineer_name) {
-      if (!engMap.has(r.assigned_engineer_id))
-        engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
-      engMap.get(r.assigned_engineer_id).projects.push({ ...r, role: 'PIC' });
+    // Assessment phase — assigned_engineer (PIC) + assist
+    if (r.kickoff_date && r.initial_report_date) {
+      if (r.assigned_engineer_id && r.engineer_name) {
+        if (!engMap.has(r.assigned_engineer_id))
+          engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
+        engMap.get(r.assigned_engineer_id).projects.push({ ...r, role: 'PIC', barType: 'assessment', _start: r.kickoff_date, _end: r.initial_report_date });
+      }
+      if (r.assist_engineer_id && r.assist_engineer_name) {
+        if (!engMap.has(r.assist_engineer_id))
+          engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
+        engMap.get(r.assist_engineer_id).projects.push({ ...r, role: 'Assist', barType: 'assessment', _start: r.kickoff_date, _end: r.initial_report_date });
+      }
     }
-    if (r.assist_engineer_id && r.assist_engineer_name) {
-      if (!engMap.has(r.assist_engineer_id))
-        engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
-      engMap.get(r.assist_engineer_id).projects.push({ ...r, role: 'Assist' });
+    // Retest phase — retest_pic + retest_assist
+    if (r.retest_status === 'started' && r.retest_start_date && r.retest_end_date) {
+      if (r.retest_pic_id && r.retest_pic_name) {
+        if (!engMap.has(r.retest_pic_id))
+          engMap.set(r.retest_pic_id, { name: r.retest_pic_name, projects: [] });
+        engMap.get(r.retest_pic_id).projects.push({ ...r, role: 'Retest PIC', barType: 'retest', _start: r.retest_start_date, _end: r.retest_end_date });
+      }
+      if (r.retest_assist_id && r.retest_assist_name) {
+        if (!engMap.has(r.retest_assist_id))
+          engMap.set(r.retest_assist_id, { name: r.retest_assist_name, projects: [] });
+        engMap.get(r.retest_assist_id).projects.push({ ...r, role: 'Retest Assist', barType: 'retest', _start: r.retest_start_date, _end: r.retest_end_date });
+      }
     }
   });
 
@@ -1174,12 +1262,12 @@ function renderAllocationChart() {
   <tbody>`;
 
   sortedEngs.forEach(([engId, eng], idx) => {
-    // For each week, compute active project count
+    // For each week, compute active project count (assessment + retest)
     const weekData = weeks.map(w => {
       const active = eng.projects.filter(p => {
-        if (!p.kickoff_date || !p.final_report_date) return false;
-        const ks = new Date(p.kickoff_date); ks.setHours(0,0,0,0);
-        const fe = new Date(p.final_report_date); fe.setHours(23,59,59,999);
+        if (!p._start || !p._end) return false;
+        const ks = new Date(p._start); ks.setHours(0,0,0,0);
+        const fe = new Date(p._end); fe.setHours(23,59,59,999);
         return ks <= w.sunday && fe >= w.monday;
       });
       return { active, count: active.length };
@@ -1188,13 +1276,13 @@ function renderAllocationChart() {
     // Find start/end week index for each project bar
     const projectBars = [];
     eng.projects.forEach(p => {
-      if (!p.kickoff_date || !p.final_report_date) return;
-      const ks = new Date(p.kickoff_date); ks.setHours(0,0,0,0);
-      const fe = new Date(p.final_report_date); fe.setHours(23,59,59,999);
+      if (!p._start || !p._end) return;
+      const ks = new Date(p._start); ks.setHours(0,0,0,0);
+      const fe = new Date(p._end); fe.setHours(23,59,59,999);
       const startIdx = weeks.findIndex(w => w.monday <= fe && w.sunday >= ks);
       const endIdx   = weeks.map((w,i) => (w.monday <= fe && w.sunday >= ks) ? i : -1)
                             .filter(i => i >= 0).pop() ?? -1;
-      if (startIdx >= 0) projectBars.push({ p, startIdx, endIdx });
+      if (startIdx >= 0) projectBars.push({ p, startIdx, endIdx, barType: p.barType || 'assessment' });
     });
 
     html += `<tr class="gantt-eng-row">
@@ -1203,19 +1291,31 @@ function renderAllocationChart() {
       </td>`;
 
     weeks.forEach((w, wi) => {
-      const { count } = weekData[wi];
-      const colorClass = count === 0 ? 'free' : count === 1 ? 'busy' : 'full';
+      const { count, active } = weekData[wi];
+      const isRetestOnly = count > 0 && active.every(p => p.barType === 'retest');
+      const colorClass = count === 0 ? 'free' : isRetestOnly ? 'retest' : count === 1 ? 'busy' : 'full';
       const isToday = today >= w.monday && today <= w.sunday;
 
       let label = '';
+      let isBarStart = false;
 
-      // Project name label at the START of each bar (span ≥ 2 weeks)
+      // Project name label at the START of each bar (span ≥ 1 week)
       const barsStartingHere = projectBars.filter(b => b.startIdx === wi);
       if (barsStartingHere.length) {
+        isBarStart = true;
         label = barsStartingHere.map(b => {
           const span = b.endIdx - b.startIdx + 1;
-          const name = escA((b.p.client_name ? b.p.client_name + ' — ' : '') + (b.p.project_name || ''));
-          return span >= 2 ? `<span class="gantt-bar-label" title="${name}">${name}</span>` : '';
+          const projectName  = escA(b.p.project_name || '');
+          const clientName   = escA(b.p.client_name  || '');
+          const role         = b.p.role || '';
+          // Tooltip: full info
+          const mandays = calcMandaysTag ? '' : '';
+          const ko = b.p.mandays_kickoff ?? 1;
+          const ig = b.p.mandays_infogath ?? 5;
+          const { days: asmDays } = workingDaysBetween(b.p.kickoff_date || '', b.p.initial_report_date || '');
+          const totalMd = ko + ig + asmDays;
+          const tooltip = `${clientName} \u2014 ${projectName} (${role}) | ${totalMd} mandays`;
+          return `<span class="gantt-bar-label" title="${tooltip}"><span class="bar-project">${projectName}</span><span class="bar-role">${role}</span></span>`;
         }).join('');
       }
 
@@ -1225,33 +1325,33 @@ function renderAllocationChart() {
         label = barsEndingHere.map(b => {
           const fe = new Date(b.p.final_report_date);
           fe.setHours(0,0,0,0);
-          // Only show if it ends before Sunday (partial week)
           if (fe < w.sunday) {
             const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">→ ${dayStr}</span>`;
+            return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">\u2192 ${dayStr}</span>`;
           }
           return '';
         }).filter(Boolean).join('');
       }
 
-      // Single-week bar with partial end: show end date directly
+      // Single-week bar with partial end: show end date
       if (!label) {
         const singleBars = projectBars.filter(b => b.startIdx === wi && b.endIdx === wi);
         if (singleBars.length) {
+          isBarStart = true;
           label = singleBars.map(b => {
             const fe = new Date(b.p.final_report_date); fe.setHours(0,0,0,0);
             if (fe < w.sunday) {
               const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-              return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">→ ${dayStr}</span>`;
+              return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">\u2192 ${dayStr}</span>`;
             }
-            // If fills the full week, show abbreviated name
-            const name = escA((b.p.client_name ? b.p.client_name + ' — ' : '') + (b.p.project_name || ''));
-            return `<span class="gantt-bar-label" title="${name}">${name}</span>`;
+            const projectName = escA(b.p.project_name || '');
+            const role = b.p.role || '';
+            return `<span class="gantt-bar-label" title="${escA(b.p.client_name||'')} \u2014 ${projectName} (${role})"><span class="bar-project">${projectName}</span><span class="bar-role">${role}</span></span>`;
           }).join('');
         }
       }
 
-      html += `<td class="gantt-cell${isToday ? ' today-col' : ''}">
+      html += `<td class="gantt-cell${isToday ? ' today-col' : ''}${isBarStart ? ' bar-start' : ''}">
         <div class="gantt-cell-inner ${colorClass}">${label}</div>
       </td>`;
     });
@@ -1524,8 +1624,15 @@ function renderClientGroups(containerId, rows, showActions) {
               <td style="padding:13px 20px">${calcMandaysTag(p)}</td>
               <td style="padding:13px 20px" class="col-findings">${p.project_type === 'phishing' ? '<span style="font-size:11px;color:var(--muted)">—</span>' : `<span class="finding-count ${countColor(p.finding_count||0)}">${p.finding_count||0}</span>`}</td>
               ${showActions?`<td style="padding:8px 12px" onclick="event.stopPropagation()">
-                <button class="icon-btn" onclick="_editProject(${p.project_id})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-                <button class="icon-btn" onclick="_deleteProject(${p.project_id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                <div style="display:flex;gap:4px;align-items:center">
+                  ${p.initial_report_status === 'completed' && (!p.retest_status || p.retest_status === 'none')
+                    ? `<button class="icon-btn" onclick="openRetestModal(${p.project_id})" title="Start Retest" style="color:#a78bfa;border:1px solid rgba(139,92,246,0.3);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;background:rgba(139,92,246,0.1)">🔁 Retest</button>`
+                    : p.retest_status === 'started'
+                      ? `<span style="font-size:10px;font-weight:700;color:#a78bfa;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:12px;padding:2px 8px">🔁 Retest Active</span>`
+                      : ''}
+                  <button class="icon-btn" onclick="_editProject(${p.project_id})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                  <button class="icon-btn" onclick="_deleteProject(${p.project_id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+                </div>
               </td>`:''}
             </tr>`).join('')}</tbody>
         </table>`}
@@ -2441,6 +2548,68 @@ function workingDaysBetween(startStr, endStr) {
     cur.setDate(cur.getDate() + 1);
   }
   return { days: count, holidays: skipped };
+}
+
+// ── Retest Modal ──────────────────────────────────────────────────────────────
+async function openRetestModal(projectId) {
+  document.getElementById('rt-project-id').value = projectId;
+  document.getElementById('rt-start').value = '';
+  document.getElementById('rt-end').value = '';
+  document.getElementById('rt-mandays-preview').style.display = 'none';
+  document.getElementById('rt-err').classList.remove('show');
+
+  // Load engineers
+  try {
+    const engs = await apiFetch('/api/users/engineers');
+    const opts = '<option value="">— Not assigned —</option>' +
+      engs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
+    const picSel = '<option value="">— Select PIC —</option>' +
+      engs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
+    document.getElementById('rt-pic').innerHTML = picSel;
+    document.getElementById('rt-assist').innerHTML = opts;
+  } catch (e) { /* ignore */ }
+
+  // Wire date inputs for live mandays preview
+  ['rt-start','rt-end'].forEach(id => {
+    document.getElementById(id).oninput = updateRetestMandaysPreview;
+  });
+
+  document.getElementById('modal-retest').classList.add('open');
+}
+
+function updateRetestMandaysPreview() {
+  const s = document.getElementById('rt-start').value;
+  const e = document.getElementById('rt-end').value;
+  const prev = document.getElementById('rt-mandays-preview');
+  if (!s || !e || e < s) { prev.style.display = 'none'; return; }
+  const { days } = workingDaysBetween(s, e);
+  document.getElementById('rt-mandays-val').textContent = days;
+  prev.style.display = 'block';
+}
+
+async function submitRetest() {
+  const projectId    = document.getElementById('rt-project-id').value;
+  const retest_pic_id    = document.getElementById('rt-pic').value   || null;
+  const retest_assist_id = document.getElementById('rt-assist').value || null;
+  const retest_start_date = document.getElementById('rt-start').value;
+  const retest_end_date   = document.getElementById('rt-end').value;
+  const errEl = document.getElementById('rt-err');
+  errEl.classList.remove('show');
+
+  if (!retest_pic_id) { errEl.textContent = 'PIC Retest harus dipilih.'; errEl.classList.add('show'); return; }
+  if (!retest_start_date || !retest_end_date) { errEl.textContent = 'Tanggal retest harus diisi.'; errEl.classList.add('show'); return; }
+  if (retest_end_date < retest_start_date) { errEl.textContent = 'Final Report Date harus setelah Retest Start.'; errEl.classList.add('show'); return; }
+
+  const btn = document.getElementById('rt-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch(`/api/projects/${projectId}/retest`, 'POST', { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date });
+    document.getElementById('modal-retest').classList.remove('open');
+    showToast('Retest started! Resource allocation updated.', 'success');
+    loadProjects(); loadDashboard();
+  } catch(e) {
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
 }
 
 function openMandaysCalc() {

@@ -89,6 +89,11 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN project_links TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN mandays_kickoff INTEGER DEFAULT 1`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN mandays_infogath INTEGER DEFAULT 5`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN retest_status TEXT DEFAULT 'none'`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN retest_start_date TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN retest_end_date TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN retest_pic_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN retest_assist_id INTEGER`, () => {});
   });
 
   db.run(`
@@ -261,13 +266,19 @@ function getDashboardSummary(callback) {
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
            p.mandays_kickoff, p.mandays_infogath,
+           p.retest_status, p.retest_start_date, p.retest_end_date,
+           p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
+           u3.display_name AS retest_pic_name,
+           u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
     FROM clients c
     JOIN projects p ON p.client_id = c.id
     LEFT JOIN users u  ON u.id  = p.assigned_engineer_id
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
+    LEFT JOIN users u3 ON u3.id = p.retest_pic_id
+    LEFT JOIN users u4 ON u4.id = p.retest_assist_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -294,13 +305,19 @@ function getClientsWithProjects(callback) {
            p.assist_engineer_id,
            p.link_report_en, p.link_report_id, p.project_links,
            p.mandays_kickoff, p.mandays_infogath,
+           p.retest_status, p.retest_start_date, p.retest_end_date,
+           p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
+           u3.display_name AS retest_pic_name,
+           u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
     FROM clients c
     LEFT JOIN projects p ON p.client_id = c.id
     LEFT JOIN users u ON u.id = p.assigned_engineer_id
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
+    LEFT JOIN users u3 ON u3.id = p.retest_pic_id
+    LEFT JOIN users u4 ON u4.id = p.retest_assist_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -781,6 +798,21 @@ function updateProjectReportStatus(id, statuses, callback) {
   getDb().run(q, params, function (err) { callback(err, { changes: this?.changes }); });
 }
 
+function startRetest(id, { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date }, callback) {
+  getDb().run(
+    `UPDATE projects SET
+       retest_status = 'started',
+       retest_pic_id = ?,
+       retest_assist_id = ?,
+       retest_start_date = ?,
+       retest_end_date = ?,
+       final_report_date = ?
+     WHERE id = ?`,
+    [retest_pic_id || null, retest_assist_id || null, retest_start_date || null, retest_end_date || null, retest_end_date || null, id],
+    function (err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
 function addVulnerabilityToProject(projectId, vulnId, callback) {
   const db = getDb();
   db.run(
@@ -897,6 +929,7 @@ module.exports = {
   updateProject,
   updateProjectReports,
   updateProjectReportStatus,
+  startRetest,
   getProjectVulnerabilityIds,
   setProjectVulnerabilities,
   addVulnerabilityToProject,
