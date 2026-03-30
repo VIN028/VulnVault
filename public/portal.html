@@ -1489,7 +1489,7 @@ function clearClientDateFilter() {
 
 // PM/Manager: inline rename client
 async function renameClientPortal(id, currentName) {
-  const name = prompt('New client name:', currentName);
+  const name = await customPrompt('Rename Client', 'New client name:', currentName);
   if (!name || !name.trim() || name.trim()===currentName) return;
   try {
     await apiFetch(`/api/clients/${id}`, 'PUT', { name: name.trim() });
@@ -1500,7 +1500,8 @@ async function renameClientPortal(id, currentName) {
 
 // PM/Manager: delete client
 async function deleteClientPortal(id, name) {
-  if (!confirm(`Delete client "${name}" and ALL its projects? This cannot be undone.`)) return;
+  const ok = await customConfirm(`Delete client "${esc(name)}" and ALL its projects?`, 'This cannot be undone.', 'Delete', 'danger');
+  if (!ok) return;
   try {
     await apiFetch(`/api/clients/${id}`, 'DELETE');
     showToast('Client deleted','success');
@@ -1510,12 +1511,65 @@ async function deleteClientPortal(id, name) {
 
 // PM/Manager: delete project
 async function deleteProjectPortal(id, name) {
-  if (!confirm(`Delete project "${name}"?`)) return;
+  const ok = await customConfirm(`Delete project "${esc(name)}"?`, 'This cannot be undone.', 'Delete', 'danger');
+  if (!ok) return;
   try {
     await apiFetch(`/api/projects/${id}`, 'DELETE');
     showToast('Project deleted','success');
     loadProjects(); loadDashboard();
   } catch(e) { showToast(e.message,'error'); }
+}
+
+// ── Custom modal dialogs (replaces browser prompt/confirm which can be blocked) ─
+function customConfirm(title, message, confirmLabel='Confirm', variant='primary') {
+  return new Promise(resolve => {
+    const id = 'dlg-' + Date.now();
+    const el = document.createElement('div');
+    el.className = 'modal-overlay open';
+    el.id = id;
+    el.innerHTML = `
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header"><h3 class="modal-title">${title}</h3></div>
+        <div style="padding:0 24px 20px;color:var(--muted);font-size:13px">${message}</div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 24px">
+          <button class="btn-ghost" id="${id}-cancel">Cancel</button>
+          <button class="btn-${variant === 'danger' ? 'delete' : 'primary'}" id="${id}-ok" style="background:${variant === 'danger' ? 'rgba(239,68,68,0.9)' : ''};">${esc(confirmLabel)}</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    const cleanup = (val) => { el.remove(); resolve(val); };
+    el.querySelector(`#${id}-ok`).onclick     = () => cleanup(true);
+    el.querySelector(`#${id}-cancel`).onclick  = () => cleanup(false);
+    el.addEventListener('click', e => { if (e.target === el) cleanup(false); });
+  });
+}
+function customPrompt(title, label, defaultValue='') {
+  return new Promise(resolve => {
+    const id = 'dlg-' + Date.now();
+    const el = document.createElement('div');
+    el.className = 'modal-overlay open';
+    el.id = id;
+    el.innerHTML = `
+      <div class="modal-box" style="max-width:420px">
+        <div class="modal-header"><h3 class="modal-title">${title}</h3></div>
+        <div style="padding:0 24px 20px">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:8px">${label}</label>
+          <input id="${id}-inp" class="form-input" value="${esc(defaultValue)}" style="width:100%">
+        </div>
+        <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 24px">
+          <button class="btn-ghost" id="${id}-cancel">Cancel</button>
+          <button class="btn-primary" id="${id}-ok">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    const inp = el.querySelector(`#${id}-inp`);
+    inp.focus(); inp.select();
+    const cleanup = (val) => { el.remove(); resolve(val); };
+    el.querySelector(`#${id}-ok`).onclick     = () => cleanup(inp.value);
+    el.querySelector(`#${id}-cancel`).onclick  = () => cleanup(null);
+    el.addEventListener('click', e => { if (e.target === el) cleanup(null); });
+    inp.addEventListener('keydown', e => { if (e.key === 'Enter') cleanup(inp.value); if (e.key === 'Escape') cleanup(null); });
+  });
 }
 
 // PM/Manager: edit project (assign engineer / dates)
