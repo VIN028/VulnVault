@@ -1660,7 +1660,7 @@ async function openFindings(projectId, projectName, picName, assistName, linkEn,
     const body = document.getElementById('findings-modal-body');
 
     // Always show engineer info
-    let engineersHtml = `<div style="font-size:13px;color:var(--muted);margin-bottom:16px">PIC: <span style="font-weight:600;color:var(--text)">${picName}</span>${assistName ? ` <span style="margin:0 6px;opacity:0.3">|</span> Assist: <span style="font-weight:600;color:var(--text)">${assistName}</span>` : ''}</div>`;
+    let engineersHtml = `<div style="font-size:13px;color:var(--muted);margin-bottom:16px">PIC: <span style="font-weight:600;color:var(--text)">${esc(picName)}</span>${assistName ? ` <span style="margin:0 6px;opacity:0.3">|</span> Assist: <span style="font-weight:600;color:var(--text)">${esc(assistName)}</span>` : ''}</div>`;
 
     // Resource links from PM
     let resourceLinksHtml = '';
@@ -1668,7 +1668,7 @@ async function openFindings(projectId, projectName, picName, assistName, linkEn,
       const plinks = projectLinksJson ? (typeof projectLinksJson === 'string' ? JSON.parse(projectLinksJson) : projectLinksJson) : null;
       if (plinks && Array.isArray(plinks) && plinks.length) {
         resourceLinksHtml = `<div style="margin-bottom:16px"><div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">📁 Resource Links</div><div style="display:flex;flex-wrap:wrap;gap:8px">${plinks.map(l =>
-          `<a href="${l.url}" target="_blank" style="padding:6px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:12px;color:#fbbf24;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(251,191,36,0.15)'" onmouseout="this.style.background='rgba(251,191,36,0.08)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>${l.label||'Link'}</a>`
+          `<a href="${safeUrl(l.url)}" target="_blank" rel="noopener noreferrer" style="padding:6px 12px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.2);border-radius:6px;font-size:12px;color:#fbbf24;text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(251,191,36,0.15)'" onmouseout="this.style.background='rgba(251,191,36,0.08)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg>${esc(l.label||'Link')}</a>`
         ).join('')}</div></div>`;
       }
     } catch {}
@@ -1677,8 +1677,8 @@ async function openFindings(projectId, projectName, picName, assistName, linkEn,
     let reportLinksHtml = '';
     if (linkEn || linkId) {
       reportLinksHtml = `<div style="display:flex;gap:8px;margin-bottom:20px">`;
-      if (linkEn) reportLinksHtml += `<a href="${linkEn}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report EN</a>`;
-      if (linkId) reportLinksHtml += `<a href="${linkId}" target="_blank" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report ID</a>`;
+      if (linkEn) reportLinksHtml += `<a href="${safeUrl(linkEn)}" target="_blank" rel="noopener noreferrer" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report EN</a>`;
+      if (linkId) reportLinksHtml += `<a href="${safeUrl(linkId)}" target="_blank" rel="noopener noreferrer" style="padding:6px 12px;background:rgba(255,255,255,0.06);border-radius:6px;font-size:12px;color:rgba(255,255,255,0.9);text-decoration:none;display:flex;align-items:center;gap:6px;transition:background 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(255,255,255,0.06)'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3"/></svg> Report ID</a>`;
       reportLinksHtml += `</div>`;
     }
 
@@ -2038,7 +2038,15 @@ async function apiFetch(url, method = 'GET', body = null) {
 
 function esc(str) {
   if (!str) return '';
-  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// Only allow http/https URLs — block javascript: and other dangerous schemes
+function safeUrl(url) {
+  if (!url) return '#';
+  const s = String(url).trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  return '#';
 }
 
 function showToast(msg, type = 'success') {
