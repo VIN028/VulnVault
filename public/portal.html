@@ -2050,10 +2050,15 @@ function safeUrl(url) {
 }
 
 // Safe JSON arg for onclick="..." attributes:
-// JSON.stringify + encode " as &quot; so they don't break the HTML attribute.
-// Browser decodes &quot; → " before JS sees it, producing a valid JS string.
+// JSON.stringify the value, then HTML-encode all special chars
+// so the result is safe inside onclick="..." without breaking HTML parsing.
+// The browser decodes entities before JS runs, keeping the value intact.
 function jsa(v) {
-  return JSON.stringify(v).replace(/"/g, '&quot;');
+  return JSON.stringify(v)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function showToast(msg, type = 'success') {
