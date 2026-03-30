@@ -1533,7 +1533,7 @@ function customConfirm(title, message, confirmLabel='Confirm', variant='primary'
         <div style="padding:0 24px 20px;color:var(--muted);font-size:13px">${message}</div>
         <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 24px">
           <button class="btn-ghost" id="${id}-cancel">Cancel</button>
-          <button class="btn-${variant === 'danger' ? 'delete' : 'primary'}" id="${id}-ok" style="background:${variant === 'danger' ? 'rgba(239,68,68,0.9)' : ''};">${esc(confirmLabel)}</button>
+          <button class="btn-primary" id="${id}-ok" style="${variant === 'danger' ? 'background:rgba(239,68,68,0.9);border-color:transparent;' : ''}">${esc(confirmLabel)}</button>
         </div>
       </div>`;
     document.body.appendChild(el);
