@@ -618,6 +618,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             New Project
           </button>
+          <button class="btn-primary" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3)" onclick="openMandaysCalc()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
+            Mandays
+          </button>
         </div>
       </div>
       <div id="projects-accordion"><div class="empty-state">Loading…</div></div>
@@ -736,6 +740,71 @@
     <div class="modal-actions">
       <button class="btn-ghost" onclick="document.getElementById('modal-create-client').classList.remove('open')">Cancel</button>
       <button class="btn-primary" onclick="submitCreateClient()" id="cc-btn" style="justify-content:center">Create Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Mandays Calculator Modal ── -->
+<div class="modal-overlay" id="modal-mandays" onclick="closeModal(event)">
+  <div class="modal" style="max-width:520px">
+    <h3 class="modal-title">🧮 Mandays Calculator</h3>
+    <p style="color:var(--muted);font-size:12px;margin:-16px 0 20px">Working days exclude weekends &amp; hari libur nasional Indonesia.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+      <div class="form-group" style="margin:0">
+        <label>Kickoff (hari)</label>
+        <input type="number" id="md-kickoff" value="1" min="0">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Info Gathering (hari)</label>
+        <input type="number" id="md-infogath" value="5" min="0">
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:24px">
+      <div class="form-group" style="margin:0">
+        <label>Mulai Assessment</label>
+        <input type="date" id="md-start">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label>Initial Report (selesai)</label>
+        <input type="date" id="md-end">
+      </div>
+    </div>
+
+    <div id="md-result" style="display:none;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:12px;padding:18px;margin-bottom:24px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <tbody>
+          <tr>
+            <td style="padding:6px 0;color:var(--muted)">Kickoff</td>
+            <td id="md-r-kickoff" style="text-align:right;font-weight:600"></td>
+            <td style="text-align:right;color:var(--muted);width:60px">hari</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:var(--muted)">Info Gathering</td>
+            <td id="md-r-infogath" style="text-align:right;font-weight:600"></td>
+            <td style="text-align:right;color:var(--muted)">hari</td>
+          </tr>
+          <tr>
+            <td style="padding:6px 0;color:var(--muted)">Assessment</td>
+            <td id="md-r-assessment" style="text-align:right;font-weight:600"></td>
+            <td style="text-align:right;color:var(--muted)">hari</td>
+          </tr>
+          <tr id="md-holiday-row">
+            <td style="padding:6px 0;color:var(--accent);font-size:11px" colspan="3" id="md-r-holidays"></td>
+          </tr>
+          <tr style="border-top:1px solid rgba(148,163,184,0.15)">
+            <td style="padding:10px 0 4px;font-weight:700;font-size:15px">Total Mandays</td>
+            <td id="md-r-total" style="text-align:right;font-weight:700;font-size:18px;color:var(--accent)"></td>
+            <td style="text-align:right;color:var(--muted)">hari</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-mandays').classList.remove('open')">Tutup</button>
+      <button class="btn-primary" onclick="calcMandays()">Hitung</button>
     </div>
   </div>
 </div>
@@ -2155,6 +2224,114 @@ function jsa(v) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// ── Mandays Calculator ────────────────────────────────────────────────────────
+// Indonesian national holidays (hari libur + cuti bersama) 2025 & 2026
+const ID_HOLIDAYS = new Set([
+  // 2025
+  '2025-01-01', // Tahun Baru Masehi
+  '2025-01-27', // Isra Mikraj
+  '2025-01-28', // Cuti Bersama Isra Mikraj
+  '2025-01-29', // Tahun Baru Imlek
+  '2025-03-29', // Hari Suci Nyepi
+  '2025-03-28', // Cuti Bersama Nyepi
+  '2025-04-18', // Wafat Isa Almasih
+  '2025-04-20', // Paskah
+  '2025-03-31', // Cuti Bersama Idul Fitri
+  '2025-04-01', // Idul Fitri 1446 H
+  '2025-04-02', // Idul Fitri 1446 H (hari 2)
+  '2025-04-03', // Cuti Bersama Idul Fitri
+  '2025-04-04', // Cuti Bersama Idul Fitri
+  '2025-04-07', // Cuti Bersama Idul Fitri
+  '2025-05-01', // Hari Buruh
+  '2025-05-12', // Hari Raya Waisak
+  '2025-05-13', // Cuti Bersama Waisak
+  '2025-05-29', // Kenaikan Isa Almasih
+  '2025-06-06', // Idul Adha 1446 H
+  '2025-06-09', // Cuti Bersama Idul Adha
+  '2025-06-27', // Tahun Baru Islam 1447 H
+  '2025-08-17', // HUT Kemerdekaan RI
+  '2025-09-05', // Maulid Nabi
+  '2025-12-25', // Hari Raya Natal
+  '2025-12-26', // Cuti Bersama Natal
+  // 2026
+  '2026-01-01', // Tahun Baru Masehi
+  '2026-01-16', // Isra Mikraj
+  '2026-01-17', // Tahun Baru Imlek
+  '2026-03-19', // Hari Suci Nyepi
+  '2026-03-20', // Cuti Bersama Nyepi
+  '2026-04-03', // Wafat Isa Almasih
+  '2026-03-20', // Idul Fitri (estimasi)
+  '2026-03-21', // Idul Fitri hari 2
+  '2026-03-23', // Cuti Bersama Idul Fitri
+  '2026-03-24', // Cuti Bersama Idul Fitri
+  '2026-05-01', // Hari Buruh
+  '2026-05-14', // Kenaikan Isa Almasih
+  '2026-05-26', // Hari Raya Waisak
+  '2026-05-27', // Idul Adha (estimasi)
+  '2026-06-17', // Tahun Baru Islam 1448 H
+  '2026-08-17', // HUT Kemerdekaan RI
+  '2026-09-25', // Maulid Nabi
+  '2026-12-25', // Hari Raya Natal
+]);
+
+function workingDaysBetween(startStr, endStr) {
+  const start = new Date(startStr);
+  const end   = new Date(endStr);
+  if (isNaN(start) || isNaN(end) || end < start) return { days: 0, holidays: [] };
+  let count = 0;
+  const skipped = [];
+  const cur = new Date(start);
+  while (cur <= end) {
+    const dow = cur.getDay();
+    const iso = cur.toISOString().slice(0, 10);
+    if (dow !== 0 && dow !== 6) { // skip weekend
+      if (ID_HOLIDAYS.has(iso)) {
+        skipped.push(iso);
+      } else {
+        count++;
+      }
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return { days: count, holidays: skipped };
+}
+
+function openMandaysCalc() {
+  document.getElementById('md-result').style.display = 'none';
+  document.getElementById('modal-mandays').classList.add('open');
+}
+
+function calcMandays() {
+  const kickoff   = parseInt(document.getElementById('md-kickoff').value)   || 0;
+  const infogath  = parseInt(document.getElementById('md-infogath').value)  || 0;
+  const startDate = document.getElementById('md-start').value;
+  const endDate   = document.getElementById('md-end').value;
+
+  if (!startDate || !endDate) {
+    showToast('Masukkan tanggal assessment terlebih dahulu', 'error'); return;
+  }
+  if (endDate < startDate) {
+    showToast('Tanggal selesai harus setelah tanggal mulai', 'error'); return;
+  }
+
+  const { days: assessment, holidays } = workingDaysBetween(startDate, endDate);
+  const total = kickoff + infogath + assessment;
+
+  document.getElementById('md-r-kickoff').textContent    = kickoff;
+  document.getElementById('md-r-infogath').textContent   = infogath;
+  document.getElementById('md-r-assessment').textContent = assessment;
+  document.getElementById('md-r-total').textContent      = total;
+
+  const holidayRow = document.getElementById('md-r-holidays');
+  if (holidays.length > 0) {
+    holidayRow.textContent = `⚠️ ${holidays.length} hari libur nasional dikecualikan dari rentang assessment`;
+  } else {
+    holidayRow.textContent = '✅ Tidak ada hari libur nasional dalam rentang assessment';
+  }
+
+  document.getElementById('md-result').style.display = 'block';
 }
 
 function showToast(msg, type = 'success') {
