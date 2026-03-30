@@ -260,6 +260,7 @@ function getDashboardSummary(callback) {
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
+           p.mandays_kickoff, p.mandays_infogath,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -292,6 +293,7 @@ function getClientsWithProjects(callback) {
            p.assigned_engineer_id,
            p.assist_engineer_id,
            p.link_report_en, p.link_report_id, p.project_links,
+           p.mandays_kickoff, p.mandays_infogath,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
