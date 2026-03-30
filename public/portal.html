@@ -1528,18 +1528,18 @@ function customConfirm(title, message, confirmLabel='Confirm', variant='primary'
     el.className = 'modal-overlay open';
     el.id = id;
     el.innerHTML = `
-      <div class="modal-box" style="max-width:420px">
-        <div class="modal-header"><h3 class="modal-title">${title}</h3></div>
-        <div style="padding:0 24px 20px;color:var(--muted);font-size:13px">${message}</div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 24px">
+      <div class="modal" style="max-width:420px">
+        <h3 class="modal-title">${title}</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 24px">${message}</p>
+        <div class="modal-actions">
           <button class="btn-ghost" id="${id}-cancel">Cancel</button>
-          <button class="btn-primary" id="${id}-ok" style="${variant === 'danger' ? 'background:rgba(239,68,68,0.9);border-color:transparent;' : ''}">${esc(confirmLabel)}</button>
+          <button class="btn-primary" id="${id}-ok" style="${variant === 'danger' ? 'background:rgba(239,68,68,0.9);' : ''}">${esc(confirmLabel)}</button>
         </div>
       </div>`;
     document.body.appendChild(el);
     const cleanup = (val) => { el.remove(); resolve(val); };
-    el.querySelector(`#${id}-ok`).onclick     = () => cleanup(true);
-    el.querySelector(`#${id}-cancel`).onclick  = () => cleanup(false);
+    el.querySelector(`#${id}-ok`).onclick    = () => cleanup(true);
+    el.querySelector(`#${id}-cancel`).onclick = () => cleanup(false);
     el.addEventListener('click', e => { if (e.target === el) cleanup(false); });
   });
 }
@@ -1550,13 +1550,13 @@ function customPrompt(title, label, defaultValue='') {
     el.className = 'modal-overlay open';
     el.id = id;
     el.innerHTML = `
-      <div class="modal-box" style="max-width:420px">
-        <div class="modal-header"><h3 class="modal-title">${title}</h3></div>
-        <div style="padding:0 24px 20px">
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:8px">${label}</label>
-          <input id="${id}-inp" class="form-input" value="${esc(defaultValue)}" style="width:100%">
+      <div class="modal" style="max-width:420px">
+        <h3 class="modal-title">${title}</h3>
+        <div class="form-group">
+          <label>${label}</label>
+          <input id="${id}-inp" value="${esc(defaultValue)}">
         </div>
-        <div style="display:flex;justify-content:flex-end;gap:10px;padding:0 24px 24px">
+        <div class="modal-actions">
           <button class="btn-ghost" id="${id}-cancel">Cancel</button>
           <button class="btn-primary" id="${id}-ok">Save</button>
         </div>
@@ -1565,8 +1565,8 @@ function customPrompt(title, label, defaultValue='') {
     const inp = el.querySelector(`#${id}-inp`);
     inp.focus(); inp.select();
     const cleanup = (val) => { el.remove(); resolve(val); };
-    el.querySelector(`#${id}-ok`).onclick     = () => cleanup(inp.value);
-    el.querySelector(`#${id}-cancel`).onclick  = () => cleanup(null);
+    el.querySelector(`#${id}-ok`).onclick    = () => cleanup(inp.value);
+    el.querySelector(`#${id}-cancel`).onclick = () => cleanup(null);
     el.addEventListener('click', e => { if (e.target === el) cleanup(null); });
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') cleanup(inp.value); if (e.key === 'Escape') cleanup(null); });
   });
