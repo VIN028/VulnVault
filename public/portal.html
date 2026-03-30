@@ -1808,7 +1808,13 @@ function _openChangePw(uid) {
 }
 function _deleteUser(uid) {
   const u = _allUsersCache.find(x => x.id === uid);
-  if (u) deleteUser(uid, u.display_name);
+  if (!u) return;
+  customConfirm(`Delete user "${esc(u.display_name)}"?`, 'This cannot be undone.', 'Delete', 'danger').then(ok => {
+    if (!ok) return;
+    apiFetch(`/api/users/${uid}`, 'DELETE')
+      .then(() => { showToast('User deleted', 'success'); loadUsers(); })
+      .catch(e => showToast(e.message, 'error'));
+  });
 }
 function _openFindings(pid) {
   const p = _allClientsCache.find(x => x.project_id === pid);
