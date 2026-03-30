@@ -840,12 +840,31 @@
         <select id="cp-assist"><option value="">— Not assigned —</option></select>
       </div>
       <div class="form-group">
-        <label>Kickoff Date (Start)</label>
-        <input id="cp-kickoff" type="date" />
+        <label>Kickoff Date (Start) *</label>
+        <input id="cp-kickoff" type="date" oninput="updateMandaysPreview()" />
       </div>
       <div class="form-group">
-        <label>Initial Report Date</label>
-        <input id="cp-initial" type="date" />
+        <label>Initial Report Date *</label>
+        <input id="cp-initial" type="date" oninput="updateMandaysPreview()" />
+      </div>
+      <div class="form-group">
+        <label>Kickoff (hari)</label>
+        <input id="cp-md-kickoff" type="number" value="1" min="0" oninput="updateMandaysPreview()" />
+      </div>
+      <div class="form-group">
+        <label>Info Gathering (hari)</label>
+        <input id="cp-md-infogath" type="number" value="5" min="0" oninput="updateMandaysPreview()" />
+      </div>
+      <!-- Live mandays preview -->
+      <div id="cp-mandays-preview" style="display:none;grid-column:1/-1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:14px 18px">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.05em">MANDAYS ESTIMATE</div>
+        <div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:12px;color:var(--muted)">Kickoff: <b id="cp-md-r-kickoff" style="color:var(--text)">—</b></span>
+          <span style="font-size:12px;color:var(--muted)">Info Gathering: <b id="cp-md-r-infogath" style="color:var(--text)">—</b></span>
+          <span style="font-size:12px;color:var(--muted)">Assessment: <b id="cp-md-r-assessment" style="color:var(--text)">—</b></span>
+          <span style="font-size:14px;font-weight:700;color:var(--accent)">Total: <span id="cp-md-r-total">—</span> hari</span>
+        </div>
+        <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
       </div>
       <div class="form-group" style="grid-column:1/-1">
         <label>Final Report Date</label>
@@ -1715,6 +1734,13 @@ async function openCreateProject() {
   document.getElementById('cp-type').value = 'web';
   document.getElementById('cp-err').classList.remove('show');
   document.getElementById('cp-links-container').innerHTML = '';
+  // Reset mandays fields
+  const mkEl = document.getElementById('cp-md-kickoff');
+  const miEl = document.getElementById('cp-md-infogath');
+  if (mkEl) mkEl.value = '1';
+  if (miEl) miEl.value = '5';
+  const prev = document.getElementById('cp-mandays-preview');
+  if (prev) prev.style.display = 'none';
 
   // Load clients into select
   try {
@@ -1740,6 +1766,29 @@ async function openCreateProject() {
   document.getElementById('modal-create-project').classList.add('open');
 }
 
+function updateMandaysPreview() {
+  const kickoffDate = document.getElementById('cp-kickoff')?.value;
+  const initialDate = document.getElementById('cp-initial')?.value;
+  const kickoffDays = parseInt(document.getElementById('cp-md-kickoff')?.value) || 0;
+  const infogathDays = parseInt(document.getElementById('cp-md-infogath')?.value) || 0;
+  const preview = document.getElementById('cp-mandays-preview');
+  if (!preview) return;
+  if (!kickoffDate || !initialDate || initialDate < kickoffDate) {
+    preview.style.display = 'none'; return;
+  }
+  const { days: assessment, holidays } = workingDaysBetween(kickoffDate, initialDate);
+  const total = kickoffDays + infogathDays + assessment;
+  document.getElementById('cp-md-r-kickoff').textContent   = kickoffDays;
+  document.getElementById('cp-md-r-infogath').textContent  = infogathDays;
+  document.getElementById('cp-md-r-assessment').textContent = assessment;
+  document.getElementById('cp-md-r-total').textContent     = total;
+  const note = document.getElementById('cp-md-r-note');
+  note.textContent = holidays.length > 0
+    ? `⚠️ ${holidays.length} hari libur nasional dikecualikan dari rentang assessment`
+    : '✅ Tidak ada hari libur nasional dalam rentang ini';
+  preview.style.display = 'block';
+}
+
 async function submitCreateProject() {
   const clientId   = document.getElementById('cp-client').value;
   const name       = document.getElementById('cp-name').value.trim();
@@ -1750,6 +1799,8 @@ async function submitCreateProject() {
   const kickoff_date        = document.getElementById('cp-kickoff').value || null;
   const initial_report_date = document.getElementById('cp-initial').value || null;
   const final_report_date   = document.getElementById('cp-final').value || null;
+  const mandays_kickoff     = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
+  const mandays_infogath    = parseInt(document.getElementById('cp-md-infogath').value) || 5;
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
 
@@ -1761,7 +1812,7 @@ async function submitCreateProject() {
   try {
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
-      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links
+      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath
     });
     document.getElementById('modal-create-project').classList.remove('open');
     showToast('Project created!', 'success');

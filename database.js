@@ -87,6 +87,8 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN initial_completed_at TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN final_completed_at TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN project_links TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN mandays_kickoff INTEGER DEFAULT 1`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN mandays_infogath INTEGER DEFAULT 5`, () => {});
   });
 
   db.run(`
@@ -608,11 +610,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links } = opts || {};
+  const { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [clientId, name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null],
+    `INSERT INTO projects (client_id, name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [clientId, name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -711,7 +713,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links }, callback) {
+function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
@@ -722,9 +724,11 @@ function updateProject(id, { name, project_type, assigned_engineer_id, assist_en
        kickoff_date = ?,
        initial_report_date = ?,
        final_report_date = ?,
-       project_links = ?
+       project_links = ?,
+       mandays_kickoff = ?,
+       mandays_infogath = ?
      WHERE id = ?`,
-    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, id],
+    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
