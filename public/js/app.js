@@ -1149,12 +1149,15 @@ async function promptAddClient() {
   } catch(e) { showToast(e.message || 'Failed', 'error'); }
 }
 
+let currentUserId = null; // set by applyRoleUI
+
 // ── Role-based UI visibility ──────────────────────────────────────────────────
 async function applyRoleUI() {
   try {
     const r = await fetch('/api/session');
     const s = await r.json();
-    
+    currentUserId = s.userId || null;
+
     // Update top right user info
     const nameEl = document.getElementById('user-profile-name');
     if (nameEl) {
@@ -1301,13 +1304,42 @@ async function selectProject(project) {
   const btnFinal = document.getElementById('btn-finish-final');
   if (btnFinal) {
     if (project.final_report_status === 'completed') {
+      // Already completed
+      btnFinal.style.display = '';
       btnFinal.disabled = true;
-      btnFinal.innerText = 'Completed ✓';
+      btnFinal.innerText = 'Final Report Done ✓';
       btnFinal.style.background = '#22c55e';
-    } else {
-      btnFinal.disabled = false;
-      btnFinal.innerText = 'Finish Final Report';
-      btnFinal.style.background = '#8b5cf6';
+      btnFinal.title = '';
+    } else if (!project.retest_status || project.retest_status === 'none') {
+      // Retest not started yet — hide and show locked message
+      btnFinal.style.display = 'none';
+      // Show locked hint if not already present
+      let hint = document.getElementById('final-report-locked-hint');
+      if (!hint) {
+        hint = document.createElement('div');
+        hint.id = 'final-report-locked-hint';
+        btnFinal.parentNode.insertBefore(hint, btnFinal.nextSibling);
+      }
+      hint.style.cssText = 'font-size:11px;color:#f59e0b;margin-top:6px;padding:6px 10px;background:rgba(245,158,11,0.08);border-radius:6px;border:1px solid rgba(245,158,11,0.2)';
+      hint.textContent = '⏳ Awaiting PM to start Retest phase before Final Report can be completed.';
+    } else if (project.retest_status === 'started') {
+      // Retest active — show button, enable only if current user is retest PIC
+      btnFinal.style.display = '';
+      const isRetestPic = currentUserId && Number(project.retest_pic_id) === Number(currentUserId);
+      // Hide locked hint if shown
+      const hint = document.getElementById('final-report-locked-hint');
+      if (hint) hint.remove();
+      if (isRetestPic) {
+        btnFinal.disabled = false;
+        btnFinal.innerText = 'Finish Final Report';
+        btnFinal.style.background = '#8b5cf6';
+        btnFinal.title = '';
+      } else {
+        btnFinal.disabled = true;
+        btnFinal.innerText = '🔒 Final Report (Retest PIC only)';
+        btnFinal.style.background = 'rgba(139,92,246,0.25)';
+        btnFinal.title = 'Only the assigned Retest PIC can complete the Final Report.';
+      }
     }
   }
   
@@ -1371,7 +1403,8 @@ async function markReportComplete(type) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error('Failed to complete report');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `Failed to complete ${type} report`);
     showToast(`${type === 'initial' ? 'Initial' : 'Final'} Report marked as completed!`, 'success');
     btn.innerText = 'Completed ✓';
     btn.style.background = '#22c55e';

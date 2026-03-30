@@ -468,10 +468,15 @@ app.get('/api/clients/:clientId/projects', (req, res) => {
   }
   db.getProjectsByClient(clientId, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Engineers only see their own assigned projects (PIC or Assist)
+    // Engineers only see their own assigned projects (PIC, Assist, or Retest PIC/Assist)
     if (req.session?.role === 'engineer') {
       const uid = Number(req.session.userId);
-      rows = rows.filter(p => Number(p.assigned_engineer_id) === uid || Number(p.assist_engineer_id) === uid);
+      rows = rows.filter(p =>
+        Number(p.assigned_engineer_id) === uid ||
+        Number(p.assist_engineer_id) === uid ||
+        Number(p.retest_pic_id) === uid ||
+        Number(p.retest_assist_id) === uid
+      );
     }
     res.json(rows);
   });
@@ -653,65 +658,105 @@ app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'man
   const { initial_report_status, final_report_status } = req.body;
   if (!initial_report_status && !final_report_status) return res.json({ ok: true });
 
-  // Build completed_by + completed_at updates
-  const completedBy = {};
-  const now = new Date().toISOString();
-  if (initial_report_status === 'completed') {
-    completedBy.initial_completed_by = req.session.displayName || req.session.username;
-    completedBy.initial_completed_at = now;
-  }
+  const role   = req.session?.role;
+  const userId = req.session?.userId;
+  const isPM   = ['admin','manager','pm'].includes(role);
+
+  // If trying to mark FINAL report done — enforce retest access control
   if (final_report_status === 'completed') {
-    completedBy.final_completed_by = req.session.displayName || req.session.username;
-    completedBy.final_completed_at = now;
+    db.getProjectById(id, (err, proj) => {
+      if (err || !proj) return res.status(404).json({ error: 'Project not found' });
+      // Must have retest started before final report can be marked done
+      if (proj.retest_status !== 'started' && !isPM)
+        return res.status(403).json({ error: 'Final Report can only be completed after PM starts the Retest phase.' });
+      // Engineer must be the retest PIC (or management)
+      if (!isPM && Number(proj.retest_pic_id) !== Number(userId))
+        return res.status(403).json({ error: 'Only the Retest PIC can complete the Final Report.' });
+      // Allowed — proceed
+      doStatusUpdate();
+    });
+  } else {
+    doStatusUpdate();
   }
 
-  db.updateProjectReportStatus(id, { initial_report_status, final_report_status, ...completedBy }, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-
-    db.getProjectById(id, (err, proj) => {
-      if (!err && proj) {
-        let msg = '';
-        if (initial_report_status === 'completed') msg = `Initial Report completed for project ${proj.name}`;
-        if (final_report_status === 'completed') msg = `Final Report completed for project ${proj.name}`;
-        if (msg) {
-          db.writeActivityLog({
-            type: 'project',
-            actorId: req.session.userId,
-            projectId: id,
-            action: 'report_completed',
-            details: msg
-          }, () => {});
-          // Notify all management
-          db.notifyManagement({
-            type: 'report_completed',
-            title: initial_report_status === 'completed' ? '📋 Initial Report Completed' : '📗 Final Report Completed',
-            message: `${req.session.displayName || req.session.username} completed the ${initial_report_status === 'completed' ? 'Initial' : 'Final'} Report for "${proj.name}".`
-          });
+  function doStatusUpdate() {
+    // Build completed_by + completed_at updates
+    const completedBy = {};
+    const now = new Date().toISOString();
+    if (initial_report_status === 'completed') {
+      completedBy.initial_completed_by = req.session.displayName || req.session.username;
+      completedBy.initial_completed_at = now;
+    }
+    if (final_report_status === 'completed') {
+      completedBy.final_completed_by = req.session.displayName || req.session.username;
+      completedBy.final_completed_at = now;
+    }
+    db.updateProjectReportStatus(id, { initial_report_status, final_report_status, ...completedBy }, (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+      db.getProjectById(id, (err, proj) => {
+        if (!err && proj) {
+          let msg = '';
+          if (initial_report_status === 'completed') msg = `Initial Report completed for project ${proj.name}`;
+          if (final_report_status === 'completed') msg = `Final Report completed for project ${proj.name}`;
+          if (msg) {
+            db.writeActivityLog({ type: 'project', actorId: req.session.userId, projectId: id, action: 'report_completed', details: msg }, () => {});
+            db.notifyManagement({
+              type: 'report_completed',
+              title: initial_report_status === 'completed' ? '📋 Initial Report Completed' : '📗 Final Report Completed',
+              message: `${req.session.displayName || req.session.username} completed the ${initial_report_status === 'completed' ? 'Initial' : 'Final'} Report for "${proj.name}".`
+            });
+          }
         }
-      }
+      });
+      res.json({ ok: true });
     });
-    res.json({ ok: true });
-  });
+  }
 });
 
 // Start Retest — PM/Manager only
-app.post('/api/projects/:id/retest', requireAuth, (req, res) => {
-  if (!['pm','admin','manager'].includes(req.session?.role)) return res.status(403).json({ error: 'PM/Manager only' });
+app.post('/api/projects/:id/retest', auth.requireRole('pm', 'admin', 'manager'), (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id) || id < 1) return res.status(400).json({ error: 'Invalid project id' });
   const { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date } = req.body;
+  if (!retest_pic_id) return res.status(400).json({ error: 'Retest PIC is required' });
   if (!retest_start_date || !retest_end_date) return res.status(400).json({ error: 'Retest start and end dates are required' });
-  db.startRetest(id, { retest_pic_id: retest_pic_id || null, retest_assist_id: retest_assist_id || null, retest_start_date, retest_end_date }, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-    db.getProjectById(id, (err2, proj) => {
-      if (!err2 && proj) {
-        db.writeActivityLog({ type: 'project', actorId: req.session.userId, projectId: id, action: 'start_retest', details: `Retest started for project "${proj.name}"` }, () => {});
-        db.notifyManagement({ type: 'retest_started', title: '🔁 Retest Started', message: `PM started retest for "${proj.name}". Final report expected ${retest_end_date}.` });
-      }
+
+  // Guard: initial report must be completed before retest can start
+  db.getProjectById(id, (err0, proj0) => {
+    if (err0 || !proj0) return res.status(404).json({ error: 'Project not found' });
+    if (proj0.initial_report_status !== 'completed')
+      return res.status(400).json({ error: 'Cannot start Retest until the Initial Report is marked as completed.' });
+
+    db.startRetest(id, { retest_pic_id: Number(retest_pic_id), retest_assist_id: retest_assist_id ? Number(retest_assist_id) : null, retest_start_date, retest_end_date }, (err, result) => {
+      if (err) return res.status(500).json({ error: err.message });
+      if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+
+      db.getProjectById(id, (err2, proj) => {
+        if (!err2 && proj) {
+          db.writeActivityLog({ type: 'project', actorId: req.session.userId, projectId: id, action: 'start_retest', details: `Retest started for project "${proj.name}"` }, () => {});
+          db.notifyManagement({ type: 'retest_started', title: '🔁 Retest Started', message: `PM started retest for "${proj.name}". Final report expected ${retest_end_date}.` });
+          // Notify retest PIC engineer directly
+          if (retest_pic_id) {
+            db.createNotification({
+              userId: Number(retest_pic_id),
+              type: 'retest_assigned',
+              title: '🔁 You are assigned as Retest PIC',
+              message: `You have been assigned as Retest PIC for "${proj.name}". Retest runs ${retest_start_date} → ${retest_end_date}. Please complete the Final Report when done.`
+            }, () => {});
+          }
+          if (retest_assist_id) {
+            db.createNotification({
+              userId: Number(retest_assist_id),
+              type: 'retest_assigned',
+              title: '🔁 You are assigned as Retest Assist',
+              message: `You have been assigned as Retest Assist for "${proj.name}". Retest runs ${retest_start_date} → ${retest_end_date}.`
+            }, () => {});
+          }
+        }
+      });
+      res.json({ ok: true });
     });
-    res.json({ ok: true });
   });
 });
 

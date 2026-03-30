@@ -289,9 +289,12 @@ function getClientsByEngineer(engineerId, callback) {
     SELECT DISTINCT c.id, c.name, c.created_at
     FROM clients c
     JOIN projects p ON p.client_id = c.id
-    WHERE p.assigned_engineer_id = ? OR p.assist_engineer_id = ?
+    WHERE p.assigned_engineer_id = ?
+       OR p.assist_engineer_id = ?
+       OR p.retest_pic_id = ?
+       OR p.retest_assist_id = ?
     ORDER BY c.name
-  `, [engineerId, engineerId], callback);
+  `, [engineerId, engineerId, engineerId, engineerId], callback);
 }
 
 // All clients with their projects (LEFT JOIN so empty clients appear too)
@@ -613,6 +616,8 @@ function getProjectsByClient(clientId, callback) {
             p.initial_report_status, p.final_report_status,
             p.link_report_en, p.link_report_id, p.project_links,
             p.created_at,
+            p.retest_status, p.retest_start_date, p.retest_end_date,
+            p.retest_pic_id, p.retest_assist_id,
             u.display_name AS engineer_name,
             u2.display_name AS assist_engineer_name
      FROM projects p
