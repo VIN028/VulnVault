@@ -773,7 +773,17 @@ app.get('/api/projects/:projectId/findings', (req, res) => {
 
 // ── AI Mandays Estimator ───────────────────────────────────────────────────────
 app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), async (req, res) => {
-  const { api_key, model, project_type, method, endpoint_count, description } = req.body;
+  const {
+    api_key, model, project_type, method, description,
+    // Web / Mobile
+    num_pages, num_features,
+    // API
+    num_endpoints, avg_methods,
+    // Infra
+    infra_subtype, num_items,
+    // Phishing
+    num_targets
+  } = req.body;
   if (!api_key) return res.status(400).json({ error: 'API key is required' });
   if (!project_type) return res.status(400).json({ error: 'Project type is required' });
 
@@ -787,31 +797,86 @@ app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), a
   const methodLabel = {
     blackbox: 'Black Box', greybox: 'Grey Box', whitebox: 'White Box',
     external: 'External', internal: 'Internal', combination: 'Combination'
-  }[method] || method || 'Black Box';
+  }[method] || method || 'Grey Box';
 
-  const prompt = `Bertindaklah sebagai Senior Cyber Security Project Manager yang ahli dalam melakukan scoping dan estimasi sumber daya proyek keamanan informasi.
+  const infraLabel = {
+    segmentation: 'Segmentation Pentest',
+    external_nonauth: 'Network VAPT (Non-Authenticated)',
+    external_auth: 'Network VAPT (Authenticated)',
+    firewall: 'Firewall Ruleset Review'
+  }[infra_subtype] || infra_subtype || '';
 
-Tugas Anda adalah menghitung estimasi mandays (hari kerja) yang rasional untuk sebuah proyek Penetration Testing (Pentest).
+  // Build input-specific section of the prompt
+  let inputSection = '';
+  if (project_type === 'web' || project_type === 'mobile') {
+    inputSection = `
+Pages: ${num_pages || 0}
+Features/Functions: ${num_features || 0}
+Method: ${methodLabel}`;
+  } else if (project_type === 'api') {
+    inputSection = `
+Number of Endpoints: ${num_endpoints || 0}
+Average HTTP Methods per Endpoint: ${avg_methods || 2}
+Total Pentest Items: ${(num_endpoints || 0) * (avg_methods || 2)}
+Method: ${methodLabel}`;
+  } else if (project_type === 'infra') {
+    inputSection = `
+VAPT Sub-type: ${infraLabel}
+Number of Items (IP/Subnet/Ruleset): ${num_items || 0}
+Method: ${methodLabel}`;
+  } else if (project_type === 'phishing') {
+    inputSection = `Number of Target Users: ${num_targets || 'Not specified'}`;
+  }
 
-Input Data:
-Scope: ${typeLabel}
-Jumlah Endpoint/IP: ${project_type !== 'phishing' ? endpoint_count : 'N/A'}
-Metode Pentest: ${methodLabel}
-Deskripsi Singkat: ${description || 'Tidak ada deskripsi spesifik'}
+  const prompt = `You are a Senior Cyber Security Project Manager following exact internal mandays guidelines.
 
-Aturan baku (TIDAK BOLEH DIRUBAH):
-- Mandays Kickoff dipastikan: 1 hari
-- Mandays Information Gathering dipastikan: 5 hari
-- (Anda hanya perlu menghitung mandays Assessment phase saja)
+=== OFFICIAL MANDAYS GUIDELINES ===
 
-Berikan estimasi assessment dan kembalikan output DALAM FORMAT JSON BERIKUT (tanpa markdown).
-Format JSON yang diharapkan:
+WEB APPLICATION (GrayBox baseline):
+- Pre & Post: FIXED 5 mandays (do NOT include in assessment_days)
+- Testing formula: (features × 4 hours) + (pages / 4 hours) = total hours ÷ 8 = assessment days
+- Method multipliers on testing hours: Black Box ×1.25 | Grey Box ×1.0 | White Box ×0.80
+- Round UP to nearest integer
+
+MOBILE APPLICATION (GrayBox baseline):
+- Pre & Post: FIXED 5 mandays (do NOT include in assessment_days)
+- Testing formula: (features × 4 hours) + (pages × 2 hours) = total hours ÷ 8 = assessment days
+- Method multipliers: Black Box ×1.25 | Grey Box ×1.0 | White Box ×0.80
+- Round UP to nearest integer
+
+API APPLICATION:
+- Total pentest items = num_endpoints × avg_http_methods
+- Hours per item: Grey Box = 2h | Black Box = 2.5h | White Box = 1.5h
+- assessment days = CEIL(total items × hours_per_item / 8)
+
+NETWORK VAPT (Infrastructure):
+- Segmentation PT: 4 hours per subnet/segment
+- Non-Authenticated VAPT: 2 hours per IP/hostname
+- Authenticated VAPT: 3 hours per IP/hostname
+- Firewall Ruleset Review: 1 hour per 4 rulesets = CEIL(num_items / 4) hours
+- assessment days = CEIL(total hours / 8)
+
+PHISHING SIMULATION:
+- Fixed: 3 to 5 days total (use description to determine complexity)
+
+IMPORTANT: assessment_days = testing phase days ONLY. Do NOT add Pre & Post (5 days) or Kickoff (1 day).
+
+=== PM INPUT ===
+Scope Type: ${typeLabel}
+${inputSection}
+Description: ${description || 'None'}
+
+=== TASK ===
+Apply the exact formula above. Show the step-by-step calculation in "reasoning" (in Bahasa Indonesia).
+Return only valid JSON:
 {
-  "assessment_days": <angka estimasi untuk fase assessment murni, hitung dengan standar industri pentesting>,
-  "confidence": "<high|medium|low>",
-  "reasoning": "<1-2 kalimat pendek alasan kenapa estimasi angkanya seperti itu (dalam Bahasa Indonesia)>",
-  "notes": "<catatan tambahan singkat jika ada, misal kerumitan khusus, dll>"
+  "assessment_days": <integer, ceil result of formula above>,
+  "confidence": "high",
+  "reasoning": "<show the formula and numbers clearly, e.g.: features(5)×4=20jam + pages(20)/4=5jam = 25jam ÷ 8 = 3.125 → dibulatkan naik = 4 hari>",
+  "notes": "<any scope clarifications or assumptions>"
 }`;
+
+
 
   try {
     const https = require('https');

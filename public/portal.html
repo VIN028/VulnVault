@@ -820,10 +820,12 @@
       <div>
         <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
           <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:18px">INPUT SCOPE PROJECT</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+          <!-- Row 1: Type + Method (always visible) -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
             <div class="form-group" style="margin:0">
               <label>Jenis Project *</label>
-              <select id="ai-project-type" onchange="updateEndpointLabel(); updateAiMethodOptions()">
+              <select id="ai-project-type" onchange="updateAiMethodOptions(); updateAiDynamicFields()">
                 <option value="web">Web Application</option>
                 <option value="api">API / REST</option>
                 <option value="mobile">Mobile Application</option>
@@ -835,19 +837,21 @@
               <label>Method *</label>
               <select id="ai-method">
                 <option value="blackbox">Black Box</option>
-                <option value="greybox">Grey Box</option>
+                <option value="greybox" selected>Grey Box</option>
                 <option value="whitebox">White Box</option>
               </select>
             </div>
-            <div class="form-group" style="margin:0">
-              <label id="ai-endpoint-label">Jumlah Endpoint *</label>
-              <input id="ai-endpoint-count" type="number" min="1" value="10" />
-            </div>
-            <div class="form-group" style="margin:0;grid-column:1/-1">
-              <label>Deskripsi Singkat Project <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
-              <textarea id="ai-description" placeholder="Contoh: Aplikasi e-commerce dengan OAuth, pembayaran Midtrans, admin panel, dan REST API untuk mobile…"></textarea>
-            </div>
           </div>
+
+          <!-- Dynamic fields per type -->
+          <div id="ai-dynamic-fields" style="margin-bottom:14px"></div>
+
+          <!-- Description: always visible -->
+          <div class="form-group" style="margin:0">
+            <label>Deskripsi Singkat Project <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+            <textarea id="ai-description" placeholder="Contoh: Aplikasi e-commerce dengan OAuth, pembayaran Midtrans, admin panel, dan REST API untuk mobile…"></textarea>
+          </div>
+
           <button id="ai-estimate-btn" onclick="runAiEstimate()" style="margin-top:18px;width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#6366f1);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.02em;transition:opacity .2s">
             ✨ Estimasi Mandays dengan AI
           </button>
@@ -1294,8 +1298,8 @@ function initAiMandaysSection() {
   } else {
     if (statusEl) { statusEl.textContent = 'Belum disimpan'; statusEl.style.background = 'rgba(239,68,68,0.15)'; statusEl.style.color = '#fca5a5'; }
   }
-  updateEndpointLabel();
   updateAiMethodOptions();
+  updateAiDynamicFields();
 }
 
 function saveAiApiKey() {
@@ -1314,12 +1318,45 @@ function clearAiApiKey() {
   initAiMandaysSection();
 }
 
-function updateEndpointLabel() {
+function updateAiDynamicFields() {
   const type = document.getElementById('ai-project-type')?.value;
-  const label = document.getElementById('ai-endpoint-label');
-  if (!label) return;
-  const map = { web: 'Jumlah Endpoint *', api: 'Jumlah Endpoint *', mobile: 'Jumlah Aplikasi *', infra: 'Jumlah IP / Host *', phishing: 'Jumlah Target User' };
-  label.textContent = map[type] || 'Jumlah Endpoint *';
+  const container = document.getElementById('ai-dynamic-fields');
+  if (!container) return;
+
+  const fg = (id, label, inputHtml) =>
+    `<div class="form-group" style="margin:0"><label>${label}</label>${inputHtml}</div>`;
+
+  if (type === 'web' || type === 'mobile') {
+    const pageLabel = type === 'web' ? 'Jumlah Pages *' : 'Jumlah Screens / Pages *';
+    const featLabel = type === 'web' ? 'Jumlah Features / Functions *' : 'Jumlah Features / Functions *';
+    container.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      ${fg('ai-num-pages',   pageLabel, '<input id="ai-num-pages" type="number" min="1" value="20" />')}
+      ${fg('ai-num-features', featLabel, '<input id="ai-num-features" type="number" min="0" value="5" />')}
+    </div>`;
+  } else if (type === 'api') {
+    container.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      ${fg('ai-num-endpoints', 'Jumlah API Endpoints *', '<input id="ai-num-endpoints" type="number" min="1" value="10" />')}
+      ${fg('ai-avg-methods',   'Avg HTTP Methods per Endpoint',
+        '<select id="ai-avg-methods"><option value="1">1 method</option><option value="2" selected>2 methods (GET+POST)</option><option value="3">3 methods</option><option value="4">4 methods</option><option value="5">5 methods (full CRUD)</option></select>')}
+    </div>`;
+  } else if (type === 'infra') {
+    container.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+      ${fg('ai-infra-subtype', 'Sub-tipe VAPT *',
+        `<select id="ai-infra-subtype">
+          <option value="segmentation">Segmentation Pentest</option>
+          <option value="external_nonauth" selected>Network VAPT (Non-Authenticated)</option>
+          <option value="external_auth">Network VAPT (Authenticated)</option>
+          <option value="firewall">Firewall Ruleset Review</option>
+        </select>`)}
+      ${fg('ai-num-items', 'Jumlah IP / Subnet / Ruleset *', '<input id="ai-num-items" type="number" min="1" value="10" />')}
+    </div>`;
+  } else if (type === 'phishing') {
+    container.innerHTML = `<div style="display:grid;grid-template-columns:1fr;gap:16px">
+      ${fg('ai-num-targets', 'Jumlah Target User <span style="font-weight:400;color:var(--muted)">(optional)</span>', '<input id="ai-num-targets" type="number" min="0" placeholder="misal: 500" />')}
+    </div>`;
+  } else {
+    container.innerHTML = '';
+  }
 }
 
 function updateAiMethodOptions() {
@@ -1362,8 +1399,22 @@ async function runAiEstimate() {
   }
   const project_type  = document.getElementById('ai-project-type')?.value;
   const method        = document.getElementById('ai-method')?.value || null;
-  const endpoint_count = parseInt(document.getElementById('ai-endpoint-count')?.value) || 1;
   const description   = document.getElementById('ai-description')?.value?.trim() || '';
+
+  // Collect dynamic fields per type
+  const extra = {};
+  if (project_type === 'web' || project_type === 'mobile') {
+    extra.num_pages    = parseInt(document.getElementById('ai-num-pages')?.value)    || 0;
+    extra.num_features = parseInt(document.getElementById('ai-num-features')?.value) || 0;
+  } else if (project_type === 'api') {
+    extra.num_endpoints = parseInt(document.getElementById('ai-num-endpoints')?.value) || 1;
+    extra.avg_methods   = parseInt(document.getElementById('ai-avg-methods')?.value)   || 2;
+  } else if (project_type === 'infra') {
+    extra.infra_subtype = document.getElementById('ai-infra-subtype')?.value || 'external_nonauth';
+    extra.num_items     = parseInt(document.getElementById('ai-num-items')?.value) || 1;
+  } else if (project_type === 'phishing') {
+    extra.num_targets = parseInt(document.getElementById('ai-num-targets')?.value) || 0;
+  }
 
   document.getElementById('ai-result').style.display  = 'none';
   document.getElementById('ai-error').style.display   = 'none';
@@ -1371,8 +1422,8 @@ async function runAiEstimate() {
   document.getElementById('ai-estimate-btn').disabled = true;
 
   try {
-    const data = await apiFetch('/api/ai/estimate-mandays', 'POST', { api_key: apiKey, model: aiModel, project_type, method, endpoint_count, description });
-    _lastAiEstimate = { ...data, project_type, method, endpoint_count };
+    const data = await apiFetch('/api/ai/estimate-mandays', 'POST', { api_key: apiKey, model: aiModel, project_type, method, description, ...extra });
+    _lastAiEstimate = { ...data, project_type, method, ...extra };
 
     document.getElementById('ai-r-kickoff').textContent    = data.kickoff_days;
     document.getElementById('ai-r-infogath').textContent   = data.infogath_days;
