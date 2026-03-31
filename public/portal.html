@@ -1703,7 +1703,7 @@ function renderAllocationChart() {
           const { days: asmDays } = workingDaysBetween(b.p.kickoff_date || '', b.p.initial_report_date || '');
           const totalMd = ko + ig + asmDays;
           const tooltip = `${clientName} \u2014 ${projectName} (${role}) | ${totalMd} mandays`;
-          return `<span class="gantt-bar-label" title="${tooltip}"><span class="bar-project">${projectName}</span><span class="bar-role">${role}</span></span>`;
+          return `<span class="gantt-bar-label" title="${tooltip}"><span class="bar-project">${clientName}</span><span class="bar-role">${role}</span></span>`;
         }).join('');
       }
 
@@ -1739,7 +1739,7 @@ function renderAllocationChart() {
             }
             const projectName = escA(b.p.project_name || '');
             const role = b.p.role || '';
-            return `<span class="gantt-bar-label" title="${escA(b.p.client_name||'')} \u2014 ${projectName} (${role})"><span class="bar-project">${projectName}</span><span class="bar-role">${role}</span></span>`;
+            return `<span class="gantt-bar-label" title="${escA(b.p.client_name||'')} \u2014 ${projectName} (${role})"><span class="bar-project">${escA(b.p.client_name||'')}</span><span class="bar-role">${role}</span></span>`;
           }).join('');
         }
       }
