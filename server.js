@@ -36,8 +36,73 @@ app.get('/api/session', (req, res) => auth.sessionStatus(req, res));
 app.post('/api/login', loginLimiter, (req, res) => auth.login(req, res));
 app.post('/api/logout', (req, res) => auth.logout(req, res));
 
+// ── Public Holidays (Google Calendar API with in-memory cache) ─────────────────
+const _holidayCache = new Map(); // year -> { fetchedAt, dates: Set<string> }
+const HOLIDAY_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+const GCAL_CALENDAR_ID = 'en.indonesian%23holiday%40group.v.calendar.google.com';
+
+// Hardcoded fallback if API key is not configured
+const ID_HOLIDAYS_FALLBACK = new Set([
+  '2025-01-01','2025-01-27','2025-01-28','2025-01-29','2025-03-28','2025-03-29',
+  '2025-03-31','2025-04-01','2025-04-02','2025-04-03','2025-04-04','2025-04-07',
+  '2025-04-18','2025-04-20','2025-05-01','2025-05-12','2025-05-13','2025-05-29',
+  '2025-06-06','2025-06-09','2025-06-27','2025-08-17','2025-09-05','2025-12-25','2025-12-26',
+  '2026-01-01','2026-01-16','2026-01-17','2026-03-19','2026-03-20','2026-03-21',
+  '2026-03-23','2026-03-24','2026-04-03','2026-05-01','2026-05-14','2026-05-26',
+  '2026-05-27','2026-06-17','2026-08-17','2026-09-25','2026-12-25',
+]);
+
+async function fetchHolidaysFromGoogle(year) {
+  const apiKey = process.env.GOOGLE_CALENDAR_API_KEY;
+  if (!apiKey) return null; // no key configured
+
+  const timeMin = encodeURIComponent(`${year}-01-01T00:00:00Z`);
+  const timeMax = encodeURIComponent(`${year}-12-31T23:59:59Z`);
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${GCAL_CALENDAR_ID}/events?key=${apiKey}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&maxResults=100`;
+
+  const https = require('https');
+  return new Promise((resolve) => {
+    https.get(url, (r) => {
+      let d = '';
+      r.on('data', c => d += c);
+      r.on('end', () => {
+        try {
+          const json = JSON.parse(d);
+          if (!json.items) return resolve(null);
+          const dates = new Set(
+            json.items.map(e => (e.start?.date || e.start?.dateTime || '').slice(0, 10)).filter(Boolean)
+          );
+          resolve(dates);
+        } catch { resolve(null); }
+      });
+    }).on('error', () => resolve(null));
+  });
+}
+
+app.get('/api/holidays', async (req, res) => {
+  const year = parseInt(req.query.year) || new Date().getFullYear();
+  if (year < 2020 || year > 2035) return res.status(400).json({ error: 'Invalid year' });
+
+  const cached = _holidayCache.get(year);
+  if (cached && Date.now() - cached.fetchedAt < HOLIDAY_CACHE_TTL) {
+    return res.json({ year, source: cached.source, dates: [...cached.dates] });
+  }
+
+  const googleDates = await fetchHolidaysFromGoogle(year);
+  if (googleDates) {
+    _holidayCache.set(year, { fetchedAt: Date.now(), dates: googleDates, source: 'google' });
+    return res.json({ year, source: 'google', dates: [...googleDates] });
+  }
+
+  // Fallback: filter hardcoded set by year
+  const fallback = new Set([...ID_HOLIDAYS_FALLBACK].filter(d => d.startsWith(`${year}-`)));
+  _holidayCache.set(year, { fetchedAt: Date.now(), dates: fallback, source: 'fallback' });
+  return res.json({ year, source: 'fallback', dates: [...fallback] });
+});
+
 // Everything under /api below requires a valid session cookie (except routes above)
 app.use(auth.requireApiAuth);
+
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, 'uploads');
