@@ -1,0 +1,12 @@
+
+> vuln-management-app@1.0.0 start
+> node server.js
+
+
+🛡️  VulnVault — Vulnerability Management App
+✅ Server running at http://localhost:3000
+📁 Database: vulnerabilities.db
+🤖 AI: Google Gemini 2.5 Pro (key provided by user)
+
+Connected to SQLite database.
+Vulnerabilities table ready.

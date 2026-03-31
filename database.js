@@ -94,6 +94,8 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN retest_end_date TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN retest_pic_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN retest_assist_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN project_method TEXT DEFAULT 'blackbox'`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN mandays_assessment INTEGER DEFAULT 0`, () => {});
   });
 
   db.run(`
@@ -634,11 +636,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath } = opts || {};
+  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [clientId, name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5],
+    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });

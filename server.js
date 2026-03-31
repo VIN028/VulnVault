@@ -494,13 +494,13 @@ app.post('/api/clients/:clientId/projects', (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  const { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath } = req.body;
+  const { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
   }
   if (!trimName) return res.status(400).json({ error: 'Project name is required' });
-  db.createProject(clientId, trimName, { project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5 }, (err, result) => {
+  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0 }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -770,6 +770,111 @@ app.get('/api/projects/:projectId/findings', (req, res) => {
     res.json(rows);
   });
 });
+
+// ── AI Mandays Estimator ───────────────────────────────────────────────────────
+app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), async (req, res) => {
+  const { api_key, model, project_type, method, endpoint_count, description } = req.body;
+  if (!api_key) return res.status(400).json({ error: 'API key is required' });
+  if (!project_type) return res.status(400).json({ error: 'Project type is required' });
+
+  const aiModel = model || 'gemini-3-flash-preview';
+
+  const typeLabel = {
+    web: 'Web Application', api: 'API / REST', mobile: 'Mobile Application',
+    infra: 'Infrastructure / Network', phishing: 'Phishing Simulation'
+  }[project_type] || project_type;
+
+  const methodLabel = {
+    blackbox: 'Black Box', greybox: 'Grey Box', whitebox: 'White Box',
+    external: 'External', internal: 'Internal', combination: 'Combination'
+  }[method] || method || 'Black Box';
+
+  const prompt = `Bertindaklah sebagai Senior Cyber Security Project Manager yang ahli dalam melakukan scoping dan estimasi sumber daya proyek keamanan informasi.
+
+Tugas Anda adalah menghitung estimasi mandays (hari kerja) yang rasional untuk sebuah proyek Penetration Testing (Pentest).
+
+Input Data:
+Scope: ${typeLabel}
+Jumlah Endpoint/IP: ${project_type !== 'phishing' ? endpoint_count : 'N/A'}
+Metode Pentest: ${methodLabel}
+Deskripsi Singkat: ${description || 'Tidak ada deskripsi spesifik'}
+
+Aturan baku (TIDAK BOLEH DIRUBAH):
+- Mandays Kickoff dipastikan: 1 hari
+- Mandays Information Gathering dipastikan: 5 hari
+- (Anda hanya perlu menghitung mandays Assessment phase saja)
+
+Berikan estimasi assessment dan kembalikan output DALAM FORMAT JSON BERIKUT (tanpa markdown).
+Format JSON yang diharapkan:
+{
+  "assessment_days": <angka estimasi untuk fase assessment murni, hitung dengan standar industri pentesting>,
+  "confidence": "<high|medium|low>",
+  "reasoning": "<1-2 kalimat pendek alasan kenapa estimasi angkanya seperti itu (dalam Bahasa Indonesia)>",
+  "notes": "<catatan tambahan singkat jika ada, misal kerumitan khusus, dll>"
+}`;
+
+  try {
+    const https = require('https');
+    const body = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { 
+        temperature: 0.2, 
+        maxOutputTokens: 1024,
+        responseMimeType: "application/json" 
+      }
+    });
+
+    const geminiRes = await new Promise((resolve, reject) => {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${api_key}`;
+      const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
+      const reqH = https.request(url, options, r => {
+        let d = ''; r.on('data', c => d += c); r.on('end', () => resolve({ status: r.statusCode, body: d }));
+      });
+      reqH.on('error', reject);
+      reqH.write(body); reqH.end();
+    });
+
+    if (geminiRes.status !== 200) {
+      const errBody = JSON.parse(geminiRes.body);
+      return res.status(400).json({ error: errBody?.error?.message || 'Gemini API error' });
+    }
+
+    const geminiJson = JSON.parse(geminiRes.body);
+    let text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    
+    // Robustly extract JSON if wrapped in markdown or other text
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      text = jsonMatch[0];
+    } else {
+      text = text.replace(/```json\n?/gi, '').replace(/```\n?/g, '').trim();
+    }
+    
+    let aiResult;
+    try {
+      aiResult = JSON.parse(text);
+    } catch (parseErr) {
+      console.error('Failed to parse AI response:', text); require('fs').writeFileSync('/Users/vincentius/Documents/testingAppBackup/VulnVault/ai_error.log', text);
+      throw new Error('AI returned an invalid format. Please try again or switch models.');
+    }
+
+    const assessmentDays = Math.max(1, Math.round(Number(aiResult.assessment_days)));
+    res.json({
+      kickoff_days: 1,
+      infogath_days: 5,
+      assessment_days: assessmentDays,
+      initial_report_days: 1,
+      total_days: 1 + 5 + assessmentDays + 1,
+      confidence: aiResult.confidence || 'medium',
+      reasoning: aiResult.reasoning || '',
+      notes: aiResult.notes || null
+    });
+  } catch (e) {
+    res.status(500).json({ error: `AI request failed: ${e.message}` });
+  }
+});
+
+
 
 // Add single vulnerability to project
 app.post('/api/projects/:projectId/assign/:vulnId', (req, res) => {

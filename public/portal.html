@@ -234,13 +234,14 @@
     .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 24px; }
     .form-group { margin-bottom: 18px; }
     .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
-    .form-group input, .form-group select {
+    .form-group input, .form-group select, .form-group textarea {
       width: 100%; padding: 11px 14px; border-radius: 10px;
       border: 1px solid var(--border); background: #0f172a;
-      color: var(--text); font-size: 14px; font-family: inherit; outline: none;
+      color: var(--text); font-size: 14px; font-family: inherit; outline: none; box-sizing: border-box;
     }
-    .form-group input:focus, .form-group select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
     .form-group select option { background: #0f172a; }
+    .form-group textarea { resize: vertical; min-height: 90px; line-height: 1.6; }
     .modal-actions { display: flex; gap: 10px; margin-top: 24px; }
     .modal-actions .btn-primary { flex: 1; justify-content: center; }
     .btn-ghost {
@@ -530,6 +531,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="14" x2="13" y2="14"/></svg>
       Resource Allocation
     </button>
+    <button class="nav-item" onclick="navigate('ai-mandays')" id="nav-ai-mandays">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v2a3 3 0 01-3 3h-1v1a4 4 0 01-8 0v-1H7a3 3 0 01-3-3V10a3 3 0 013-3h1V6a4 4 0 014-4z"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/></svg>
+      AI Estimator
+      <span style="font-size:9px;font-weight:700;background:linear-gradient(135deg,#7c3aed,#6366f1);color:#fff;padding:1px 5px;border-radius:4px;margin-left:auto">AI</span>
+    </button>
   </div>
 
   <div class="sidebar-footer" style="display:flex;align-items:center;justify-content:space-between;padding:12px;border-top:1px solid var(--border);">
@@ -740,7 +746,180 @@
   </section>
 
   <!-- Resource Allocation -->
+  <!-- ── AI Mandays Estimator Section ── -->
+  <section class="section" id="section-ai-mandays">
+    <div class="topbar">
+      <div>
+        <div class="page-title">🤖 AI Mandays Estimator</div>
+        <div class="page-sub">Estimasi mandays assessment menggunakan AI — masukkan scope &amp; endpoint, dapatkan breakdown hari kerja.</div>
+      </div>
+    </div>
+
+    <div style="max-width:860px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start">
+
+      <!-- LEFT: API Key Card -->
+      <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+          <span style="font-size:16px">🤖</span>
+          <span style="font-size:13px;font-weight:700;color:var(--text)">AI Configuration</span>
+          <span id="ai-key-status" style="margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:8px;background:rgba(239,68,68,0.15);color:#fca5a5">Belum disimpan</span>
+        </div>
+        <p style="font-size:11px;color:var(--muted);margin:0 0 12px;line-height:1.55">Dapatkan key gratis di <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#a5b4fc;text-decoration:none">Google AI Studio</a>.<br>Tersimpan di localStorage — tidak ada di server.</p>
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="font-size:10px">API KEY</label>
+          <input id="ai-api-key-input" type="password" placeholder="AIzaSy…" autocomplete="off" />
+        </div>
+        <div class="form-group" style="margin-bottom:10px">
+          <label style="font-size:10px">MODEL</label>
+          <select id="ai-model-select">
+            <optgroup label="🚀 Gemini 3.1 — Frontier">
+              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview — Deep reasoning &amp; agentic</option>
+              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview — High volume, low cost</option>
+            </optgroup>
+            <optgroup label="⚡ Gemini 3 — Performance">
+              <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview — High intelligence, fast ✓ Default</option>
+            </optgroup>
+            <optgroup label="✅ Gemini 2.5 — Stable">
+              <option value="gemini-2.5-pro">gemini-2.5-pro — Production Pro</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash — Production Flash</option>
+            </optgroup>
+            <optgroup label="📦 Gemini 2.0 / 1.5 — Legacy">
+              <option value="gemini-2.0-flash">gemini-2.0-flash — Flash 2.0</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash — Flash 1.5 (Free tier)</option>
+              <option value="gemini-1.5-pro">gemini-1.5-pro — Pro 1.5</option>
+            </optgroup>
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="saveAiApiKey()" style="flex:1;padding:8px;background:linear-gradient(135deg,#7c3aed,#6366f1);border:none;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Simpan</button>
+          <button onclick="clearAiApiKey()" title="Hapus API key" style="padding:8px 10px;background:rgba(239,68,68,0.1);color:#fca5a5;border:1px solid rgba(239,68,68,0.2);border-radius:8px;cursor:pointer;font-size:13px">🗑</button>
+        </div>
+
+        <!-- Divider -->
+        <div style="border-top:1px solid var(--border);margin:16px 0"></div>
+
+        <!-- Default mandays info -->
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:8px;letter-spacing:.05em">DEFAULT MANDAYS</div>
+        <div style="display:flex;gap:8px">
+          <div style="flex:1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;color:#e2e8f0">1</div>
+            <div style="font-size:10px;color:var(--muted)">Kickoff</div>
+          </div>
+          <div style="flex:1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.15);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;color:#e2e8f0">5</div>
+            <div style="font-size:10px;color:var(--muted)">Info Gath</div>
+          </div>
+          <div style="flex:1;background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:8px;text-align:center">
+            <div style="font-size:18px;font-weight:800;color:#a78bfa">AI</div>
+            <div style="font-size:10px;color:var(--muted)">Assessment</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Form + Result -->
+      <div>
+        <div style="background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:18px">INPUT SCOPE PROJECT</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+            <div class="form-group" style="margin:0">
+              <label>Jenis Project *</label>
+              <select id="ai-project-type" onchange="updateEndpointLabel(); updateAiMethodOptions()">
+                <option value="web">Web Application</option>
+                <option value="api">API / REST</option>
+                <option value="mobile">Mobile Application</option>
+                <option value="infra">Infrastructure / Network</option>
+                <option value="phishing">Phishing Simulation</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0" id="ai-method-wrap">
+              <label>Method *</label>
+              <select id="ai-method">
+                <option value="blackbox">Black Box</option>
+                <option value="greybox">Grey Box</option>
+                <option value="whitebox">White Box</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0">
+              <label id="ai-endpoint-label">Jumlah Endpoint *</label>
+              <input id="ai-endpoint-count" type="number" min="1" value="10" />
+            </div>
+            <div class="form-group" style="margin:0;grid-column:1/-1">
+              <label>Deskripsi Singkat Project <span style="font-weight:400;color:var(--muted)">(optional)</span></label>
+              <textarea id="ai-description" placeholder="Contoh: Aplikasi e-commerce dengan OAuth, pembayaran Midtrans, admin panel, dan REST API untuk mobile…"></textarea>
+            </div>
+          </div>
+          <button id="ai-estimate-btn" onclick="runAiEstimate()" style="margin-top:18px;width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#6366f1);border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.02em;transition:opacity .2s">
+            ✨ Estimasi Mandays dengan AI
+          </button>
+        </div>
+
+        <!-- Loading -->
+        <div id="ai-loading" style="display:none;text-align:center;padding:32px;background:var(--card-bg);border:1px solid var(--border);border-radius:14px">
+          <div style="font-size:32px;animation:spin 1.2s linear infinite;display:inline-block">⚙️</div>
+          <div style="margin-top:12px;font-size:13px;color:#a78bfa;font-weight:600">AI sedang menganalisis scope project…</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Biasanya butuh 3–8 detik</div>
+        </div>
+
+        <!-- Result -->
+        <div id="ai-result" style="display:none;background:var(--card-bg);border:1px solid var(--border);border-radius:14px;padding:24px">
+          <div style="font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.06em;margin-bottom:16px">HASIL ESTIMASI MANDAYS</div>
+
+          <!-- Breakdown chips -->
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:20px">
+            <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 6px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600">KICKOFF</div>
+              <div style="font-size:22px;font-weight:800;color:#e2e8f0" id="ai-r-kickoff">1</div>
+              <div style="font-size:9px;color:#475569">hari</div>
+            </div>
+            <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.2);border-radius:10px;padding:10px 6px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600">INFO GATH</div>
+              <div style="font-size:22px;font-weight:800;color:#e2e8f0" id="ai-r-infogath">5</div>
+              <div style="font-size:9px;color:#475569">hari</div>
+            </div>
+            <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:10px 6px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600">ASSESSMENT</div>
+              <div style="font-size:22px;font-weight:800;color:#a78bfa" id="ai-r-assessment">—</div>
+              <div style="font-size:9px;color:#475569">hari</div>
+            </div>
+            <div style="background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.25);border-radius:10px;padding:10px 6px;text-align:center">
+              <div style="font-size:10px;color:var(--muted);margin-bottom:4px;font-weight:600">INIT REPORT</div>
+              <div style="font-size:22px;font-weight:800;color:#c4b5fd" id="ai-r-ir">1</div>
+              <div style="font-size:9px;color:#475569">hari</div>
+            </div>
+            <div style="background:linear-gradient(135deg,rgba(99,102,241,0.18),rgba(139,92,246,0.18));border:1px solid rgba(139,92,246,0.35);border-radius:10px;padding:10px 6px;text-align:center">
+              <div style="font-size:10px;color:#a5b4fc;margin-bottom:4px;font-weight:700">TOTAL</div>
+              <div style="font-size:22px;font-weight:900;color:#fff" id="ai-r-total">—</div>
+              <div style="font-size:9px;color:#94a3b8">hari kerja</div>
+            </div>
+          </div>
+
+          <!-- Confidence + Reasoning -->
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+            <span style="font-size:12px;color:var(--muted)">Confidence AI:</span>
+            <span id="ai-r-confidence" style="font-size:12px;font-weight:700;padding:3px 10px;border-radius:8px"></span>
+          </div>
+          <div style="background:rgba(0,0,0,0.25);border-radius:10px;padding:14px 16px;margin-bottom:12px">
+            <div style="font-size:10px;font-weight:700;color:#475569;margin-bottom:6px;letter-spacing:.06em">AI REASONING</div>
+            <div id="ai-r-reasoning" style="font-size:13px;color:var(--muted);line-height:1.7"></div>
+          </div>
+          <div id="ai-r-notes-wrap" style="display:none;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:8px;padding:12px;margin-bottom:12px">
+            <div style="font-size:10px;font-weight:700;color:#f59e0b;margin-bottom:4px;letter-spacing:.05em">⚠️ CATATAN</div>
+            <div id="ai-r-notes" style="font-size:12px;color:#fcd34d;line-height:1.55"></div>
+          </div>
+          <button onclick="useEstimateInProject()" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:8px;color:#a5b4fc;padding:8px 16px;font-size:12px;font-weight:600;cursor:pointer;width:100%">
+            📋 Gunakan Estimasi di New Project →
+          </button>
+        </div>
+
+        <!-- Error -->
+        <div id="ai-error" style="display:none;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:16px;color:#fca5a5;font-size:13px;line-height:1.6"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Resource Allocation Section ── -->
   <section class="section" id="section-allocation">
+
     <div class="topbar">
       <div>
         <div class="page-title">Resource Allocation</div>
@@ -907,12 +1086,20 @@
       </div>
       <div class="form-group">
         <label>Project Type *</label>
-        <select id="cp-type">
+        <select id="cp-type" onchange="updateCpMethodOptions()">
           <option value="web">Web</option>
           <option value="api">API</option>
           <option value="mobile">Mobile</option>
           <option value="infra">Infrastructure</option>
           <option value="phishing">Phishing</option>
+        </select>
+      </div>
+      <div class="form-group" id="cp-method-wrap">
+        <label>Method *</label>
+        <select id="cp-method">
+          <option value="blackbox">Black Box</option>
+          <option value="greybox">Grey Box</option>
+          <option value="whitebox">White Box</option>
         </select>
       </div>
       <div class="form-group">
@@ -1089,6 +1276,145 @@ function navigate(section) {
   if (section === 'requests')   loadRequests();
   if (section === 'actlog')     loadActivityLog();
   if (section === 'allocation') loadAllocation();
+  if (section === 'ai-mandays') initAiMandaysSection();
+}
+
+// ── AI Mandays Estimator ─────────────────────────────────────────────────────
+
+function initAiMandaysSection() {
+  const stored = localStorage.getItem('vulnvault_gemini_key');
+  const storedModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  const statusEl = document.getElementById('ai-key-status');
+  const inputEl  = document.getElementById('ai-api-key-input');
+  const modelEl  = document.getElementById('ai-model-select');
+  if (modelEl) modelEl.value = storedModel;
+  if (stored) {
+    if (statusEl) { statusEl.textContent = '✅ Tersimpan'; statusEl.style.background = 'rgba(34,197,94,0.15)'; statusEl.style.color = '#86efac'; }
+    if (inputEl)  inputEl.placeholder = 'AIzaSy…••••• (tersimpan)';
+  } else {
+    if (statusEl) { statusEl.textContent = 'Belum disimpan'; statusEl.style.background = 'rgba(239,68,68,0.15)'; statusEl.style.color = '#fca5a5'; }
+  }
+  updateEndpointLabel();
+  updateAiMethodOptions();
+}
+
+function saveAiApiKey() {
+  const key = document.getElementById('ai-api-key-input')?.value.trim();
+  const model = document.getElementById('ai-model-select')?.value || 'gemini-3-flash-preview';
+  if (key) localStorage.setItem('vulnvault_gemini_key', key);
+  localStorage.setItem('vulnvault_gemini_model', model);
+  initAiMandaysSection();
+}
+
+function clearAiApiKey() {
+  localStorage.removeItem('vulnvault_gemini_key');
+  localStorage.removeItem('vulnvault_gemini_model');
+  const inputEl = document.getElementById('ai-api-key-input');
+  if (inputEl) inputEl.value = '';
+  initAiMandaysSection();
+}
+
+function updateEndpointLabel() {
+  const type = document.getElementById('ai-project-type')?.value;
+  const label = document.getElementById('ai-endpoint-label');
+  if (!label) return;
+  const map = { web: 'Jumlah Endpoint *', api: 'Jumlah Endpoint *', mobile: 'Jumlah Aplikasi *', infra: 'Jumlah IP / Host *', phishing: 'Jumlah Target User' };
+  label.textContent = map[type] || 'Jumlah Endpoint *';
+}
+
+function updateAiMethodOptions() {
+  const type = document.getElementById('ai-project-type')?.value;
+  const wrap = document.getElementById('ai-method-wrap');
+  const sel  = document.getElementById('ai-method');
+  if (!wrap || !sel) return;
+  if (type === 'phishing') { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (type === 'infra') {
+    sel.innerHTML = '<option value="external">External</option><option value="internal">Internal</option><option value="combination">Combination</option>';
+  } else {
+    sel.innerHTML = '<option value="blackbox">Black Box</option><option value="greybox">Grey Box</option><option value="whitebox">White Box</option>';
+  }
+}
+
+function updateCpMethodOptions() {
+  const type = document.getElementById('cp-type')?.value;
+  const wrap = document.getElementById('cp-method-wrap');
+  const sel  = document.getElementById('cp-method');
+  if (!wrap || !sel) return;
+  if (type === 'phishing') { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (type === 'infra') {
+    sel.innerHTML = '<option value="external">External</option><option value="internal">Internal</option><option value="combination">Combination</option>';
+  } else {
+    sel.innerHTML = '<option value="blackbox">Black Box</option><option value="greybox">Grey Box</option><option value="whitebox">White Box</option>';
+  }
+}
+
+let _lastAiEstimate = null;
+
+async function runAiEstimate() {
+  const apiKey = localStorage.getItem('vulnvault_gemini_key');
+  const aiModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  if (!apiKey) {
+    document.getElementById('ai-error').style.display = 'block';
+    document.getElementById('ai-error').textContent = '⚠️ Simpan Gemini API Key terlebih dahulu.';
+    return;
+  }
+  const project_type  = document.getElementById('ai-project-type')?.value;
+  const method        = document.getElementById('ai-method')?.value || null;
+  const endpoint_count = parseInt(document.getElementById('ai-endpoint-count')?.value) || 1;
+  const description   = document.getElementById('ai-description')?.value?.trim() || '';
+
+  document.getElementById('ai-result').style.display  = 'none';
+  document.getElementById('ai-error').style.display   = 'none';
+  document.getElementById('ai-loading').style.display = 'block';
+  document.getElementById('ai-estimate-btn').disabled = true;
+
+  try {
+    const data = await apiFetch('/api/ai/estimate-mandays', 'POST', { api_key: apiKey, model: aiModel, project_type, method, endpoint_count, description });
+    _lastAiEstimate = { ...data, project_type, method, endpoint_count };
+
+    document.getElementById('ai-r-kickoff').textContent    = data.kickoff_days;
+    document.getElementById('ai-r-infogath').textContent   = data.infogath_days;
+    document.getElementById('ai-r-assessment').textContent = data.assessment_days;
+    document.getElementById('ai-r-ir').textContent         = data.initial_report_days;
+    document.getElementById('ai-r-total').textContent      = data.total_days;
+    document.getElementById('ai-r-reasoning').textContent  = data.reasoning;
+
+    const cfEl = document.getElementById('ai-r-confidence');
+    const cfMap = { high: ['🟢 High', 'rgba(34,197,94,0.15)', '#86efac'], medium: ['🟡 Medium', 'rgba(234,179,8,0.15)', '#fde047'], low: ['🔴 Low', 'rgba(239,68,68,0.15)', '#fca5a5'] };
+    const [txt, bg, color] = cfMap[data.confidence] || cfMap.medium;
+    cfEl.textContent = txt; cfEl.style.background = bg; cfEl.style.color = color;
+
+    const notesWrap = document.getElementById('ai-r-notes-wrap');
+    if (data.notes) {
+      document.getElementById('ai-r-notes').textContent = data.notes;
+      notesWrap.style.display = 'block';
+    } else { notesWrap.style.display = 'none'; }
+
+    document.getElementById('ai-result').style.display = 'block';
+  } catch (e) {
+    document.getElementById('ai-error').style.display = 'block';
+    document.getElementById('ai-error').textContent = `❌ ${e.message}`;
+  } finally {
+    document.getElementById('ai-loading').style.display = 'none';
+    document.getElementById('ai-estimate-btn').disabled = false;
+  }
+}
+
+function useEstimateInProject() {
+  if (!_lastAiEstimate) return;
+  openCreateProject();
+  // Set project type and method
+  setTimeout(() => {
+    const typeEl = document.getElementById('cp-type');
+    if (typeEl) { typeEl.value = _lastAiEstimate.project_type || 'web'; updateCpMethodOptions(); }
+    const methodEl = document.getElementById('cp-method');
+    if (methodEl && _lastAiEstimate.method) methodEl.value = _lastAiEstimate.method;
+    // Set assessment mandays
+    const assEl = document.getElementById('cp-md-assessment');
+    if (assEl) { assEl.value = _lastAiEstimate.assessment_days; onAssessmentInput(); }
+  }, 100);
 }
 
 // ── Resource Allocation ────────────────────────────────────────────────────────
@@ -2137,6 +2463,7 @@ async function submitCreateProject() {
   const clientId   = document.getElementById('cp-client').value;
   const name       = document.getElementById('cp-name').value.trim();
   const project_type = document.getElementById('cp-type').value;
+  const project_method = (project_type !== 'phishing') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
   const assigned_engineer_id = document.getElementById('cp-engineer').value || null;
   const assistSel  = document.getElementById('cp-assist');
   const assist_engineer_id = (assistSel && assistSel.value) || null;
@@ -2165,7 +2492,7 @@ async function submitCreateProject() {
   try {
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
-      name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment
+      name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment
     });
     document.getElementById('modal-create-project').classList.remove('open');
     showToast('Project created!', 'success');
