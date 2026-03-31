@@ -919,7 +919,7 @@ Return only valid JSON:
     try {
       aiResult = JSON.parse(text);
     } catch (parseErr) {
-      console.error('Failed to parse AI response:', text); require('fs').writeFileSync('/Users/vincentius/Documents/testingAppBackup/VulnVault/ai_error.log', text);
+      console.error('Failed to parse AI response:', text);
       throw new Error('AI returned an invalid format. Please try again or switch models.');
     }
 
