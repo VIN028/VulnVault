@@ -1694,7 +1694,7 @@ let mfEditingId = null; // null = create, number = edit
 function openManualFindingModal() {
   mfEditingId = null;
   ['mf-name','mf-affected'].forEach(id => document.getElementById(id).value = '');
-  ['mf-description','mf-recommendation','mf-poc'].forEach(id => document.getElementById(id).value = '');
+  ['mf-description','mf-impact','mf-recommendation','mf-poc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('mf-severity').value = 'Medium';
   document.getElementById('mf-err').style.display = 'none';
   document.getElementById('mf-screenshot-input').value = '';
@@ -1715,6 +1715,7 @@ function openEditFinding() {
   document.getElementById('mf-severity').value = v.severity || 'Medium';
   document.getElementById('mf-description').value = v.description || '';
   document.getElementById('mf-affected').value = v.affected_items || '';
+  document.getElementById('mf-impact').value = v.impact || '';
   document.getElementById('mf-recommendation').value = v.recommendation || '';
   document.getElementById('mf-poc').value = v.poc || '';
   document.getElementById('mf-err').style.display = 'none';
@@ -1797,6 +1798,7 @@ async function submitManualFinding() {
   const severity = document.getElementById('mf-severity').value;
   const description = document.getElementById('mf-description').value.trim();
   const affected_items = document.getElementById('mf-affected').value.trim();
+  const impact = document.getElementById('mf-impact').value.trim();
   const recommendation = document.getElementById('mf-recommendation').value.trim();
   const poc = document.getElementById('mf-poc').value.trim();
   const errEl = document.getElementById('mf-err');
@@ -1807,7 +1809,7 @@ async function submitManualFinding() {
   const btn = document.getElementById('mf-btn');
   btn.disabled = true;
   const payload = {
-    name, severity, description, affected_items, recommendation, poc,
+    name, severity, description, affected_items, impact, recommendation, poc,
     screenshot_path: mfScreenshotPaths.length ? JSON.stringify(mfScreenshotPaths) : null
   };
 

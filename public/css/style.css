@@ -528,7 +528,8 @@ kbd {
 .modal-overlay {
   position: fixed; inset: 0; z-index: 1000;
   background: rgba(0,0,0,0.75); backdrop-filter: blur(8px);
-  display: none; align-items: center; justify-content: center; padding: 24px;
+  display: none; align-items: flex-start; justify-content: center;
+  padding: 40px 24px; overflow-y: auto;
 }
 .modal-overlay.open { display: flex; }
 .modal-content {
