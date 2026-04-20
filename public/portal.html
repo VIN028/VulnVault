@@ -1842,46 +1842,59 @@ function renderDeadlineTimeline(projects) {
     return '';
   };
 
-  const projectRow = p => {
-    const hasDue = !!p.final_report_date;
-    let statusHtml, barColor, pct;
-    if (hasDue) {
-      const due = new Date(p.final_report_date);
-      const daysLeft = Math.ceil((due - today) / 86400000);
-      const isCompleted = p.final_report_status === 'completed';
-      const overdue = !isCompleted && daysLeft < 0;
-      const urgent  = !isCompleted && !overdue && daysLeft <= 7;
-      barColor = isCompleted ? '#22c55e' : overdue ? '#f87171' : urgent ? '#fb923c' : '#6366f1';
-      pct = isCompleted ? 100 : Math.max(5, Math.min(95, 100 - (daysLeft / 60) * 100));
-      const completedByName = isCompleted ? (p.final_completed_by || '') : '';
-      const completedAt = isCompleted && p.final_completed_at ? fmt(p.final_completed_at) : '';
-      statusHtml = isCompleted
-        ? `<div style="font-size:12px;font-weight:700;color:#22c55e">&#10003; Completed</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${completedAt || fmt(p.final_report_date)}${completedByName ? ` • by ${esc(completedByName)}` : ''}</div>`
-        : overdue
-          ? `<div style="font-size:12px;font-weight:700;color:#f87171">&#9888; ${Math.abs(daysLeft)}d overdue</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
-          : daysLeft === 0
-            ? `<div style="font-size:12px;font-weight:700;color:#fb923c">Due today</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`
-            : `<div style="font-size:12px;font-weight:700;color:${barColor}">${daysLeft}d left</div><div style="font-size:10px;color:var(--muted);margin-top:2px">${fmt(p.final_report_date)}</div>`;
+  // Helper: deadline row with progress bar
+  const deadlineRow = (label, dateStr, status, completedBy, completedAt, accentColor) => {
+    if (!dateStr) return '';
+    const due = new Date(dateStr);
+    const daysLeft = Math.ceil((due - today) / 86400000);
+    const done = status === 'completed';
+    const overdue = !done && daysLeft < 0;
+    const urgent  = !done && !overdue && daysLeft <= 7;
+    const col = done ? '#22c55e' : overdue ? '#f87171' : urgent ? '#fb923c' : accentColor;
+    const pct = done ? 100 : Math.max(5, Math.min(95, 100 - (daysLeft / 60) * 100));
+    let info;
+    if (done) {
+      const at = completedAt ? fmt(completedAt) : fmt(dateStr);
+      info = `✓ ${at}`;
+    } else if (overdue) {
+      info = `${Math.abs(daysLeft)}d overdue`;
+    } else if (daysLeft === 0) {
+      info = `Due today`;
     } else {
-      barColor = 'rgba(255,255,255,0.08)'; pct = 0;
-      statusHtml = `<div style="font-size:11px;color:var(--muted)">No deadline</div>`;
+      info = `${daysLeft}d left · ${fmt(dateStr)}`;
     }
+    return `
+      <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
+        <span style="font-size:10px;font-weight:700;color:${col};min-width:42px">${label}</span>
+        <div style="flex:1;position:relative;height:6px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;min-width:80px;max-width:200px">
+          <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width 0.4s"></div>
+        </div>
+        <span style="font-size:11px;font-weight:600;color:${col};white-space:nowrap">${info}</span>
+      </div>`;
+  };
+
+  const projectRow = p => {
+    const irRow = deadlineRow('Initial', p.initial_report_date, p.initial_report_status, p.initial_completed_by, p.initial_completed_at, '#6366f1');
+    const frRow = p.final_report_date
+      ? deadlineRow('Final', p.final_report_date, p.final_report_status, p.final_completed_by, p.final_completed_at, '#a78bfa')
+      : '';
+    const noDeadline = !p.initial_report_date && !p.final_report_date;
 
     return `
-      <div style="display:grid;grid-template-columns:1fr 160px 100px;align-items:center;gap:16px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
+      <div style="display:grid;grid-template-columns:180px 1fr;align-items:start;gap:16px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
         <div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
             <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.project_name)}</span>
-            ${phaseTag(p)}
           </div>
-          <div style="font-size:10px;color:var(--muted)">PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name || '—')}</span></div>
+          <div style="display:flex;align-items:center;gap:6px">
+            ${phaseTag(p)}
+            <span style="font-size:10px;color:var(--muted)">PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name || '—')}</span></span>
+          </div>
         </div>
         <div>
-          <div style="position:relative;height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden">
-            <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.4s"></div>
-          </div>
+          ${noDeadline ? '<div style="font-size:11px;color:var(--muted);padding-top:6px">No deadline</div>' : ''}
+          ${irRow}${frRow}
         </div>
-        <div style="text-align:right">${statusHtml}</div>
       </div>`;
   };
 
