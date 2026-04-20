@@ -309,7 +309,7 @@ function getClientsWithProjects(callback) {
            p.assigned_engineer_id,
            p.assist_engineer_id,
            p.link_report_en, p.link_report_id, p.project_links,
-           p.mandays_kickoff, p.mandays_infogath,
+           p.project_method, p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -739,12 +739,13 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath }, callback) {
+function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
        name = ?,
        project_type = ?,
+       project_method = ?,
        assigned_engineer_id = ?,
        assist_engineer_id = ?,
        kickoff_date = ?,
@@ -752,9 +753,10 @@ function updateProject(id, { name, project_type, assigned_engineer_id, assist_en
        final_report_date = ?,
        project_links = ?,
        mandays_kickoff = ?,
-       mandays_infogath = ?
+       mandays_infogath = ?,
+       mandays_assessment = ?
      WHERE id = ?`,
-    [name, project_type || 'web', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, id],
+    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });

@@ -1080,7 +1080,7 @@
 <!-- ── Create Project Modal ── -->
 <div class="modal-overlay" id="modal-create-project" onclick="closeModal(event)">
   <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
-    <div class="modal-title">New Project</div>
+    <div class="modal-title" id="modal-create-project-title">New Project</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
       <div class="form-group" style="grid-column:1/-1">
         <label>Client *</label>
@@ -2267,53 +2267,100 @@ function customPrompt(title, label, defaultValue='') {
 }
 
 // PM/Manager: edit project (assign engineer / dates)
-async function editProjectPortal(projectId, projectName, currentEngineerId, currentAssistId, currentProjectType, currentProjectLinks) {
-  // Build a quick modal using existing modal-create-project but pre-filled
-  // Reuse the create-project modal as an edit modal  
+async function editProjectPortal(proj) {
   const modal = document.getElementById('modal-create-project');
-  document.getElementById('modal-create-project-title') && (document.getElementById('modal-create-project-title').textContent = 'Edit Project');
-  
-  // Set project type
-  document.getElementById('cp-type').value = currentProjectType || 'web';
+  const titleEl = document.getElementById('modal-create-project-title');
+  if (titleEl) titleEl.textContent = 'Edit Project';
+
+  // Pre-fill all fields from existing project data
+  document.getElementById('cp-name').value = proj.project_name || '';
+  document.getElementById('cp-type').value = proj.project_type || 'web';
+  updateCpMethodOptions();
+  if (proj.project_method) {
+    const methodEl = document.getElementById('cp-method');
+    if (methodEl) methodEl.value = proj.project_method;
+  }
+
+  // Pre-fill dates
+  document.getElementById('cp-kickoff').value = proj.kickoff_date || '';
+  document.getElementById('cp-initial').value = proj.initial_report_date || '';
+
+  // Pre-fill mandays
+  const mkEl = document.getElementById('cp-md-kickoff');
+  const miEl = document.getElementById('cp-md-infogath');
+  const maEl = document.getElementById('cp-md-assessment');
+  if (mkEl) mkEl.value = proj.mandays_kickoff ?? 1;
+  if (miEl) miEl.value = proj.mandays_infogath ?? 5;
+  if (maEl) maEl.value = proj.mandays_assessment ?? 0;
+
+  // Handle assessment mode
+  const assessment = proj.mandays_assessment ?? 0;
+  if (assessment > 0) {
+    _setInitialReadonly(true);
+  } else {
+    _setInitialReadonly(false);
+  }
+
+  // Update mandays preview and min-date validation
+  _updateModeAMinDate();
+  updateMandaysPreview();
+
+  // Clear error
+  document.getElementById('cp-err').classList.remove('show');
+  const warnEl = document.getElementById('cp-initial-warn');
+  if (warnEl) warnEl.style.display = 'none';
 
   // Populate existing project links
-  populateProjectLinks(currentProjectLinks);
+  populateProjectLinks(proj.project_links || '');
 
-  // Load engineers
-  const engSel = document.getElementById('cp-engineer');
-  const assistSel = document.getElementById('cp-assist');
+  // Load clients into select and pre-select current client
   const clientSel = document.getElementById('cp-client');
-  document.getElementById('cp-name').value = projectName;
   clientSel.disabled = true;
   try {
+    const clients = await apiFetch('/api/clients');
+    clientSel.innerHTML = '<option value="">— Select client —</option>' +
+      clients.map(c => `<option value="${c.id}" ${Number(c.id)===Number(proj.client_id)?'selected':''}>${esc(c.name)}</option>`).join('');
+  } catch { clientSel.innerHTML = '<option value="">Failed to load</option>'; }
+
+  // Load engineers and pre-select current PIC and Assist
+  const engSel = document.getElementById('cp-engineer');
+  const assistSel = document.getElementById('cp-assist');
+  try {
     const engs = await apiFetch('/api/users/engineers');
-    const optionsHtmlPIC = '<option value="">— Not assigned —</option>' + 
-      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(currentEngineerId)?'selected':''}>${esc(e.display_name)}</option>`).join('');
-    const optionsHtmlAssist = '<option value="">— Not assigned —</option>' + 
-      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(currentAssistId)?'selected':''}>${esc(e.display_name)}</option>`).join('');
-    
-    engSel.innerHTML = optionsHtmlPIC;
-    if(assistSel) assistSel.innerHTML = optionsHtmlAssist;
+    const optPIC = '<option value="">— Not assigned —</option>' + 
+      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(proj.assigned_engineer_id)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+    const optAssist = '<option value="">— Not assigned —</option>' + 
+      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(proj.assist_engineer_id)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+    engSel.innerHTML = optPIC;
+    if(assistSel) assistSel.innerHTML = optAssist;
   } catch { 
     engSel.innerHTML = '<option value="">Failed to load</option>'; 
     if(assistSel) assistSel.innerHTML = '<option value="">Failed to load</option>'; 
   }
 
-  document.getElementById('cp-name').value = projectName;
-  clientSel.disabled = true;
-
   const btn = document.getElementById('cp-btn');
   btn.innerHTML = 'Save Changes';
   btn.onclick = async () => {
     const project_type = document.getElementById('cp-type').value;
+    const project_method = (project_type !== 'phishing') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
     const assigned_engineer_id = engSel.value || null;
     const assist_engineer_id = (assistSel && assistSel.value) || null;
     const kickoff_date = document.getElementById('cp-kickoff').value || null;
     const initial_report_date = document.getElementById('cp-initial').value || null;
+    const mandays_kickoff = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
+    const mandays_infogath = parseInt(document.getElementById('cp-md-infogath').value) || 5;
+    const mandays_assessment = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
     const project_links = getProjectLinksFromForm();
     btn.disabled = true;
     try {
-      await apiFetch(`/api/projects/${projectId}`, 'PUT', { name: document.getElementById('cp-name').value.trim(), project_type, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, project_links });
+      await apiFetch(`/api/projects/${proj.project_id}`, 'PUT', { 
+        name: document.getElementById('cp-name').value.trim(), 
+        project_type, project_method, 
+        assigned_engineer_id, assist_engineer_id, 
+        kickoff_date, initial_report_date, 
+        mandays_kickoff, mandays_infogath, mandays_assessment,
+        project_links 
+      });
       modal.classList.remove('open');
       showToast('Project updated!', 'success');
       loadProjects(); loadDashboard();
@@ -2327,8 +2374,9 @@ async function editProjectPortal(projectId, projectName, currentEngineerId, curr
 
 // ── Create Project ────────────────────────────────────────────────────────────
 async function openCreateProject() {
-  // Reset form and reset modal state incase it was polluted by editProjectPortal
-  document.getElementById('modal-create-project-title') && (document.getElementById('modal-create-project-title').textContent = 'New Project');
+  // Reset form and reset modal state in case it was polluted by editProjectPortal
+  const titleEl = document.getElementById('modal-create-project-title');
+  if (titleEl) titleEl.textContent = 'New Project';
   const clientSel = document.getElementById('cp-client');
   clientSel.disabled = false;
   const btn = document.getElementById('cp-btn');
@@ -2687,7 +2735,7 @@ function _openFindings(pid) {
 }
 function _editProject(pid) {
   const p = _allClientsCache.find(x => x.project_id === pid);
-  if (p) editProjectPortal(p.project_id, p.project_name, p.assigned_engineer_id||null, p.assist_engineer_id||null, p.project_type||'web', p.project_links||'');
+  if (p) editProjectPortal(p);
 }
 function _deleteProject(pid) {
   const p = _allClientsCache.find(x => x.project_id === pid);
