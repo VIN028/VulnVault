@@ -374,119 +374,68 @@
       .btn-primary { font-size: 12px !important; padding: 8px 12px !important; }
     }
 
-    /* ── Resource Allocation Gantt ── */
-    .gantt-controls {
+    /* ── Resource Allocation — Capacity View ── */
+    .capacity-controls {
       display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
     }
-    .gantt-quarter-select {
+    .capacity-month-select {
       padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border);
       background: var(--card); color: var(--text); font-size: 13px; font-family: inherit;
-      outline: none; cursor: pointer; min-width: 160px;
+      outline: none; cursor: pointer; min-width: 180px;
     }
-    .gantt-legend { display: flex; align-items: center; gap: 12px; margin-left: auto; }
-    .gantt-legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
-    .gantt-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
+    .capacity-legend { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+    .capacity-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+    .capacity-legend-dot { width: 10px; height: 10px; border-radius: 3px; }
 
-    .gantt-outer {
-      overflow-x: auto; border-radius: var(--radius);
-      border: 1px solid var(--border); background: var(--card);
+    .capacity-list {
+      display: flex; flex-direction: column; gap: 0;
     }
-    .gantt-table {
-      width: max-content; min-width: 100%; border-collapse: collapse;
+    .capacity-row {
+      background: var(--card); border: 1px solid var(--border);
+      border-bottom: none; padding: 18px 24px;
+      transition: background 0.1s;
     }
-    /* Month header */
-    .gantt-month-row th {
-      padding: 11px 0; font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
-      text-transform: uppercase; color: #a5b4fc; text-align: center;
-      background: rgba(99,102,241,0.1); border-bottom: 1px solid rgba(99,102,241,0.2);
-      border-right: 1px solid rgba(99,102,241,0.15);
+    .capacity-row:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+    .capacity-row:last-child  { border-radius: 0 0 var(--radius) var(--radius); border-bottom: 1px solid var(--border); }
+    .capacity-row:only-child  { border-radius: var(--radius); border-bottom: 1px solid var(--border); }
+    .capacity-row:hover { background: rgba(255,255,255,0.02); }
+    .capacity-row-top {
+      display: flex; align-items: center; gap: 16px;
     }
-    .gantt-month-row th:first-child { text-align: left; padding-left: 20px; }
-    /* Week sub-header */
-    .gantt-week-row th {
-      padding: 6px 0; font-size: 10px; font-weight: 600; color: var(--muted);
-      text-align: center; background: rgba(15,23,42,0.6);
-      border-bottom: 1px solid var(--border);
-      border-right: 1px solid rgba(148,163,184,0.07);
-      min-width: 64px; white-space: nowrap; letter-spacing: 0.04em;
+    .capacity-card-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; min-width: 140px; }
+    .capacity-bar-track {
+      flex: 1; height: 10px; background: rgba(148,163,184,0.12);
+      border-radius: 6px; overflow: hidden; min-width: 120px;
     }
-    .gantt-week-row th:first-child { text-align: left; padding-left: 20px; min-width: 190px; }
+    .capacity-bar-fill {
+      height: 100%; border-radius: 6px; transition: width 0.4s ease;
+    }
+    .capacity-bar-fill.green  { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .capacity-bar-fill.amber  { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .capacity-bar-fill.red    { background: linear-gradient(90deg, #ef4444, #f87171); }
+    .capacity-card-stat { font-size: 13px; font-weight: 700; white-space: nowrap; text-align: right; min-width: 170px; }
 
-    /* Engineer rows */
-    .gantt-eng-row { border-bottom: 1px solid rgba(148,163,184,0.07); transition: background 0.1s; }
-    .gantt-eng-row:last-child { border-bottom: none; }
-    .gantt-eng-row:hover { background: rgba(255,255,255,0.025); }
-    .gantt-eng-name {
-      padding: 0 20px; font-size: 13px; font-weight: 600; white-space: nowrap;
-      vertical-align: middle; min-width: 190px; position: sticky; left: 0;
-      background: var(--card); z-index: 2;
-      border-right: 1px solid rgba(99,102,241,0.18);
+    .capacity-project-list { list-style: none; padding: 0; margin: 6px 0 0 0; }
+    .capacity-project-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 5px 0; padding-left: 156px;
+      font-size: 12px; color: var(--muted);
     }
-    .gantt-eng-row:hover .gantt-eng-name { background: rgba(15,20,40,1); }
-    .gantt-eng-num {
-      display: inline-flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px; border-radius: 50%;
-      background: rgba(99,102,241,0.15); color: #a5b4fc;
-      font-size: 10px; font-weight: 700; margin-right: 10px; flex-shrink: 0;
+    .capacity-project-name { font-weight: 600; color: var(--text); }
+    .capacity-project-role {
+      font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 4px;
+      margin-left: 6px;
     }
-    /* Week cell */
-    .gantt-cell {
-      height: 54px; min-width: 64px; padding: 4px;
-      border-right: 1px solid rgba(148,163,184,0.07);
-      vertical-align: middle; position: relative;
-    }
-    /* Allow label to overflow rightward from starting cell */
-    .gantt-cell.bar-start { overflow: visible; z-index: 1; }
-    .gantt-cell-inner {
-      width: 100%; height: 100%; border-radius: 7px;
-      display: flex; align-items: center;
-      font-size: 11px; font-weight: 600; overflow: hidden;
-      transition: filter 0.15s;
-    }
-    .gantt-cell-inner:hover { filter: brightness(1.15); }
-    /* Colors */
-    .gantt-cell-inner.free   {
-      background: rgba(34,197,94,0.1);
-      border: 1px solid rgba(34,197,94,0.18);
-    }
-    .gantt-cell-inner.busy   {
-      background: linear-gradient(135deg, rgba(245,158,11,0.3), rgba(251,146,60,0.25));
-      border: 1px solid rgba(245,158,11,0.35);
-      color: #fcd34d;
-    }
-    .gantt-cell-inner.full   {
-      background: linear-gradient(135deg, rgba(239,68,68,0.3), rgba(220,38,38,0.25));
-      border: 1px solid rgba(239,68,68,0.35);
-      color: #fca5a5;
-    }
-    /* Retest bar — purple */
-    .gantt-cell-inner.retest {
-      background: linear-gradient(135deg, rgba(139,92,246,0.35), rgba(99,102,241,0.25));
-      border: 1px solid rgba(139,92,246,0.45);
-      color: #c4b5fd;
-    }
-    /* Bar label - overflows right for long bars */
-    .gantt-bar-label {
-      font-size: 11px; font-weight: 700; white-space: nowrap;
-      overflow: visible; text-overflow: clip;
-      padding: 0 10px; pointer-events: none; line-height: 1.3;
-      color: inherit; letter-spacing: 0.01em;
-      text-shadow: 0 1px 3px rgba(0,0,0,0.4);
-    }
-    .gantt-bar-label .bar-project {
-      display: block; font-size: 11px; font-weight: 700;
-    }
-    .gantt-bar-label .bar-role {
-      display: block; font-size: 9px; font-weight: 500;
-      opacity: 0.75; margin-top: 2px;
-    }
-    /* today marker */
-    .gantt-cell.today-col .gantt-cell-inner {
-      outline: 2px solid rgba(99,102,241,0.6);
-      outline-offset: -2px;
-    }
-    .gantt-empty-state {
+    .capacity-project-role.pic { background: rgba(245,158,11,0.15); color: #fbbf24; }
+    .capacity-project-role.assist { background: rgba(99,102,241,0.15); color: #a5b4fc; }
+    .capacity-project-role.retest { background: rgba(139,92,246,0.15); color: #c4b5fd; }
+    .capacity-project-days { font-weight: 700; white-space: nowrap; }
+
+    .capacity-empty {
       text-align: center; padding: 48px; color: var(--muted); font-size: 14px;
+    }
+    .capacity-avail-note {
+      font-size: 11px; color: var(--muted); margin-top: 2px; padding-left: 156px;
     }
   </style>
 </head>
@@ -660,14 +609,11 @@
             <button class="date-filter-clear" onclick="clearClientDateFilter()">Clear</button>
           </div>
           <input id="projects-search" type="search" placeholder="Search client or project…" oninput="filterProjects()" style="padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;width:220px" />
-          <button class="btn-primary" style="background:rgba(255,255,255,0.08);color:var(--text)" onclick="openCreateClient()">
+          <button class="btn-primary" onclick="openNewEntry()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add Client
+            New Entry
           </button>
-          <button class="btn-primary" onclick="openCreateProject()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New Project
-          </button>
+
           <button class="btn-primary" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3)" onclick="openMandaysCalc()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><rect x="2" y="3" width="20" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>
             Mandays
@@ -929,49 +875,32 @@
     <div class="topbar">
       <div>
         <div class="page-title">Resource Allocation</div>
-        <div class="page-sub">Engineer workload view — week-by-week across the selected quarter.</div>
+        <div class="page-sub">Monthly engineer capacity — mandays used vs available (excluding weekends &amp; public holidays).</div>
       </div>
       <button class="btn-refresh" onclick="loadAllocation()" title="Refresh">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
       </button>
     </div>
     <div style="padding: 24px 32px 40px">
-      <div class="gantt-controls">
-        <select id="gantt-quarter-select" class="gantt-quarter-select" onchange="renderAllocationChart()">
-          <option value="">Loading quarters…</option>
+      <div class="capacity-controls">
+        <select id="capacity-month-select" class="capacity-month-select" onchange="renderCapacityView()">
+          <option value="">Loading…</option>
         </select>
-        <div class="gantt-legend">
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(34,197,94,0.35)"></div>Free</div>
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(245,158,11,0.5)"></div>Assessment</div>
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(139,92,246,0.5)"></div>Retest</div>
-          <div class="gantt-legend-item"><div class="gantt-legend-dot" style="background:rgba(239,68,68,0.5)"></div>2+ Projects</div>
+        <div class="capacity-legend">
+          <div class="capacity-legend-item"><div class="capacity-legend-dot" style="background:linear-gradient(90deg,#22c55e,#4ade80)"></div>≤ 50%</div>
+          <div class="capacity-legend-item"><div class="capacity-legend-dot" style="background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>51–80%</div>
+          <div class="capacity-legend-item"><div class="capacity-legend-dot" style="background:linear-gradient(90deg,#ef4444,#f87171)"></div>&gt; 80%</div>
         </div>
       </div>
-      <div class="gantt-outer">
-        <div id="gantt-chart-body">
-          <div class="gantt-empty-state">Loading allocation data…</div>
-        </div>
+      <div id="capacity-body">
+        <div class="capacity-empty">Loading allocation data…</div>
       </div>
     </div>
   </section>
 
 </main>
 
-<!-- ── Add Client Modal ── -->
-<div class="modal-overlay" id="modal-create-client" onclick="closeModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-title">Add New Client</div>
-    <div class="form-group">
-      <label>Client Name *</label>
-      <input id="cc-name" placeholder="e.g. PT Contoh Digital" />
-    </div>
-    <div class="modal-err" id="cc-err"></div>
-    <div class="modal-actions">
-      <button class="btn-ghost" onclick="document.getElementById('modal-create-client').classList.remove('open')">Cancel</button>
-      <button class="btn-primary" onclick="submitCreateClient()" id="cc-btn" style="justify-content:center">Create Client</button>
-    </div>
-  </div>
-</div>
+<!-- ── Old Add Client Modal removed — now part of New Entry modal ── -->
 
 <!-- ── Start Retest Modal ── -->
 <div class="modal-overlay" id="modal-retest" onclick="closeModal(event)">
@@ -1077,95 +1006,143 @@
   </div>
 </div>
 
-<!-- ── Create Project Modal ── -->
+<!-- ── New Entry Modal (Client + Project — Tabbed) ── -->
 <div class="modal-overlay" id="modal-create-project" onclick="closeModal(event)">
-  <div class="modal" style="max-width:520px" onclick="event.stopPropagation()">
-    <div class="modal-title" id="modal-create-project-title">New Project</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
-      <div class="form-group" style="grid-column:1/-1">
-        <label>Client *</label>
-        <select id="cp-client"><option value="">— Select client —</option></select>
-      </div>
-      <div class="form-group" style="grid-column:1/-1">
-        <label>Project Name *</label>
-        <input id="cp-name" placeholder="e.g. Web App Pentest Q2 2025" />
-      </div>
-      <div class="form-group">
-        <label>Project Type *</label>
-        <select id="cp-type" onchange="updateCpMethodOptions()">
-          <option value="web">Web</option>
-          <option value="api">API</option>
-          <option value="mobile">Mobile</option>
-          <option value="infra">Infrastructure</option>
-          <option value="phishing">Phishing</option>
-        </select>
-      </div>
-      <div class="form-group" id="cp-method-wrap">
-        <label>Method *</label>
-        <select id="cp-method">
-          <option value="blackbox">Black Box</option>
-          <option value="greybox">Grey Box</option>
-          <option value="whitebox">White Box</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Assign PIC</label>
-        <select id="cp-engineer"><option value="">— Not assigned —</option></select>
-      </div>
-      <div class="form-group">
-        <label>Assign Assist</label>
-        <select id="cp-assist"><option value="">— Not assigned —</option></select>
-      </div>
-      <div class="form-group">
-        <label>Kickoff Date (Start) *</label>
-        <input id="cp-kickoff" type="date" oninput="updateMandaysPreview(); updateInitialReportMin()" />
-      </div>
-      <div class="form-group">
-        <label>Initial Report Date *</label>
-        <input id="cp-initial" type="date" oninput="onInitialDateInput()" />
-        <div id="cp-initial-warn" style="font-size:11px;color:#f87171;margin-top:4px;display:none"></div>
-        <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px;display:none">🤖 Auto-calculated. Kosongkan Assessment untuk ubah manual.</div>
-      </div>
-      <div class="form-group">
-        <label>Kickoff (hari)</label>
-        <input id="cp-md-kickoff" type="number" value="1" min="1" oninput="onMandaysParamChanged()" />
-      </div>
-      <div class="form-group">
-        <label>Info Gathering (hari)</label>
-        <input id="cp-md-infogath" type="number" value="5" min="0" oninput="onMandaysParamChanged()" />
-      </div>
-      <div class="form-group">
-        <label>Assessment (hari) <span style="font-size:10px;font-weight:400;color:var(--muted)">(optional — mengunci Initial Report Date)</span></label>
-        <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
-      </div>
-      <!-- Live mandays preview -->
-      <div id="cp-mandays-preview" style="display:none;grid-column:1/-1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:14px 18px">
-        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.05em">MANDAYS ESTIMATE</div>
-        <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-          <span style="font-size:12px;color:var(--muted)">Kickoff: <b id="cp-md-r-kickoff" style="color:var(--text)">—</b></span>
-          <span style="font-size:12px;color:var(--muted)">Info Gathering: <b id="cp-md-r-infogath" style="color:var(--text)">—</b></span>
-          <span style="font-size:12px;color:var(--muted)">Assessment: <b id="cp-md-r-assessment" style="color:var(--text)">—</b></span>
-          <span style="font-size:12px;color:var(--muted)">Initial Report: <b id="cp-md-r-ir" style="color:#a78bfa">—</b></span>
-          <span style="font-size:14px;font-weight:700;color:var(--accent)">Total: <span id="cp-md-r-total">—</span> hari</span>
+  <div class="modal" style="max-width:580px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="modal-title" id="modal-create-project-title">New Entry</div>
+
+    <!-- ═══ Tab Bar (half-width with separator) ═══ -->
+    <div id="ne-tab-bar" style="display:flex;margin-bottom:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
+      <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 0;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
+      <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 0;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
+    </div>
+
+    <!-- ═══ TAB 1: Client Information ═══ -->
+    <div id="ne-client-section">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Client *</label>
+          <select id="cp-client" onchange="onClientSelectChange()">
+            <option value="">— Select client —</option>
+            <option value="__new__">➕ Create New Client</option>
+          </select>
         </div>
-        <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+        <div class="form-group" style="grid-column:1/-1;display:none" id="ne-new-client-fields">
+          <div class="form-group">
+            <label>Client Name *</label>
+            <input id="ne-client-name" placeholder="e.g. PT Contoh Digital" oninput="_updateProjectTabState()" />
+          </div>
+          <div class="form-group">
+            <label>Engagement Reference</label>
+            <select id="ne-engagement-ref">
+              <option value="">— Select reference —</option>
+              <option value="Cisometric Proposal">Cisometric Proposal</option>
+              <option value="Pricing Letter">Pricing Letter</option>
+              <option value="Purchase Order">Purchase Order</option>
+              <option value="Cisometric Quotation">Cisometric Quotation</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Engagement Info</label>
+            <input id="ne-engagement-info" placeholder="e.g. PO-2025-001 or proposal reference details" />
+          </div>
+        </div>
       </div>
-      <!-- Final report date is set automatically when PM starts retest -->
-      <div class="form-group" style="grid-column:1/-1">
-        <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
-        <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+        <button type="button" class="btn-primary" style="font-size:12px;padding:8px 20px" onclick="validateAndGoToProject()">
+          Next →
+        </button>
       </div>
     </div>
+
+    <!-- ═══ TAB 2: Project Details ═══ -->
+    <div id="ne-project-section" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Project Name *</label>
+          <input id="cp-name" placeholder="e.g. Web App Pentest Q2 2025" />
+        </div>
+        <div class="form-group">
+          <label>Project Type *</label>
+          <select id="cp-type" onchange="updateCpMethodOptions()">
+            <option value="web">Web</option>
+            <option value="api">API</option>
+            <option value="mobile">Mobile</option>
+            <option value="infra">Infrastructure</option>
+            <option value="phishing">Phishing</option>
+          </select>
+        </div>
+        <div class="form-group" id="cp-method-wrap">
+          <label>Method *</label>
+          <select id="cp-method">
+            <option value="blackbox">Black Box</option>
+            <option value="greybox">Grey Box</option>
+            <option value="whitebox">White Box</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Assign PIC</label>
+          <select id="cp-engineer"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Assign Assist</label>
+          <select id="cp-assist"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group">
+          <label>Kickoff Date (Start) *</label>
+          <input id="cp-kickoff" type="date" oninput="updateMandaysPreview(); updateInitialReportMin()" />
+        </div>
+        <div class="form-group">
+          <label>Initial Report Date *</label>
+          <input id="cp-initial" type="date" oninput="onInitialDateInput()" />
+          <div id="cp-initial-warn" style="font-size:11px;color:#f87171;margin-top:4px;display:none"></div>
+          <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px;display:none">🤖 Auto-calculated. Kosongkan Assessment untuk ubah manual.</div>
+        </div>
+        <div class="form-group">
+          <label>Kickoff (hari)</label>
+          <input id="cp-md-kickoff" type="number" value="1" min="1" oninput="onMandaysParamChanged()" />
+        </div>
+        <div class="form-group">
+          <label>Info Gathering (hari)</label>
+          <input id="cp-md-infogath" type="number" value="5" min="0" oninput="onMandaysParamChanged()" />
+        </div>
+        <div class="form-group">
+          <label>Assessment (hari) <span style="font-size:10px;font-weight:400;color:var(--muted)">(optional — mengunci Initial Report Date)</span></label>
+          <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
+        </div>
+        <!-- Live mandays preview -->
+        <div id="cp-mandays-preview" style="display:none;grid-column:1/-1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:14px 18px">
+          <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.05em">MANDAYS ESTIMATE</div>
+          <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px;color:var(--muted)">Kickoff: <b id="cp-md-r-kickoff" style="color:var(--text)">—</b></span>
+            <span style="font-size:12px;color:var(--muted)">Info Gathering: <b id="cp-md-r-infogath" style="color:var(--text)">—</b></span>
+            <span style="font-size:12px;color:var(--muted)">Assessment: <b id="cp-md-r-assessment" style="color:var(--text)">—</b></span>
+            <span style="font-size:12px;color:var(--muted)">Initial Report: <b id="cp-md-r-ir" style="color:#a78bfa">—</b></span>
+            <span style="font-size:14px;font-weight:700;color:var(--accent)">Total: <span id="cp-md-r-total">—</span> hari</span>
+          </div>
+          <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
+        </div>
+        <!-- Final report date is set automatically when PM starts retest -->
+        <div class="form-group" style="grid-column:1/-1">
+          <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
+          <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
+        </div>
+      </div>
+    </div>
+
     <div class="modal-err" id="cp-err"></div>
     <div class="modal-actions">
       <button class="btn-ghost" onclick="document.getElementById('modal-create-project').classList.remove('open')">Cancel</button>
-      <button class="btn-primary" onclick="submitCreateProject()" id="cp-btn" style="justify-content:center">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Create Project
-      </button>
+      <span id="ne-submit-wrap">
+        <button class="btn-primary" onclick="submitNewEntry()" id="cp-btn" style="justify-content:center">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Create Entry
+        </button>
+      </span>
     </div>
   </div>
 </div>
+
 
 <!-- ── Finding Detail Modal ── -->
 <div class="modal-overlay" id="modal-findings" onclick="closeModal(event)">
@@ -1482,58 +1459,24 @@ function useEstimateInProject() {
   }, 100);
 }
 
-// ── Resource Allocation ────────────────────────────────────────────────────────
+// ── Resource Allocation — Capacity View ────────────────────────────────────────
 let _allocationRows = [];
 let _allEngineers = [];
 
 async function loadAllocation() {
-  document.getElementById('gantt-chart-body').innerHTML =
-    '<div class="gantt-empty-state">Loading…</div>';
+  document.getElementById('capacity-body').innerHTML =
+    '<div class="capacity-empty">Loading…</div>';
   try {
     [_allocationRows, _allEngineers] = await Promise.all([
       apiFetch('/api/dashboard/summary'),
       apiFetch('/api/users/engineers'),
     ]);
-    buildQuarterOptions(_allocationRows);
-    renderAllocationChart();
+    buildMonthOptions(_allocationRows);
+    renderCapacityView();
   } catch(e) {
-    document.getElementById('gantt-chart-body').innerHTML =
-      `<div class="gantt-empty-state">Error: ${e.message}</div>`;
+    document.getElementById('capacity-body').innerHTML =
+      `<div class="capacity-empty">Error: ${e.message}</div>`;
   }
-}
-
-function buildQuarterOptions(rows) {
-  const quarters = new Set();
-  const today = new Date();
-
-  rows.forEach(r => {
-    const dates = [r.kickoff_date, r.initial_report_date, r.final_report_date].filter(Boolean);
-    dates.forEach(d => {
-      const dt = new Date(d);
-      if (!isNaN(dt.getTime())) {
-        const y = dt.getFullYear();
-        const q = Math.floor(dt.getMonth() / 3) + 1;
-        quarters.add(`${y}-Q${q}`);
-      }
-    });
-  });
-
-  // Always include current quarter
-  const curQ = Math.floor(today.getMonth() / 3) + 1;
-  quarters.add(`${today.getFullYear()}-Q${curQ}`);
-
-  const sorted = [...quarters].sort();
-  const sel = document.getElementById('gantt-quarter-select');
-  const curVal = `${today.getFullYear()}-Q${curQ}`;
-  sel.innerHTML = sorted.map(q =>
-    `<option value="${q}" ${q === curVal ? 'selected' : ''}>${quarterLabel(q)}</option>`
-  ).join('');
-}
-
-function quarterLabel(key) {
-  const [year, q] = key.split('-');
-  const months = { Q1:'Jan – Mar', Q2:'Apr – Jun', Q3:'Jul – Sep', Q4:'Oct – Dec' };
-  return `${q} ${year}  (${months[q]})`;
 }
 
 // Safe HTML attribute / text escape
@@ -1541,232 +1484,148 @@ function escA(s) {
   return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function buildWeeks(quarterKey) {
-  const [year, q] = quarterKey.split('-');
-  const qNum = Number(q.replace('Q',''));
-  const startMonth = (qNum - 1) * 3;
-  const endMonth   = startMonth + 2;
+const _monthNames = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
 
-  const qStart = new Date(Number(year), startMonth, 1);
-  const dayOfWeek = qStart.getDay() || 7;
-  qStart.setDate(qStart.getDate() - (dayOfWeek - 1));
+function buildMonthOptions(rows) {
+  const months = new Set();
+  const today = new Date();
+  rows.forEach(r => {
+    [r.kickoff_date, r.initial_report_date, r.final_report_date,
+     r.retest_start_date, r.retest_end_date].filter(Boolean).forEach(d => {
+      const dt = new Date(d);
+      if (!isNaN(dt.getTime()))
+        months.add(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);
+    });
+  });
+  months.add(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
+  const next = new Date(today.getFullYear(), today.getMonth()+1, 1);
+  months.add(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
 
-  const qEnd = new Date(Number(year), endMonth + 1, 0);
-
-  const weeks = [];
-  let cur = new Date(qStart);
-  while (cur <= qEnd) {
-    const weekEnd = new Date(cur); weekEnd.setDate(cur.getDate() + 6);
-    const displayMonth = cur.getMonth() >= startMonth && cur.getMonth() <= endMonth
-      ? cur.getMonth()
-      : weekEnd.getMonth() >= startMonth && weekEnd.getMonth() <= endMonth
-        ? weekEnd.getMonth()
-        : -1;
-    if (displayMonth >= 0) {
-      weeks.push({
-        monday: new Date(cur),
-        sunday: weekEnd,
-        month: displayMonth,
-        label: `W${weeks.filter(w => w.month === displayMonth).length + 1}`,
-      });
-    }
-    cur.setDate(cur.getDate() + 7);
-  }
-  return weeks;
+  const sorted = [...months].sort();
+  const sel = document.getElementById('capacity-month-select');
+  const curVal = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  sel.innerHTML = sorted.map(m => {
+    const [y, mon] = m.split('-');
+    return `<option value="${m}" ${m === curVal ? 'selected' : ''}>${_monthNames[Number(mon)-1]} ${y}</option>`;
+  }).join('');
 }
 
-function renderAllocationChart() {
-  const quarterKey = document.getElementById('gantt-quarter-select').value;
-  if (!quarterKey) return;
+/** Count workdays in a month, excluding weekends and Indonesian public holidays */
+function getWorkdaysInMonth(year, month) {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let workdays = 0, holidays = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(year, month, d);
+    if (dt.getDay() === 0 || dt.getDay() === 6) continue;
+    if (idHolidaySet.has(dt.toISOString().slice(0, 10))) { holidays++; continue; }
+    workdays++;
+  }
+  return { workdays, holidays };
+}
 
-  const weeks = buildWeeks(quarterKey);
-  const today = new Date(); today.setHours(0,0,0,0);
+/** Count working days overlap between a date range and a month */
+function _workdaysOverlap(startStr, endStr, year, month) {
+  const mS = new Date(year, month, 1);
+  const mE = new Date(year, month + 1, 0);
+  const rS = new Date(startStr);
+  const rE = new Date(endStr);
+  const oS = new Date(Math.max(mS, rS));
+  const oE = new Date(Math.min(mE, rE));
+  if (oS > oE) return 0;
+  return workingDaysBetween(oS.toISOString().slice(0,10), oE.toISOString().slice(0,10)).days;
+}
+
+function renderCapacityView() {
+  const monthKey = document.getElementById('capacity-month-select').value;
+  if (!monthKey) return;
+  const [yearStr, monStr] = monthKey.split('-');
+  const year = Number(yearStr), month = Number(monStr) - 1;
+  const { workdays: availableDays, holidays } = getWorkdaysInMonth(year, month);
   const rows = _allocationRows;
-
-  // ── Build engineer → projects map (from dashboard data) ────────────────────
-  const engMap = new Map(); // engineerId → { name, projects:[] }
+  const engMap = new Map();
 
   rows.forEach(r => {
-    // Assessment phase — assigned_engineer (PIC) + assist
+    // Assessment phase
     if (r.kickoff_date && r.initial_report_date) {
-      if (r.assigned_engineer_id && r.engineer_name) {
-        if (!engMap.has(r.assigned_engineer_id))
-          engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
-        engMap.get(r.assigned_engineer_id).projects.push({ ...r, role: 'PIC', barType: 'assessment', _start: r.kickoff_date, _end: r.initial_report_date });
-      }
-      if (r.assist_engineer_id && r.assist_engineer_name) {
-        if (!engMap.has(r.assist_engineer_id))
-          engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
-        engMap.get(r.assist_engineer_id).projects.push({ ...r, role: 'Assist', barType: 'assessment', _start: r.kickoff_date, _end: r.initial_report_date });
+      const overlapDays = _workdaysOverlap(r.kickoff_date, r.initial_report_date, year, month);
+      if (overlapDays > 0) {
+        const totalProjDays = workingDaysBetween(r.kickoff_date, r.initial_report_date).days;
+        const totalMandays = (r.mandays_kickoff ?? 1) + (r.mandays_infogath ?? 5) + (r.mandays_assessment ?? 0);
+        const md = totalProjDays > 0 ? Math.round((totalMandays * overlapDays / totalProjDays) * 10) / 10 : totalMandays;
+
+        if (r.assigned_engineer_id && r.engineer_name) {
+          if (!engMap.has(r.assigned_engineer_id)) engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
+          engMap.get(r.assigned_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'PIC', roleClass: 'pic', mandaysInMonth: md });
+        }
+        if (r.assist_engineer_id && r.assist_engineer_name) {
+          if (!engMap.has(r.assist_engineer_id)) engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
+          engMap.get(r.assist_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Assist', roleClass: 'assist', mandaysInMonth: md });
+        }
       }
     }
-    // Retest phase — retest_pic + retest_assist
+    // Retest phase
     if (r.retest_status === 'started' && r.retest_start_date && r.retest_end_date) {
-      if (r.retest_pic_id) {
-        const picName = r.retest_pic_name || _allEngineers.find(e => e.id === r.retest_pic_id)?.display_name || `Engineer #${r.retest_pic_id}`;
-        if (!engMap.has(r.retest_pic_id))
-          engMap.set(r.retest_pic_id, { name: picName, projects: [] });
-        engMap.get(r.retest_pic_id).projects.push({ ...r, role: 'Retest PIC', barType: 'retest', _start: r.retest_start_date, _end: r.retest_end_date });
-      }
-      if (r.retest_assist_id) {
-        const assistName = r.retest_assist_name || _allEngineers.find(e => e.id === r.retest_assist_id)?.display_name || `Engineer #${r.retest_assist_id}`;
-        if (!engMap.has(r.retest_assist_id))
-          engMap.set(r.retest_assist_id, { name: assistName, projects: [] });
-        engMap.get(r.retest_assist_id).projects.push({ ...r, role: 'Retest Assist', barType: 'retest', _start: r.retest_start_date, _end: r.retest_end_date });
+      const overlapDays = _workdaysOverlap(r.retest_start_date, r.retest_end_date, year, month);
+      if (overlapDays > 0) {
+        if (r.retest_pic_id) {
+          const nm = r.retest_pic_name || _allEngineers.find(e => e.id === r.retest_pic_id)?.display_name || `Eng #${r.retest_pic_id}`;
+          if (!engMap.has(r.retest_pic_id)) engMap.set(r.retest_pic_id, { name: nm, projects: [] });
+          engMap.get(r.retest_pic_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest PIC', roleClass: 'retest', mandaysInMonth: overlapDays });
+        }
+        if (r.retest_assist_id) {
+          const nm = r.retest_assist_name || _allEngineers.find(e => e.id === r.retest_assist_id)?.display_name || `Eng #${r.retest_assist_id}`;
+          if (!engMap.has(r.retest_assist_id)) engMap.set(r.retest_assist_id, { name: nm, projects: [] });
+          engMap.get(r.retest_assist_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest Assist', roleClass: 'retest', mandaysInMonth: overlapDays });
+        }
       }
     }
   });
 
-  // ── Add free engineers (no project assignments at all) ──────────────────────
-  _allEngineers.forEach(e => {
-    if (!engMap.has(e.id))
-      engMap.set(e.id, { name: e.display_name, projects: [] });
-  });
+  _allEngineers.forEach(e => { if (!engMap.has(e.id)) engMap.set(e.id, { name: e.display_name, projects: [] }); });
 
   if (!engMap.size) {
-    document.getElementById('gantt-chart-body').innerHTML =
-      '<div class="gantt-empty-state">No engineers found.</div>';
+    document.getElementById('capacity-body').innerHTML = '<div class="capacity-empty">No engineers found.</div>';
     return;
   }
 
-  // ── Month grouping for header ───────────────────────────────────────────────
-  const monthNames = ['January','February','March','April','May','June',
-                      'July','August','September','October','November','December'];
-  const monthGroups = [];
-  let curMonth = -1, curCount = 0;
-  weeks.forEach(w => {
-    if (w.month !== curMonth) {
-      if (curCount) monthGroups.push({ month: curMonth, count: curCount });
-      curMonth = w.month; curCount = 1;
-    } else curCount++;
-  });
-  if (curCount) monthGroups.push({ month: curMonth, count: curCount });
-
-  // ── Sort: engineers with projects first, then free ──────────────────────────
-  const sortedEngs = [...engMap.entries()].sort((a, b) =>
-    b[1].projects.length - a[1].projects.length || a[1].name.localeCompare(b[1].name)
-  );
-
-  // ── Build table HTML ────────────────────────────────────────────────────────
-  let html = `<table class="gantt-table">
-  <thead>
-    <tr class="gantt-month-row">
-      <th>Engineer</th>
-      ${monthGroups.map(g => `<th colspan="${g.count}">${monthNames[g.month]}</th>`).join('')}
-    </tr>
-    <tr class="gantt-week-row">
-      <th>Name</th>
-      ${weeks.map(w => `<th>${w.label}</th>`).join('')}
-    </tr>
-  </thead>
-  <tbody>`;
-
-  sortedEngs.forEach(([engId, eng], idx) => {
-    // For each week, compute active project count (assessment + retest)
-    const weekData = weeks.map(w => {
-      const active = eng.projects.filter(p => {
-        if (!p._start || !p._end) return false;
-        const ks = new Date(p._start); ks.setHours(0,0,0,0);
-        const fe = new Date(p._end); fe.setHours(23,59,59,999);
-        return ks <= w.sunday && fe >= w.monday;
-      });
-      return { active, count: active.length };
-    });
-
-    // Find start/end week index for each project bar
-    const projectBars = [];
-    eng.projects.forEach(p => {
-      if (!p._start || !p._end) return;
-      const ks = new Date(p._start); ks.setHours(0,0,0,0);
-      const fe = new Date(p._end); fe.setHours(23,59,59,999);
-      const startIdx = weeks.findIndex(w => w.monday <= fe && w.sunday >= ks);
-      const endIdx   = weeks.map((w,i) => (w.monday <= fe && w.sunday >= ks) ? i : -1)
-                            .filter(i => i >= 0).pop() ?? -1;
-      if (startIdx >= 0) projectBars.push({ p, startIdx, endIdx, barType: p.barType || 'assessment' });
-    });
-
-    html += `<tr class="gantt-eng-row">
-      <td class="gantt-eng-name">
-        <span class="gantt-eng-num">${idx + 1}</span>${escA(eng.name)}
-      </td>`;
-
-    weeks.forEach((w, wi) => {
-      const { count, active } = weekData[wi];
-      const isRetestOnly = count > 0 && active.every(p => p.barType === 'retest');
-      const colorClass = count === 0 ? 'free' : isRetestOnly ? 'retest' : count === 1 ? 'busy' : 'full';
-      const isToday = today >= w.monday && today <= w.sunday;
-
-      let label = '';
-      let isBarStart = false;
-
-      // Project name label at the START of each bar (span ≥ 1 week)
-      const barsStartingHere = projectBars.filter(b => b.startIdx === wi);
-      if (barsStartingHere.length) {
-        isBarStart = true;
-        label = barsStartingHere.map(b => {
-          const span = b.endIdx - b.startIdx + 1;
-          const projectName  = escA(b.p.project_name || '');
-          const clientName   = escA(b.p.client_name  || '');
-          const role         = b.p.role || '';
-          // Tooltip: full info
-          const mandays = calcMandaysTag ? '' : '';
-          const ko = b.p.mandays_kickoff ?? 1;
-          const ig = b.p.mandays_infogath ?? 5;
-          const { days: asmDays } = workingDaysBetween(b.p.kickoff_date || '', b.p.initial_report_date || '');
-          const totalMd = ko + ig + asmDays;
-          const tooltip = `${clientName} \u2014 ${projectName} (${role}) | ${totalMd} mandays`;
-          return `<span class="gantt-bar-label" title="${tooltip}"><span class="bar-project">${clientName}</span><span class="bar-role">${role}</span></span>`;
-        }).join('');
-      }
-
-      // End-date label on the LAST week of a bar if project ends before that week's Sunday (partial week)
-      const barsEndingHere = projectBars.filter(b => b.endIdx === wi && b.startIdx !== wi);
-      if (!label && barsEndingHere.length) {
-        label = barsEndingHere.map(b => {
-          const endDateStr = b.p.final_report_date || b.p._end;
-          if (!endDateStr) return '';
-          const fe = new Date(endDateStr); fe.setHours(0,0,0,0);
-          if (isNaN(fe.getTime())) return '';
-          if (fe < w.sunday) {
-            const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-            return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">\u2192 ${dayStr}</span>`;
-          }
-          return '';
-        }).filter(Boolean).join('');
-      }
-
-      // Single-week bar with partial end: show end date
-      if (!label) {
-        const singleBars = projectBars.filter(b => b.startIdx === wi && b.endIdx === wi);
-        if (singleBars.length) {
-          isBarStart = true;
-          label = singleBars.map(b => {
-            const endDateStr = b.p.final_report_date || b.p._end;
-            if (endDateStr) {
-              const fe = new Date(endDateStr); fe.setHours(0,0,0,0);
-              if (!isNaN(fe.getTime()) && fe < w.sunday) {
-                const dayStr = fe.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-                return `<span class="gantt-bar-label" title="Ends ${dayStr}" style="opacity:0.85">\u2192 ${dayStr}</span>`;
-              }
-            }
-            const projectName = escA(b.p.project_name || '');
-            const role = b.p.role || '';
-            return `<span class="gantt-bar-label" title="${escA(b.p.client_name||'')} \u2014 ${projectName} (${role})"><span class="bar-project">${escA(b.p.client_name||'')}</span><span class="bar-role">${role}</span></span>`;
-          }).join('');
-        }
-      }
-
-      html += `<td class="gantt-cell${isToday ? ' today-col' : ''}${isBarStart ? ' bar-start' : ''}">
-        <div class="gantt-cell-inner ${colorClass}">${label}</div>
-      </td>`;
-    });
-
-    html += `</tr>`;
+  const sortedEngs = [...engMap.entries()].sort((a, b) => {
+    const aU = a[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
+    const bU = b[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
+    return bU - aU || a[1].name.localeCompare(b[1].name);
   });
 
-  html += `</tbody></table>`;
-  document.getElementById('gantt-chart-body').innerHTML = html;
+  let html = '<div class="capacity-list">';
+  sortedEngs.forEach(([engId, eng]) => {
+    const used = Math.round(eng.projects.reduce((s, p) => s + p.mandaysInMonth, 0) * 10) / 10;
+    const pct = availableDays > 0 ? Math.round((used / availableDays) * 100) : 0;
+    const barPct = Math.min(pct, 100);
+    const colorClass = pct <= 50 ? 'green' : pct <= 80 ? 'amber' : 'red';
+    const statColor = pct <= 50 ? '#4ade80' : pct <= 80 ? '#fbbf24' : '#f87171';
+
+    html += `<div class="capacity-row">
+      <div class="capacity-row-top">
+        <div class="capacity-card-name">${escA(eng.name)}</div>
+        <div class="capacity-bar-track"><div class="capacity-bar-fill ${colorClass}" style="width:${barPct}%"></div></div>
+        <div class="capacity-card-stat" style="color:${statColor}">${used} / ${availableDays} <span style="font-size:11px;font-weight:400;color:var(--muted)">mandays</span> <span style="font-size:12px">(${pct}%)</span></div>
+      </div>`;
+
+    if (eng.projects.length) {
+      html += `<ul class="capacity-project-list">${eng.projects.map(p =>
+        `<li class="capacity-project-item">
+          <div><span class="capacity-project-name">${escA(p.client)}</span><span style="color:var(--muted)"> — ${escA(p.name)}</span><span class="capacity-project-role ${p.roleClass}">${p.role}</span></div>
+          <div class="capacity-project-days" style="color:${statColor}">${Math.round(p.mandaysInMonth*10)/10} <span style="font-size:10px;font-weight:400;color:var(--muted)">d</span></div>
+        </li>`
+      ).join('')}</ul>`;
+    }
+    html += `</div>`;
+  });
+
+  html += `</div><div class="capacity-avail-note" style="padding-left:0;margin-top:12px">${availableDays} workdays in ${_monthNames[month]} ${year}${holidays ? ` (${holidays} public holiday${holidays>1?'s':''} excluded)` : ''}</div>`;
+  document.getElementById('capacity-body').innerHTML = html;
 }
+
+
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
 let _dashboardRows = [];
@@ -1978,7 +1837,7 @@ function renderClientGroups(containerId, rows, showActions) {
   if (!container) return;
   const groups = {};
   rows.forEach(r => {
-    if (!groups[r.client_id]) groups[r.client_id] = { id: r.client_id, name: r.client_name, projects: [] };
+    if (!groups[r.client_id]) groups[r.client_id] = { id: r.client_id, name: r.client_name, engagement_reference: r.engagement_reference || '', engagement_info: r.engagement_info || '', projects: [] };
     if (r.project_id) groups[r.client_id].projects.push(r);
   });
   // Persist client id→name map so _renameClient/_deleteClient can find names
@@ -2001,9 +1860,11 @@ function renderClientGroups(containerId, rows, showActions) {
     return `
     <div class="client-group">
       <div class="client-group-header" onclick="toggleGroup('${pid}')">
-        <div style="display:flex;align-items:center;gap:12px;font-size:13px;font-weight:700">
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;font-weight:700;flex-wrap:wrap">
           <svg id="arr-${g.id}" class="cg-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 6 15 12 9 18"/></svg>
           ${esc(g.name)}
+          ${g.engagement_reference ? `<span style="font-size:10px;font-weight:600;color:#a5b4fc;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:6px;padding:2px 8px;letter-spacing:.02em">${esc(g.engagement_reference)}</span>` : ''}
+          ${g.engagement_info ? `<span style="font-size:10px;font-weight:400;color:var(--muted);font-style:italic">${esc(g.engagement_info)}</span>` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:14px">
           <span class="cg-meta">${g.projects.length} project${g.projects.length!==1?'s':''} &bull; <span class="finding-count ${countColor(totalF)}" style="font-size:12px">${totalF}</span> finding${totalF!==1?'s':''}</span>
@@ -2285,6 +2146,15 @@ async function editProjectPortal(proj) {
   const titleEl = document.getElementById('modal-create-project-title');
   if (titleEl) titleEl.textContent = 'Edit Project';
 
+  // Hide client section and tab bar when editing (only show project details)
+  const clientSection = document.getElementById('ne-client-section');
+  if (clientSection) clientSection.style.display = 'none';
+  const tabBar = document.getElementById('ne-tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
+  // Show project section directly
+  const projSection = document.getElementById('ne-project-section');
+  if (projSection) projSection.style.display = '';
+
   // Pre-fill all fields from existing project data
   document.getElementById('cp-name').value = proj.project_name || '';
   document.getElementById('cp-type').value = proj.project_type || 'web';
@@ -2385,17 +2255,128 @@ async function editProjectPortal(proj) {
   modal.classList.add('open');
 }
 
-// ── Create Project ────────────────────────────────────────────────────────────
-async function openCreateProject() {
+// ── New Entry (combined Client + Project) ─────────────────────────────────────
+// onClientSelectChange: toggle new-client fields when "➕ Create New Client" is selected
+function onClientSelectChange() {
+  const sel = document.getElementById('cp-client');
+  const newFields = document.getElementById('ne-new-client-fields');
+  if (!sel || !newFields) return;
+  if (sel.value === '__new__') {
+    newFields.style.display = 'block';
+  } else {
+    newFields.style.display = 'none';
+    // If an existing client is selected, auto-switch to project details tab
+    if (sel.value) switchNeTab('project');
+  }
+  _updateProjectTabState();
+}
+
+// Check if a client has been selected or new-client name filled
+function _isClientReady() {
+  const sel = document.getElementById('cp-client');
+  if (!sel) return false;
+  if (sel.value === '__new__') {
+    return (document.getElementById('ne-client-name')?.value || '').trim().length > 0;
+  }
+  return sel.value !== '';
+}
+
+// Update the project tab appearance based on client readiness
+function _updateProjectTabState() {
+  const tabProject = document.getElementById('ne-tab-project');
+  if (!tabProject) return;
+  tabProject.style.opacity = _isClientReady() ? '1' : '0.5';
+  tabProject.style.cursor = _isClientReady() ? 'pointer' : 'not-allowed';
+}
+
+// Validate client then switch to project tab (used by Next button)
+function validateAndGoToProject() {
+  const errEl = document.getElementById('cp-err');
+  errEl.classList.remove('show');
+  const sel = document.getElementById('cp-client');
+  if (!sel || !sel.value) {
+    errEl.textContent = 'Please select a client or create a new one first.';
+    errEl.classList.add('show'); return;
+  }
+  if (sel.value === '__new__') {
+    const name = (document.getElementById('ne-client-name')?.value || '').trim();
+    if (!name) {
+      errEl.textContent = 'Please enter a client name.';
+      errEl.classList.add('show'); return;
+    }
+  }
+  switchNeTab('project');
+}
+
+// switchNeTab: switch between 'client' and 'project' tabs in the New Entry modal
+function switchNeTab(tab) {
+  const clientSection = document.getElementById('ne-client-section');
+  const projectSection = document.getElementById('ne-project-section');
+  const tabClient = document.getElementById('ne-tab-client');
+  const tabProject = document.getElementById('ne-tab-project');
+  const submitWrap = document.getElementById('ne-submit-wrap');
+  if (!clientSection || !projectSection || !tabClient || !tabProject) return;
+
+  // Block switching to project tab if no client selected
+  if (tab === 'project' && !_isClientReady()) {
+    const errEl = document.getElementById('cp-err');
+    errEl.textContent = 'Please select or create a client first.';
+    errEl.classList.add('show');
+    return;
+  }
+  document.getElementById('cp-err').classList.remove('show');
+
+  if (tab === 'client') {
+    clientSection.style.display = '';
+    projectSection.style.display = 'none';
+    tabClient.style.background = 'rgba(99,102,241,0.1)';
+    tabClient.style.color = 'var(--text)';
+    tabProject.style.background = 'transparent';
+    tabProject.style.color = 'var(--muted)';
+    if (submitWrap) submitWrap.style.display = 'none';
+  } else {
+    clientSection.style.display = 'none';
+    projectSection.style.display = '';
+    tabProject.style.background = 'rgba(99,102,241,0.1)';
+    tabProject.style.color = 'var(--text)';
+    tabClient.style.background = 'transparent';
+    tabClient.style.color = 'var(--muted)';
+    if (submitWrap) submitWrap.style.display = '';
+  }
+  _updateProjectTabState();
+}
+
+async function openNewEntry() {
   // Reset form and reset modal state in case it was polluted by editProjectPortal
   const titleEl = document.getElementById('modal-create-project-title');
-  if (titleEl) titleEl.textContent = 'New Project';
+  if (titleEl) titleEl.textContent = 'New Entry';
+
+  // Show tab bar and reset to client tab
+  const tabBar = document.getElementById('ne-tab-bar');
+  if (tabBar) tabBar.style.display = '';
+  switchNeTab('client');
+
+  // Show client section
+  const clientSection = document.getElementById('ne-client-section');
+  if (clientSection) clientSection.style.display = '';
+
   const clientSel = document.getElementById('cp-client');
   clientSel.disabled = false;
   const btn = document.getElementById('cp-btn');
-  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Project`;
-  btn.onclick = submitCreateProject;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Entry`;
+  btn.onclick = submitNewEntry;
 
+  // Reset client fields
+  const neClientName = document.getElementById('ne-client-name');
+  const neEngRef = document.getElementById('ne-engagement-ref');
+  const neEngInfo = document.getElementById('ne-engagement-info');
+  if (neClientName) neClientName.value = '';
+  if (neEngRef) neEngRef.value = '';
+  if (neEngInfo) neEngInfo.value = '';
+  const newFields = document.getElementById('ne-new-client-fields');
+  if (newFields) newFields.style.display = 'none';
+
+  // Reset project fields
   ['cp-name','cp-kickoff','cp-initial'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('cp-type').value = 'web';
   document.getElementById('cp-err').classList.remove('show');
@@ -2415,10 +2396,11 @@ async function openCreateProject() {
   const prev = document.getElementById('cp-mandays-preview');
   if (prev) prev.style.display = 'none';
 
-  // Load clients into select
+  // Load clients into select (with Create New option)
   try {
     const clients = await apiFetch('/api/clients');
     clientSel.innerHTML = '<option value="">— Select client —</option>' +
+      '<option value="__new__">➕ Create New Client</option>' +
       clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   } catch { clientSel.innerHTML = '<option value="">Failed to load clients</option>'; }
 
@@ -2438,6 +2420,9 @@ async function openCreateProject() {
 
   document.getElementById('modal-create-project').classList.add('open');
 }
+
+// Backward compatibility: openCreateProject now calls openNewEntry
+async function openCreateProject() { return openNewEntry(); }
 
 // ── Mandays helpers ───────────────────────────────────────────────────────────
 
@@ -2585,8 +2570,8 @@ function updateMandaysPreview() {
 function updateInitialReportMin() { _updateModeAMinDate(); }
 
 
-async function submitCreateProject() {
-  const clientId   = document.getElementById('cp-client').value;
+async function submitNewEntry() {
+  const clientSelVal = document.getElementById('cp-client').value;
   const name       = document.getElementById('cp-name').value.trim();
   const project_type = document.getElementById('cp-type').value;
   const project_method = (project_type !== 'phishing') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
@@ -2602,8 +2587,19 @@ async function submitCreateProject() {
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
 
-  if (!clientId) { errEl.textContent = 'Please select a client.'; errEl.classList.add('show'); return; }
-  if (!name)     { errEl.textContent = 'Project name is required.'; errEl.classList.add('show'); return; }
+  // Determine client ID — create new or use existing
+  let clientId = clientSelVal;
+  const isNewClient = (clientSelVal === '__new__');
+
+  if (isNewClient) {
+    const newClientName = (document.getElementById('ne-client-name')?.value || '').trim();
+    if (!newClientName) { errEl.textContent = 'Client name is required for new client.'; errEl.classList.add('show'); return; }
+    // We'll create the client first, then use the returned ID
+  } else if (!clientId) {
+    errEl.textContent = 'Please select a client.'; errEl.classList.add('show'); return;
+  }
+  if (!name) { errEl.textContent = 'Project name is required.'; errEl.classList.add('show'); return; }
+
   // Validate: initial report date must be at least kickoff + total mandays working days
   if (kickoff_date && initial_report_date) {
     const minEl = document.getElementById('cp-initial');
@@ -2616,6 +2612,17 @@ async function submitCreateProject() {
   const btn = document.getElementById('cp-btn');
   btn.disabled = true;
   try {
+    // Step 1: If new client, create it first
+    if (isNewClient) {
+      const newClientName = document.getElementById('ne-client-name').value.trim();
+      const engagement_reference = document.getElementById('ne-engagement-ref')?.value || null;
+      const engagement_info = (document.getElementById('ne-engagement-info')?.value || '').trim() || null;
+      const clientResult = await apiFetch('/api/clients', 'POST', { name: newClientName, engagement_reference, engagement_info });
+      clientId = clientResult.id;
+      showToast(`Client "${newClientName}" created!`, 'success');
+    }
+
+    // Step 2: Create the project under the client
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
       name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment
@@ -2630,6 +2637,9 @@ async function submitCreateProject() {
     errEl.textContent = e.message; errEl.classList.add('show');
   } finally { btn.disabled = false; }
 }
+
+// Backward compatibility alias
+async function submitCreateProject() { return submitNewEntry(); }
 
 // ── Finding Detail ────────────────────────────────────────────────────────────
 const SEV_ORDER = { Critical:0, High:1, Medium:2, Low:3, Info:4 };
@@ -2833,28 +2843,20 @@ async function submitChangePassword() {
   } finally { btn.disabled = false; }
 }
 
-// ── Add Client ────────────────────────────────────────────────────────────────
+// ── Add Client (now redirects to New Entry) ──────────────────────────────────
 function openCreateClient() {
-  document.getElementById('cc-name').value = '';
-  document.getElementById('cc-err').classList.remove('show');
-  document.getElementById('modal-create-client').classList.add('open');
+  openNewEntry();
+  // Auto-select "Create New Client" after modal opens
+  setTimeout(() => {
+    const sel = document.getElementById('cp-client');
+    if (sel) { sel.value = '__new__'; onClientSelectChange(); }
+  }, 100);
 }
 
+// Legacy submitCreateClient — no longer used (kept for safety)
 async function submitCreateClient() {
-  const name = document.getElementById('cc-name').value.trim();
-  const errEl = document.getElementById('cc-err');
-  errEl.classList.remove('show');
-  if (!name) { errEl.textContent = 'Client name is required.'; errEl.classList.add('show'); return; }
-  const btn = document.getElementById('cc-btn');
-  btn.disabled = true;
-  try {
-    await apiFetch('/api/clients', 'POST', { name });
-    document.getElementById('modal-create-client').classList.remove('open');
-    showToast('Client created!', 'success');
-    loadDashboard(); loadProjects();
-  } catch(e) {
-    errEl.textContent = e.message; errEl.classList.add('show');
-  } finally { btn.disabled = false; }
+  // Handled by submitNewEntry now
+  return submitNewEntry();
 }
 
 // ── Activity Log ───────────────────────────────────────────────────────────────

@@ -59,7 +59,10 @@ function initializeDb() {
       name TEXT NOT NULL UNIQUE,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `);
+  `, () => {
+    db.run(`ALTER TABLE clients ADD COLUMN engagement_reference TEXT`, () => {});
+    db.run(`ALTER TABLE clients ADD COLUMN engagement_info TEXT`, () => {});
+  });
 
   db.run(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -267,7 +270,7 @@ function getDashboardSummary(callback) {
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
-           p.mandays_kickoff, p.mandays_infogath,
+           p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -288,7 +291,7 @@ function getDashboardSummary(callback) {
 // Engineers only see clients where they have an assigned project
 function getClientsByEngineer(engineerId, callback) {
   getDb().all(`
-    SELECT DISTINCT c.id, c.name, c.created_at
+    SELECT DISTINCT c.id, c.name, c.engagement_reference, c.engagement_info, c.created_at
     FROM clients c
     JOIN projects p ON p.client_id = c.id
     WHERE p.assigned_engineer_id = ?
@@ -303,6 +306,7 @@ function getClientsByEngineer(engineerId, callback) {
 function getClientsWithProjects(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name,
+           c.engagement_reference, c.engagement_info,
            p.id AS project_id, p.name AS project_name, p.project_type,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
@@ -582,12 +586,15 @@ function countVulnerabilities(callback) {
 
 function getClients(callback) {
   const db = getDb();
-  db.all('SELECT id, name, created_at FROM clients ORDER BY name COLLATE NOCASE ASC', [], callback);
+  db.all('SELECT id, name, engagement_reference, engagement_info, created_at FROM clients ORDER BY name COLLATE NOCASE ASC', [], callback);
 }
 
-function createClient(name, callback) {
+function createClient(name, opts, callback) {
+  // Handle legacy 2-arg call: createClient(name, callback)
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  const { engagement_reference, engagement_info } = opts || {};
   const db = getDb();
-  db.run('INSERT INTO clients (name) VALUES (?)', [name], function (err) {
+  db.run('INSERT INTO clients (name, engagement_reference, engagement_info) VALUES (?, ?, ?)', [name, engagement_reference || null, engagement_info || null], function (err) {
     if (err) return callback(err);
     callback(null, { id: this.lastID });
   });

@@ -497,8 +497,10 @@ app.post('/api/clients', (req, res) => {
   // Engineers cannot create clients
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create clients. Ask your PM to create and assign you.' });
   const name = (req.body?.name || '').trim();
+  const engagement_reference = (req.body?.engagement_reference || '').trim() || null;
+  const engagement_info = (req.body?.engagement_info || '').trim() || null;
   if (!name) return res.status(400).json({ error: 'Client name is required' });
-  db.createClient(name, (err, result) => {
+  db.createClient(name, { engagement_reference, engagement_info }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Client already exists' });
       return res.status(500).json({ error: err.message });
@@ -511,6 +513,7 @@ app.post('/api/clients', (req, res) => {
     });
   });
 });
+
 
 app.delete('/api/clients/:id', (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete clients.' });
