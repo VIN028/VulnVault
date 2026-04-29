@@ -7,6 +7,117 @@
   <meta name="description" content="VulnVault management portal for PM, Manager, and Admin roles." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js">
+// â”€â”€ Highlight Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let _hlProjectId = null;
+let _hlProjectData = null;
+
+function _openHighlight(pid) {
+  const p = _allClientsCache.find(x => x.project_id === pid);
+  if (!p) return;
+  _hlProjectData = p;
+  openHighlightModal(pid, p.project_name, p.client_name);
+}
+
+async function openHighlightModal(projectId, projectName, clientName) {
+  _hlProjectId = projectId;
+  const titleEl = document.getElementById('hl-modal-title');
+  const subEl = document.getElementById('hl-modal-sub');
+  if (titleEl) titleEl.textContent = '\uD83D\uDCDD ' + projectName;
+  if (subEl) subEl.textContent = 'Client: ' + clientName;
+  document.getElementById('hl-result-wrap').style.display = 'none';
+  document.getElementById('hl-err').classList.remove('show');
+  document.getElementById('hl-ai-status').textContent = '';
+  const container = document.getElementById('hl-notes-container');
+  container.innerHTML = '';
+  try {
+    const data = await apiFetch('/api/projects/' + projectId + '/highlight');
+    (data.highlight_notes && data.highlight_notes.length ? data.highlight_notes : ['']).forEach(n => hlAddNote(n));
+    if (data.highlight_text) {
+      document.getElementById('hl-result-text').value = data.highlight_text;
+      document.getElementById('hl-result-wrap').style.display = '';
+    }
+  } catch { hlAddNote(''); }
+  document.getElementById('modal-highlight').classList.add('open');
+}
+
+function hlAddNote(val) {
+  const container = document.getElementById('hl-notes-container');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = val || '';
+  inp.placeholder = 'Contoh: Assessment selesai lebih awal 2 hari';
+  inp.style.cssText = 'flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none';
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.innerHTML = '\u2715';
+  del.title = 'Hapus';
+  del.style.cssText = 'background:none;border:none;color:#f87171;cursor:pointer;font-size:16px;padding:4px;line-height:1';
+  del.onclick = () => row.remove();
+  row.appendChild(inp);
+  row.appendChild(del);
+  container.appendChild(inp.focus ? (inp.focus(), row) : row);
+}
+
+function _hlGetNotes() {
+  return [...document.querySelectorAll('#hl-notes-container input')].map(i => i.value.trim()).filter(Boolean);
+}
+
+async function hlGenerate() {
+  const apiKey = localStorage.getItem('vulnvault_gemini_key');
+  const model = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.0-flash';
+  if (!apiKey) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = 'Simpan Gemini API Key terlebih dahulu di menu AI Estimator.';
+    errEl.classList.add('show'); return;
+  }
+  const notes = _hlGetNotes();
+  if (!notes.length) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = 'Tambahkan minimal 1 poin highlight.';
+    errEl.classList.add('show'); return;
+  }
+  document.getElementById('hl-err').classList.remove('show');
+  const btn = document.getElementById('hl-gen-btn');
+  const statusEl = document.getElementById('hl-ai-status');
+  btn.disabled = true;
+  statusEl.textContent = '\u23F3 Generating...';
+  try {
+    const p = _hlProjectData || {};
+    const res = await apiFetch('/api/projects/' + _hlProjectId + '/highlight/generate', 'POST', {
+      api_key: apiKey, model, notes,
+      project_name: p.project_name || '', client_name: p.client_name || '',
+      project_type: p.project_type || '', kickoff_date: p.kickoff_date || '',
+      initial_report_date: p.initial_report_date || '', final_report_date: p.final_report_date || ''
+    });
+    document.getElementById('hl-result-text').value = res.highlight_text;
+    document.getElementById('hl-result-wrap').style.display = '';
+    statusEl.textContent = '\u2705 Done';
+  } catch(e) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = e.message; errEl.classList.add('show');
+    statusEl.textContent = '';
+  } finally { btn.disabled = false; }
+}
+
+async function hlSave() {
+  const notes = _hlGetNotes();
+  const text = document.getElementById('hl-result-text').value.trim();
+  const btn = document.getElementById('hl-save-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/projects/' + _hlProjectId + '/highlight', 'PUT', { highlight_notes: notes, highlight_text: text });
+    document.getElementById('modal-highlight').classList.remove('open');
+    showToast('Highlight disimpan!', 'success');
+    loadDashboard();
+  } catch(e) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
+</script>
   <style>
     :root {
       --bg: #080b14;
@@ -378,10 +489,22 @@
     .capacity-controls {
       display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
     }
-    .capacity-month-select {
-      padding: 8px 14px; border-radius: 9px; border: 1px solid var(--border);
-      background: var(--card); color: var(--text); font-size: 13px; font-family: inherit;
-      outline: none; cursor: pointer; min-width: 180px;
+    .capacity-month-nav {
+      display: flex; align-items: center; gap: 0; border: 1px solid var(--border);
+      border-radius: 10px; overflow: hidden; background: var(--card);
+    }
+    .capacity-month-nav button {
+      background: none; border: none; color: var(--text); cursor: pointer;
+      padding: 8px 14px; font-size: 16px; line-height: 1; transition: background 0.15s;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .capacity-month-nav button:hover { background: rgba(255,255,255,0.07); }
+    .capacity-month-nav button:active { background: rgba(255,255,255,0.13); }
+    .capacity-month-label {
+      font-size: 13px; font-weight: 700; color: var(--text);
+      padding: 8px 18px; min-width: 150px; text-align: center;
+      border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+      white-space: nowrap;
     }
     .capacity-legend { display: flex; align-items: center; gap: 14px; margin-left: auto; }
     .capacity-legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
@@ -415,7 +538,23 @@
     .capacity-bar-fill.red    { background: linear-gradient(90deg, #ef4444, #f87171); }
     .capacity-card-stat { font-size: 13px; font-weight: 700; white-space: nowrap; text-align: right; min-width: 170px; }
 
-    .capacity-project-list { list-style: none; padding: 0; margin: 6px 0 0 0; }
+    .capacity-card-name {
+      font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap;
+      min-width: 140px; cursor: pointer; display: flex; align-items: center; gap: 6px;
+      user-select: none;
+    }
+    .capacity-card-name:hover { color: #a5b4fc; }
+    .capacity-card-name .caret {
+      font-size: 10px; color: var(--muted); transition: transform 0.2s;
+      display: inline-block; margin-top: 1px;
+    }
+    .capacity-card-name.open .caret { transform: rotate(90deg); }
+    .capacity-project-list {
+      list-style: none; padding: 0; margin: 0;
+      max-height: 0; overflow: hidden;
+      transition: max-height 0.3s ease, margin 0.2s;
+    }
+    .capacity-project-list.open { max-height: 600px; margin: 6px 0 0 0; }
     .capacity-project-item {
       display: flex; align-items: center; justify-content: space-between;
       padding: 5px 0; padding-left: 156px;
@@ -437,6 +576,62 @@
     .capacity-avail-note {
       font-size: 11px; color: var(--muted); margin-top: 2px; padding-left: 156px;
     }
+
+    /* == New Dashboard Sections == */
+    .dash-section-wrap { padding: 0 32px; margin-bottom: 28px; }
+    .dash-section-title {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
+    }
+    .dash-section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    .kpi-grid-new { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; }
+    .kpi-card-new {
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 18px 20px; position: relative; overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .kpi-card-new:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.35); }
+    .kpi-card-new::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+    .kpi-card-new.accent::before  { background: linear-gradient(90deg,#6366f1,#8b5cf6); }
+    .kpi-card-new.green::before   { background: linear-gradient(90deg,#22c55e,#4ade80); }
+    .kpi-card-new.red::before     { background: linear-gradient(90deg,#ef4444,#f87171); }
+    .kpi-card-new.cyan::before    { background: linear-gradient(90deg,#06b6d4,#22d3ee); }
+    .kpi-card-new.purple::before  { background: linear-gradient(90deg,#a855f7,#c084fc); }
+    .kpi-label-new { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 10px; }
+    .kpi-value-new { font-size: 36px; font-weight: 800; letter-spacing: -0.04em; line-height: 1; margin-bottom: 8px; }
+    .kpi-delta { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .kpi-delta.up   { color: #22c55e; }
+    .kpi-delta.down { color: #ef4444; }
+    .kpi-delta.neutral { color: var(--muted); }
+    .dash-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .dash-chart-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .dash-card-title { font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+    .dash-chart-area { position: relative; height: 180px; }
+    .dash-alloc-month { margin-bottom: 16px; }
+    .dash-alloc-month-label { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 8px; }
+    .dash-alloc-row { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
+    .dash-alloc-name { font-size: 12px; font-weight: 600; min-width: 110px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dash-alloc-bar-track { flex: 1; height: 6px; background: rgba(148,163,184,0.12); border-radius: 4px; overflow: hidden; }
+    .dash-alloc-bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+    .dash-alloc-pct { font-size: 11px; font-weight: 700; min-width: 36px; text-align: right; }
+    .dash-active-table { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .dash-active-table table { width: 100%; border-collapse: collapse; }
+    .dash-active-table th { padding: 11px 16px; text-align: left; font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: 0.07em; text-transform: uppercase; border-bottom: 1px solid var(--border); }
+    .dash-active-table td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid rgba(148,163,184,0.06); }
+    .dash-active-table tbody tr:last-child td { border-bottom: none; }
+    .dash-active-table tbody tr:hover { background: var(--card-hover); }
+    .badge-on-track  { background: rgba(34,197,94,0.15);  color: #4ade80;  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display:inline-block; }
+    .badge-off-track { background: rgba(239,68,68,0.15);  color: #f87171;  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display:inline-block; }
+    .badge-completed { background: rgba(99,102,241,0.15); color: #a5b4fc;  padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; display:inline-block; }
+    .dash-highlights { display: flex; flex-direction: column; gap: 12px; }
+    .dash-hl-card { border-radius: var(--radius); padding: 16px 20px; }
+    .dash-hl-card.positive { border: 1px solid rgba(34,197,94,0.3); background: rgba(34,197,94,0.04); border-left: 4px solid #22c55e; }
+    .dash-hl-card.negative { border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.04); border-left: 4px solid #ef4444; }
+    .dash-hl-card.neutral  { border: 1px solid rgba(148,163,184,0.15); background: rgba(255,255,255,0.02); border-left: 4px solid #6366f1; }
+    .dash-hl-project { font-size: 12px; font-weight: 700; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
+    .dash-hl-client  { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
+    .dash-hl-text    { font-size: 13px; color: var(--text); line-height: 1.65; }
   </style>
 </head>
 <body>
@@ -520,31 +715,69 @@
     <div class="topbar">
       <div>
         <div class="page-title">Dashboard</div>
-        <div class="page-sub">Overview of all projects and findings across clients.</div>
+        <div class="page-sub" id="dash-month-sub">Overview bulan berjalan</div>
       </div>
       <button class="btn-refresh" id="refresh-dashboard" onclick="doRefresh('dashboard')" title="Refresh">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
       </button>
     </div>
-    <div style="padding: 24px 32px 0">
-      <div class="kpi-grid" id="kpi-grid">
-        <div class="kpi-card"><div class="kpi-label">Total Clients</div><div class="kpi-value" id="kpi-clients">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Total Projects</div><div class="kpi-value" id="kpi-projects">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Total Findings</div><div class="kpi-value" id="kpi-findings">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Engineers</div><div class="kpi-value" id="kpi-engineers">—</div></div>
-      </div>
-
-      <div class="section-header">
-        <div class="section-heading">Upcoming Deadlines</div>
-        <div class="date-filter">
-          <span>From</span>
-          <input type="date" id="dash-date-from" onchange="applyDashboardFilter()">
-          <span>To</span>
-          <input type="date" id="dash-date-to" onchange="applyDashboardFilter()">
-          <button class="date-filter-clear" onclick="clearDashboardFilter()">Clear</button>
+    <!-- Section 1: KPI Cards -->
+    <div class="dash-section-wrap" style="padding-top:24px">
+      <div class="kpi-grid-new" id="kpi-grid-new">
+        <div class="kpi-card-new accent">
+          <div class="kpi-label-new">Total Project</div>
+          <div class="kpi-value-new" id="kpi-total">&#8212;</div>
+          <div class="kpi-delta neutral" id="kpi-total-delta">vs bulan lalu</div>
+        </div>
+        <div class="kpi-card-new green">
+          <div class="kpi-label-new">On Track</div>
+          <div class="kpi-value-new" id="kpi-ontrack">&#8212;</div>
+          <div class="kpi-delta neutral" id="kpi-ontrack-delta">vs bulan lalu</div>
+        </div>
+        <div class="kpi-card-new red">
+          <div class="kpi-label-new">Off Track</div>
+          <div class="kpi-value-new" id="kpi-offtrack">&#8212;</div>
+          <div class="kpi-delta neutral" id="kpi-offtrack-delta">vs bulan lalu</div>
+        </div>
+        <div class="kpi-card-new cyan">
+          <div class="kpi-label-new">Dimulai Bulan Ini</div>
+          <div class="kpi-value-new" id="kpi-started">&#8212;</div>
+          <div class="kpi-delta neutral" id="kpi-started-delta">vs bulan lalu</div>
+        </div>
+        <div class="kpi-card-new purple">
+          <div class="kpi-label-new">Selesai Bulan Ini</div>
+          <div class="kpi-value-new" id="kpi-completed">&#8212;</div>
+          <div class="kpi-delta neutral" id="kpi-completed-delta">vs bulan lalu</div>
         </div>
       </div>
-      <div id="deadline-timeline"><div class="empty-state">Loading…</div></div>
+    </div>
+    <!-- Section 2: Trend Chart + Resource Allocation -->
+    <div class="dash-section-wrap">
+      <div class="dash-row-2">
+        <div class="dash-chart-card">
+          <div class="dash-card-title">&#128200; Trend Project per Bulan</div>
+          <div class="dash-chart-area"><canvas id="dash-trend-chart"></canvas></div>
+        </div>
+        <div class="dash-chart-card" style="overflow-y:auto;max-height:280px">
+          <div class="dash-card-title">&#128197; Resource Allocation (3 Bulan)</div>
+          <div id="dash-alloc-body"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
+        </div>
+      </div>
+    </div>
+    <!-- Section 3: Active Projects -->
+    <div class="dash-section-wrap">
+      <div class="dash-section-title">Project Aktif Berjalan</div>
+      <div class="dash-active-table">
+        <table>
+          <thead><tr><th>Client</th><th>Tgl Assessment</th><th>Tgl Initial Report</th><th>Jenis</th><th>Status</th></tr></thead>
+          <tbody id="dash-active-tbody"><tr><td colspan="5"><div class="empty-state">Loading&#8230;</div></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Section 4: Highlights -->
+    <div class="dash-section-wrap" style="padding-bottom:40px">
+      <div class="dash-section-title">Project Highlights</div>
+      <div class="dash-highlights" id="dash-highlights-body"><div class="empty-state">Loading&#8230;</div></div>
     </div>
   </section>
 
@@ -883,9 +1116,11 @@
     </div>
     <div style="padding: 24px 32px 40px">
       <div class="capacity-controls">
-        <select id="capacity-month-select" class="capacity-month-select" onchange="renderCapacityView()">
-          <option value="">Loading…</option>
-        </select>
+        <div class="capacity-month-nav">
+          <button onclick="shiftAllocationMonth(-1)" title="Previous month">&#8249;</button>
+          <div class="capacity-month-label" id="capacity-month-label">Loading…</div>
+          <button onclick="shiftAllocationMonth(1)" title="Next month">&#8250;</button>
+        </div>
         <div class="capacity-legend">
           <div class="capacity-legend-item"><div class="capacity-legend-dot" style="background:linear-gradient(90deg,#22c55e,#4ade80)"></div>≤ 50%</div>
           <div class="capacity-legend-item"><div class="capacity-legend-dot" style="background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div>51–80%</div>
@@ -897,6 +1132,37 @@
       </div>
     </div>
   </section>
+
+<!-- == Highlight Modal == -->
+<div class="modal-overlay" id="modal-highlight" onclick="closeModal(event)">
+  <div class="modal" style="max-width:580px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="modal-title" id="hl-modal-title">&#128221; Project Highlights</div>
+    <div style="font-size:12px;color:var(--muted);margin:-14px 0 18px" id="hl-modal-sub"></div>
+
+    <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;margin-bottom:8px">POIN-POIN HIGHLIGHT</div>
+    <div id="hl-notes-container" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <button type="button" onclick="hlAddNote()" style="background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.25);border-radius:7px;color:#a5b4fc;font-size:12px;font-weight:600;padding:6px 14px;cursor:pointer;margin-bottom:18px">+ Tambah Poin</button>
+
+    <div style="display:flex;gap:10px;margin-bottom:18px;align-items:center">
+      <button onclick="hlGenerate()" id="hl-gen-btn" style="flex:1;padding:10px;background:linear-gradient(135deg,#7c3aed,#6366f1);border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px"><path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v2a3 3 0 01-3 3h-1v1a4 4 0 01-8 0v-1H7a3 3 0 01-3-3V10a3 3 0 013-3h1V6a4 4 0 014-4z"/></svg>
+        &#10024; Generate AI Highlight
+      </button>
+      <div id="hl-ai-status" style="font-size:11px;color:var(--muted)"></div>
+    </div>
+
+    <div id="hl-result-wrap" style="display:none;margin-bottom:16px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;margin-bottom:8px">HASIL HIGHLIGHT (AI)</div>
+      <textarea id="hl-result-text" style="width:100%;min-height:100px;padding:12px 14px;border-radius:10px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:vertical;line-height:1.65"></textarea>
+    </div>
+
+    <div class="modal-err" id="hl-err"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-highlight').classList.remove('open')">Batal</button>
+      <button class="btn-primary" onclick="hlSave()" id="hl-save-btn" style="justify-content:center">&#128190; Simpan Highlight</button>
+    </div>
+  </div>
+</div>
 
 </main>
 
@@ -1252,7 +1518,8 @@ let currentUser = null;
       }
     })();
 
-    loadDashboard();
+    const savedTab = localStorage.getItem('vulnvault_active_tab') || 'dashboard';
+    navigate(savedTab);
     loadPendingCount();
   } catch {
     window.location.replace('/login.html');
@@ -1263,9 +1530,15 @@ let currentUser = null;
 function navigate(section) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-  document.getElementById('section-' + section).classList.add('active');
-  document.getElementById('nav-' + section).classList.add('active');
+  
+  const secEl = document.getElementById('section-' + section);
+  const navEl = document.getElementById('nav-' + section);
+  if (secEl) secEl.classList.add('active');
+  if (navEl) navEl.classList.add('active');
 
+  localStorage.setItem('vulnvault_active_tab', section);
+
+  if (section === 'dashboard')  loadDashboard();
   if (section === 'users')      loadUsers();
   if (section === 'projects')   loadProjects();
   if (section === 'requests')   loadRequests();
@@ -1487,6 +1760,9 @@ function escA(s) {
 const _monthNames = ['January','February','March','April','May','June',
                      'July','August','September','October','November','December'];
 
+let _allocationMonths = [];
+let _allocationMonthIdx = 0;
+
 function buildMonthOptions(rows) {
   const months = new Set();
   const today = new Date();
@@ -1498,17 +1774,31 @@ function buildMonthOptions(rows) {
         months.add(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}`);
     });
   });
+  // Always include current month + 1 ahead
   months.add(`${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`);
   const next = new Date(today.getFullYear(), today.getMonth()+1, 1);
   months.add(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,'0')}`);
 
-  const sorted = [...months].sort();
-  const sel = document.getElementById('capacity-month-select');
+  _allocationMonths = [...months].sort();
   const curVal = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
-  sel.innerHTML = sorted.map(m => {
-    const [y, mon] = m.split('-');
-    return `<option value="${m}" ${m === curVal ? 'selected' : ''}>${_monthNames[Number(mon)-1]} ${y}</option>`;
-  }).join('');
+  _allocationMonthIdx = Math.max(0, _allocationMonths.indexOf(curVal));
+  _updateMonthLabel();
+}
+
+function _updateMonthLabel() {
+  const m = _allocationMonths[_allocationMonthIdx];
+  if (!m) return;
+  const [y, mon] = m.split('-');
+  const label = document.getElementById('capacity-month-label');
+  if (label) label.textContent = `${_monthNames[Number(mon)-1]} ${y}`;
+}
+
+function shiftAllocationMonth(dir) {
+  const newIdx = _allocationMonthIdx + dir;
+  if (newIdx < 0 || newIdx >= _allocationMonths.length) return;
+  _allocationMonthIdx = newIdx;
+  _updateMonthLabel();
+  renderCapacityView();
 }
 
 /** Count workdays in a month, excluding weekends and Indonesian public holidays */
@@ -1536,47 +1826,90 @@ function _workdaysOverlap(startStr, endStr, year, month) {
   return workingDaysBetween(oS.toISOString().slice(0,10), oE.toISOString().slice(0,10)).days;
 }
 
+/**
+ * Distribute assessment mandays across months from kickoff_date onward.
+ * Returns how many of those mandays fall in (year, month).
+ * Excess mandays carry over to subsequent months.
+ */
+function _assessmentMandaysInMonth(r, year, month) {
+  if (!r.kickoff_date || !(r.mandays_assessment > 0)) return 0;
+
+  const totalMd = r.mandays_assessment;
+  // Start distributing from the month containing kickoff_date
+  const ko = new Date(r.kickoff_date);
+  let curYear = ko.getFullYear();
+  let curMonth = ko.getMonth(); // 0-based
+  let remaining = totalMd;
+
+  while (remaining > 0) {
+    const { workdays: cap } = getWorkdaysInMonth(curYear, curMonth);
+    const allocated = Math.min(remaining, cap);
+    if (curYear === year && curMonth === month) return allocated;
+    remaining -= allocated;
+    // advance to next month
+    curMonth++;
+    if (curMonth > 11) { curMonth = 0; curYear++; }
+    // safety: stop after 24 months
+    if ((curYear - ko.getFullYear()) * 12 + curMonth - ko.getMonth() > 24) break;
+  }
+  return 0;
+}
+
+function _toggleEngRow(idx) {
+  const list = document.getElementById('cap-list-' + idx);
+  const name = document.getElementById('cap-name-' + idx);
+  if (!list || !name) return;
+  const open = list.classList.toggle('open');
+  name.classList.toggle('open', open);
+}
+
 function renderCapacityView() {
-  const monthKey = document.getElementById('capacity-month-select').value;
-  if (!monthKey) return;
-  const [yearStr, monStr] = monthKey.split('-');
+  const m = _allocationMonths[_allocationMonthIdx];
+  if (!m) return;
+  const [yearStr, monStr] = m.split('-');
   const year = Number(yearStr), month = Number(monStr) - 1;
   const { workdays: availableDays, holidays } = getWorkdaysInMonth(year, month);
   const rows = _allocationRows;
   const engMap = new Map();
 
   rows.forEach(r => {
-    // Assessment phase
-    if (r.kickoff_date && r.initial_report_date) {
-      const overlapDays = _workdaysOverlap(r.kickoff_date, r.initial_report_date, year, month);
-      if (overlapDays > 0) {
-        const totalProjDays = workingDaysBetween(r.kickoff_date, r.initial_report_date).days;
-        const totalMandays = (r.mandays_kickoff ?? 1) + (r.mandays_infogath ?? 5) + (r.mandays_assessment ?? 0);
-        const md = totalProjDays > 0 ? Math.round((totalMandays * overlapDays / totalProjDays) * 10) / 10 : totalMandays;
-
-        if (r.assigned_engineer_id && r.engineer_name) {
+    // Assessment phase — only mandays_assessment, with carry-over
+    if (r.kickoff_date && r.mandays_assessment > 0) {
+      const md = _assessmentMandaysInMonth(r, year, month);
+      if (md > 0) {
+        const hasPic = r.assigned_engineer_id && r.engineer_name;
+        const hasAssist = r.assist_engineer_id && r.assist_engineer_name;
+        const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
+        const mdPerPerson = numEng > 0 ? md / numEng : md;
+        
+        if (hasPic) {
           if (!engMap.has(r.assigned_engineer_id)) engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
-          engMap.get(r.assigned_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'PIC', roleClass: 'pic', mandaysInMonth: md });
+          engMap.get(r.assigned_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'PIC', roleClass: 'pic', mandaysInMonth: mdPerPerson });
         }
-        if (r.assist_engineer_id && r.assist_engineer_name) {
+        if (hasAssist) {
           if (!engMap.has(r.assist_engineer_id)) engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
-          engMap.get(r.assist_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Assist', roleClass: 'assist', mandaysInMonth: md });
+          engMap.get(r.assist_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Assist', roleClass: 'assist', mandaysInMonth: mdPerPerson });
         }
       }
     }
-    // Retest phase
+    // Retest phase — unchanged
     if (r.retest_status === 'started' && r.retest_start_date && r.retest_end_date) {
       const overlapDays = _workdaysOverlap(r.retest_start_date, r.retest_end_date, year, month);
       if (overlapDays > 0) {
-        if (r.retest_pic_id) {
+        const hasPic = r.retest_pic_id;
+        const hasAssist = r.retest_assist_id;
+        const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
+        const mdPerPerson = numEng > 0 ? overlapDays / numEng : overlapDays;
+
+        if (hasPic) {
           const nm = r.retest_pic_name || _allEngineers.find(e => e.id === r.retest_pic_id)?.display_name || `Eng #${r.retest_pic_id}`;
           if (!engMap.has(r.retest_pic_id)) engMap.set(r.retest_pic_id, { name: nm, projects: [] });
-          engMap.get(r.retest_pic_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest PIC', roleClass: 'retest', mandaysInMonth: overlapDays });
+          engMap.get(r.retest_pic_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest PIC', roleClass: 'retest', mandaysInMonth: mdPerPerson });
         }
-        if (r.retest_assist_id) {
+        if (hasAssist) {
           const nm = r.retest_assist_name || _allEngineers.find(e => e.id === r.retest_assist_id)?.display_name || `Eng #${r.retest_assist_id}`;
           if (!engMap.has(r.retest_assist_id)) engMap.set(r.retest_assist_id, { name: nm, projects: [] });
-          engMap.get(r.retest_assist_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest Assist', roleClass: 'retest', mandaysInMonth: overlapDays });
+          engMap.get(r.retest_assist_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest Assist', roleClass: 'retest', mandaysInMonth: mdPerPerson });
         }
       }
     }
@@ -1596,22 +1929,26 @@ function renderCapacityView() {
   });
 
   let html = '<div class="capacity-list">';
-  sortedEngs.forEach(([engId, eng]) => {
+  sortedEngs.forEach(([engId, eng], idx) => {
     const used = Math.round(eng.projects.reduce((s, p) => s + p.mandaysInMonth, 0) * 10) / 10;
     const pct = availableDays > 0 ? Math.round((used / availableDays) * 100) : 0;
     const barPct = Math.min(pct, 100);
     const colorClass = pct <= 50 ? 'green' : pct <= 80 ? 'amber' : 'red';
     const statColor = pct <= 50 ? '#4ade80' : pct <= 80 ? '#fbbf24' : '#f87171';
+    const hasProjects = eng.projects.length > 0;
 
     html += `<div class="capacity-row">
       <div class="capacity-row-top">
-        <div class="capacity-card-name">${escA(eng.name)}</div>
+        <div class="capacity-card-name" id="cap-name-${idx}" ${hasProjects ? `onclick="_toggleEngRow(${idx})"` : ''}>
+          ${escA(eng.name)}
+          ${hasProjects ? '<span class="caret">&#9654;</span>' : ''}
+        </div>
         <div class="capacity-bar-track"><div class="capacity-bar-fill ${colorClass}" style="width:${barPct}%"></div></div>
         <div class="capacity-card-stat" style="color:${statColor}">${used} / ${availableDays} <span style="font-size:11px;font-weight:400;color:var(--muted)">mandays</span> <span style="font-size:12px">(${pct}%)</span></div>
       </div>`;
 
-    if (eng.projects.length) {
-      html += `<ul class="capacity-project-list">${eng.projects.map(p =>
+    if (hasProjects) {
+      html += `<ul class="capacity-project-list" id="cap-list-${idx}">${eng.projects.map(p =>
         `<li class="capacity-project-item">
           <div><span class="capacity-project-name">${escA(p.client)}</span><span style="color:var(--muted)"> — ${escA(p.name)}</span><span class="capacity-project-role ${p.roleClass}">${p.role}</span></div>
           <div class="capacity-project-days" style="color:${statColor}">${Math.round(p.mandaysInMonth*10)/10} <span style="font-size:10px;font-weight:400;color:var(--muted)">d</span></div>
@@ -1627,201 +1964,130 @@ function renderCapacityView() {
 
 
 
-// ── Dashboard ─────────────────────────────────────────────────────────────────
+// -- Dashboard (4 Sections) --
 let _dashboardRows = [];
+let _dashTrendChart = null;
 
 async function loadDashboard() {
   try {
-    const rows = await apiFetch('/api/dashboard/summary');
-    _dashboardRows = rows;
-    applyDashboardFilter();
-  } catch(e) {
-    const el = document.getElementById('deadline-timeline');
-    if (el) el.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
-    showToast('Dashboard error: ' + e.message, 'error');
-  }
-}
-
-function applyDashboardFilter() {
-  const from = document.getElementById('dash-date-from')?.value || '';
-  const to   = document.getElementById('dash-date-to')?.value || '';
-  let rows = _dashboardRows;
-  if (from || to) {
-    rows = rows.filter(r => {
-      const d = r.kickoff_date || r.initial_report_date || r.final_report_date;
-      if (!d) return false;
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      return true;
-    });
-  }
-  const clientIds = new Set();
-  let totalProjects = 0, totalFindings = 0;
-  rows.forEach(r => { if (r.project_id) { clientIds.add(r.client_id); totalProjects++; totalFindings += (r.finding_count||0); }});
-  document.getElementById('kpi-clients').textContent  = clientIds.size;
-  document.getElementById('kpi-projects').textContent = totalProjects;
-  document.getElementById('kpi-findings').textContent = totalFindings;
-  if (!_dashboardRows._engLoaded) {
-    apiFetch('/api/users').then(users => {
-      document.getElementById('kpi-engineers').textContent = users.filter(u => u.role === 'engineer').length;
-      _dashboardRows._engLoaded = true;
-    }).catch(() => { document.getElementById('kpi-engineers').textContent = '—'; });
-  }
-  renderDeadlineTimeline(rows.filter(r => r.project_id));
-}
-
-function clearDashboardFilter() {
-  document.getElementById('dash-date-from').value = '';
-  document.getElementById('dash-date-to').value = '';
-  applyDashboardFilter();
-}
-
-function renderDeadlineTimeline(projects) {
-  const el = document.getElementById('deadline-timeline');
-  if (!el) return;
-  if (!projects.length) { el.innerHTML = '<div class="empty-state">No projects yet.</div>'; return; }
-
-  const today = new Date(); today.setHours(0,0,0,0);
-
-  // Split into backlog (no kickoff or kickoff in future) vs active (kickoff today or past)
-  const backlogProjects = projects.filter(p => !p.kickoff_date || new Date(p.kickoff_date) > today);
-  const activeProjects  = projects.filter(p => p.kickoff_date && new Date(p.kickoff_date) <= today);
-
-  const phaseTag = p => {
-    if (p.final_report_status === 'completed') {
-      const completedDate = p.final_completed_at ? ` • ${fmt(p.final_completed_at)}` : '';
-      const byName = p.final_completed_by ? ` by ${esc(p.final_completed_by)}` : '';
-      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(34,197,94,0.18);color:#4ade80;font-weight:700;letter-spacing:0.3px" title="Final Report completed${byName}${completedDate}">Final ✓</span>`;
-    }
-    if (p.initial_report_status === 'completed') {
-      const completedDate = p.initial_completed_at ? ` • ${fmt(p.initial_completed_at)}` : '';
-      const byName = p.initial_completed_by ? ` by ${esc(p.initial_completed_by)}` : '';
-      return `<span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(99,102,241,0.2);color:#a5b4fc;font-weight:700;letter-spacing:0.3px" title="Initial Report completed${byName}${completedDate}">Initial ✓</span>`;
-    }
-    return '';
-  };
-
-  // Helper: deadline row with progress bar
-  const deadlineRow = (label, dateStr, status, completedBy, completedAt, accentColor) => {
-    if (!dateStr) return '';
-    const due = new Date(dateStr);
-    const daysLeft = Math.ceil((due - today) / 86400000);
-    const done = status === 'completed';
-    const overdue = !done && daysLeft < 0;
-    const urgent  = !done && !overdue && daysLeft <= 7;
-    const col = done ? '#22c55e' : overdue ? '#f87171' : urgent ? '#fb923c' : accentColor;
-    const pct = done ? 100 : Math.max(5, Math.min(95, 100 - (daysLeft / 60) * 100));
-    let info;
-    if (done) {
-      const at = completedAt ? fmt(completedAt) : fmt(dateStr);
-      info = `✓ ${at}`;
-    } else if (overdue) {
-      info = `${Math.abs(daysLeft)}d overdue`;
-    } else if (daysLeft === 0) {
-      info = `Due today`;
+    let rows;
+    if (typeof _allEngineers === 'undefined' || _allEngineers.length === 0) {
+      [rows, _allEngineers] = await Promise.all([
+        apiFetch('/api/dashboard/summary'),
+        apiFetch('/api/users/engineers')
+      ]);
     } else {
-      info = `${daysLeft}d left · ${fmt(dateStr)}`;
+      rows = await apiFetch('/api/dashboard/summary');
     }
-    return `
-      <div style="display:flex;align-items:center;gap:8px;margin-top:5px">
-        <span style="font-size:10px;font-weight:700;color:${col};min-width:42px">${label}</span>
-        <div style="flex:1;position:relative;height:6px;background:rgba(255,255,255,0.07);border-radius:4px;overflow:hidden;min-width:80px;max-width:200px">
-          <div style="position:absolute;left:0;top:0;height:100%;width:${pct}%;background:${col};border-radius:4px;transition:width 0.4s"></div>
-        </div>
-        <span style="font-size:11px;font-weight:600;color:${col};white-space:nowrap">${info}</span>
-      </div>`;
-  };
-
-  const projectRow = p => {
-    const irRow = deadlineRow('Initial', p.initial_report_date, p.initial_report_status, p.initial_completed_by, p.initial_completed_at, '#6366f1');
-    const frRow = p.final_report_date
-      ? deadlineRow('Final', p.final_report_date, p.final_report_status, p.final_completed_by, p.final_completed_at, '#a78bfa')
-      : '';
-    const noDeadline = !p.initial_report_date && !p.final_report_date;
-
-    return `
-      <div style="display:grid;grid-template-columns:180px 1fr;align-items:start;gap:16px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
-        <div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-            <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.project_name)}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            ${phaseTag(p)}
-            <span style="font-size:10px;color:var(--muted)">PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name || '—')}</span></span>
-          </div>
-        </div>
-        <div>
-          ${noDeadline ? '<div style="font-size:11px;color:var(--muted);padding-top:6px">No deadline</div>' : ''}
-          ${irRow}${frRow}
-        </div>
-      </div>`;
-  };
-
-  const backlogRow = p => `
-    <div style="display:grid;grid-template-columns:1fr 100px;align-items:center;gap:16px;padding:11px 16px;border-bottom:1px solid rgba(255,255,255,0.04);">
-      <div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">
-          <span style="font-size:13px;font-weight:600;color:var(--text)">${esc(p.project_name)}</span>
-          <span style="font-size:9px;padding:2px 7px;border-radius:10px;background:rgba(251,191,36,0.15);color:#fbbf24;font-weight:700;letter-spacing:0.3px">${(p.project_type||'web').toUpperCase()}</span>
-        </div>
-        <div style="font-size:10px;color:var(--muted)">
-          Client: <span style="color:#c4cfe0;font-weight:500">${esc(p.client_name)}</span>
-          ${p.engineer_name ? ` · PIC: <span style="color:#c4cfe0;font-weight:500">${esc(p.engineer_name)}</span>` : ''}
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;color:#fbbf24;font-weight:600">${p.kickoff_date ? 'Kickoff: ' + fmt(p.kickoff_date) : 'Awaiting kickoff'}</div>
-      </div>
-    </div>`;
-
-  // ── Build HTML ──
-  let html = '';
-
-  // Backlog section (always on top)
-  if (backlogProjects.length) {
-    html += `
-      <div style="border:1px solid rgba(251,191,36,0.2);border-radius:12px;overflow:hidden;background:rgba(251,191,36,0.03);margin-bottom:14px;">
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(251,191,36,0.08);border-bottom:1px solid rgba(251,191,36,0.15);">
-          <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#f59e0b,#d97706);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">📋</div>
-          <span style="font-size:13px;font-weight:700;color:#fbbf24">Backlog</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(251,191,36,0.1);padding:2px 8px;border-radius:8px">${backlogProjects.length} project${backlogProjects.length > 1 ? 's' : ''}</span>
-        </div>
-        <div>${backlogProjects.map(p => backlogRow(p)).join('')}</div>
-      </div>`;
-  }
-
-  // Active projects grouped by client
-  if (activeProjects.length) {
-    const clientMap = {};
-    activeProjects.forEach(p => {
-      if (!clientMap[p.client_name]) clientMap[p.client_name] = [];
-      clientMap[p.client_name].push(p);
-    });
-    Object.keys(clientMap).forEach(c => {
-      clientMap[c].sort((a, b) => {
-        if (!a.final_report_date && !b.final_report_date) return 0;
-        if (!a.final_report_date) return 1;
-        if (!b.final_report_date) return -1;
-        return new Date(a.final_report_date) - new Date(b.final_report_date);
-      });
-    });
-
-    html += Object.entries(clientMap).map(([clientName, projs]) => `
-      <div style="border:1px solid rgba(255,255,255,0.07);border-radius:12px;overflow:hidden;background:rgba(255,255,255,0.015);margin-bottom:14px;">
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 16px;background:rgba(99,102,241,0.08);border-bottom:1px solid rgba(255,255,255,0.06);">
-          <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#8b5cf6);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:white;flex-shrink:0">${esc(clientName).charAt(0).toUpperCase()}</div>
-          <span style="font-size:13px;font-weight:700;color:#e2e8f0">${esc(clientName)}</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--muted);background:rgba(255,255,255,0.06);padding:2px 8px;border-radius:8px">${projs.length} project${projs.length > 1 ? 's' : ''}</span>
-        </div>
-        <div>${projs.map(p => projectRow(p)).join('')}</div>
-      </div>`).join('');
-  }
-
-  if (!html) html = '<div class="empty-state">No projects yet.</div>';
-  el.innerHTML = html;
+    _dashboardRows = rows;
+    const today = new Date(); today.setHours(0,0,0,0);
+    const cy = today.getFullYear(), cm = today.getMonth();
+    const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
+    const subEl = document.getElementById('dash-month-sub');
+    if(subEl) subEl.textContent = 'Data per '+today.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+    const allP = rows.filter(r=>r.project_id);
+    const inMonth=(r,y,m)=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===y&&new Date(r.kickoff_date).getMonth()===m;
+    const isActive=r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=today&&r.final_report_status!=='completed';
+    const isOnTrack=r=>isActive(r)&&(!r.initial_report_date||new Date(r.initial_report_date)>=today);
+    const isOffTrack=r=>isActive(r)&&r.initial_report_date&&new Date(r.initial_report_date)<today&&r.initial_report_status!=='completed';
+    const doneIn=(r,y,m)=>r.project_id&&r.initial_report_status==='completed'&&r.initial_completed_at&&new Date(r.initial_completed_at).getFullYear()===y&&new Date(r.initial_completed_at).getMonth()===m;
+    const prevEnd=new Date(cy,cm,0);
+    const cur={total:allP.filter(r=>inMonth(r,cy,cm)).length,ontrack:allP.filter(isOnTrack).length,offtrack:allP.filter(isOffTrack).length,started:allP.filter(r=>inMonth(r,cy,cm)).length,completed:allP.filter(r=>doneIn(r,cy,cm)).length};
+    const prev={total:allP.filter(r=>inMonth(r,py,pm)).length,ontrack:allP.filter(r=>r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&r.final_report_status!=='completed'&&(!r.initial_report_date||new Date(r.initial_report_date)>=prevEnd)).length,offtrack:allP.filter(r=>r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&r.initial_report_date&&new Date(r.initial_report_date)<prevEnd&&r.initial_report_status!=='completed').length,started:allP.filter(r=>inMonth(r,py,pm)).length,completed:allP.filter(r=>doneIn(r,py,pm)).length};
+    const setV=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
+    const setD=(id,c,p)=>{const e=document.getElementById(id);if(!e)return;const d=c-p;if(d===0){e.className='kpi-delta neutral';e.innerHTML='&mdash; sama dengan bulan lalu';}else if(d>0){e.className='kpi-delta up';e.innerHTML='&#9650; +'+d+' dari bulan lalu';}else{e.className='kpi-delta down';e.innerHTML='&#9660; '+d+' dari bulan lalu';}};
+    setV('kpi-total',cur.total);setD('kpi-total-delta',cur.total,prev.total);
+    setV('kpi-ontrack',cur.ontrack);setD('kpi-ontrack-delta',cur.ontrack,prev.ontrack);
+    setV('kpi-offtrack',cur.offtrack);setD('kpi-offtrack-delta',cur.offtrack,prev.offtrack);
+    setV('kpi-started',cur.started);setD('kpi-started-delta',cur.started,prev.started);
+    setV('kpi-completed',cur.completed);setD('kpi-completed-delta',cur.completed,prev.completed);
+    renderDashTrendChart(rows, today);
+    renderDashAlloc(rows);
+    renderDashActiveProjects(rows, today);
+    renderDashHighlights(rows);
+  } catch(e) { showToast('Dashboard error: '+e.message,'error'); }
 }
 
+function renderDashTrendChart(rows, today) {
+  if (typeof Chart === 'undefined') return;
+  const labels=[], data=[];
+  for(let i=11;i>=0;i--){const d=new Date(today.getFullYear(),today.getMonth()-i,1);labels.push(d.toLocaleDateString('id-ID',{month:'short',year:'2-digit'}));data.push(rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===d.getFullYear()&&new Date(r.kickoff_date).getMonth()===d.getMonth()).length);}
+  const ctx=document.getElementById('dash-trend-chart');if(!ctx)return;
+  if(_dashTrendChart)_dashTrendChart.destroy();
+  _dashTrendChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.12)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#6366f1',fill:true,tension:0.35}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}}}});
+}
 
+function renderDashAlloc(rows) {
+  const body=document.getElementById('dash-alloc-body');if(!body)return;
+  const today=new Date();today.setHours(0,0,0,0);let html='';
+  for(let i=0;i<3;i++){
+    const d=new Date(today.getFullYear(),today.getMonth()+i,1);
+    const year=d.getFullYear(),month=d.getMonth();
+    const {workdays:available}=getWorkdaysInMonth(year,month);
+    const engMap=new Map();
+    if(typeof _allEngineers!=='undefined'){_allEngineers.forEach(e=>engMap.set(e.id,{name:e.display_name,used:0}));}
+    const addEng=(id,name,md)=>{if(!id||!name)return;if(!engMap.has(id))engMap.set(id,{name,used:0});engMap.get(id).used+=md;};
+    rows.forEach(r=>{
+      if(r.kickoff_date&&r.mandays_assessment>0){
+        const md=_assessmentMandaysInMonth(r,year,month);
+        if(md>0){
+          const hasPic=r.assigned_engineer_id, hasAssist=r.assist_engineer_id;
+          const numEng=(hasPic?1:0)+(hasAssist?1:0);
+          const perPerson=numEng>0?md/numEng:md;
+          if(hasPic)addEng(r.assigned_engineer_id,r.engineer_name,perPerson);
+          if(hasAssist)addEng(r.assist_engineer_id,r.assist_engineer_name,perPerson);
+        }
+      }
+      if(r.retest_status==='started'&&r.retest_start_date&&r.retest_end_date){
+        const od=_workdaysOverlap(r.retest_start_date,r.retest_end_date,year,month);
+        if(od>0){
+          const hasPic=r.retest_pic_id, hasAssist=r.retest_assist_id;
+          const numEng=(hasPic?1:0)+(hasAssist?1:0);
+          const perPerson=numEng>0?od/numEng:od;
+          if(hasPic)addEng(r.retest_pic_id,r.retest_pic_name,perPerson);
+          if(hasAssist)addEng(r.retest_assist_id,r.retest_assist_name,perPerson);
+        }
+      }
+    });
+    
+    html+=`<div class="dash-alloc-month"><div class="dash-alloc-month-label">${d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})}</div>`;
+    if(!engMap.size){
+      html+=`<div class="empty-state" style="padding:10px;font-size:11px">Belum ada data engineer di sistem</div>`;
+    } else {
+      [...engMap.values()].sort((a,b)=>b.used-a.used || a.name.localeCompare(b.name)).forEach(e=>{const pct=available>0?Math.min(Math.round((e.used/available)*100),100):0;const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';html+=`<div class="dash-alloc-row"><span class="dash-alloc-name">${escA(e.name)}</span><div class="dash-alloc-bar-track"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col}">${pct}%</span></div>`;});
+    }
+    html+=`<div style="font-size:10px;color:var(--muted);margin-top:4px">${available} hari kerja tersedia</div></div>`;
+  }
+  body.innerHTML=html||'<div class="empty-state" style="padding:20px;font-size:12px">Tidak ada data alokasi</div>';
+}
+
+function renderDashActiveProjects(rows, today) {
+  const tbody=document.getElementById('dash-active-tbody');if(!tbody)return;
+  const active=rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=today&&r.final_report_status!=='completed');
+  if(!active.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">Tidak ada project aktif.</div></td></tr>';return;}
+  const tl={web:'Web',api:'API',mobile:'Mobile',infra:'Infrastructure',phishing:'Phishing'};
+  tbody.innerHTML=active.map(p=>{
+    const isOff=p.initial_report_date&&new Date(p.initial_report_date)<today&&p.initial_report_status!=='completed';
+    const isDone=p.initial_report_status==='completed';
+    const badge=isDone?'<span class="badge-completed">&#10003; Initial Done</span>':isOff?'<span class="badge-off-track">&#9888; Off Track</span>':'<span class="badge-on-track">&#10003; On Track</span>';
+    return `<tr><td style="font-weight:600">${esc(p.client_name)}</td><td style="color:var(--muted);font-size:12px">${fmt(p.kickoff_date)}</td><td style="color:var(--muted);font-size:12px">${fmt(p.initial_report_date)}</td><td><span class="badge badge-${p.project_type||'web'}">${tl[p.project_type]||p.project_type||'Web'}</span></td><td>${badge}</td></tr>`;
+  }).join('');
+}
+
+async function renderDashHighlights(rows) {
+  const body=document.getElementById('dash-highlights-body');if(!body)return;
+  const allP=rows.filter(r=>r.project_id);
+  if(!allP.length){body.innerHTML='<div class="empty-state">Belum ada project.</div>';return;}
+  const results=await Promise.all(allP.map(r=>apiFetch('/api/projects/'+r.project_id+'/highlight').catch(()=>null)));
+  const withText=results.filter(r=>r&&r.highlight_text);
+  if(!withText.length){body.innerHTML='<div class="empty-state" style="padding:24px;text-align:center">Belum ada highlight. Isi highlights di menu <strong>Clients</strong>.</div>';return;}
+  const negKw=['kendala','hambatan','terlambat','delay','masalah','gagal','off track'];
+  const posKw=['selesai lebih awal','tepat waktu','sukses','berhasil','lancar','on track'];
+  body.innerHTML=withText.map(h=>{const t=(h.highlight_text||'').toLowerCase();const isNeg=negKw.some(k=>t.includes(k)),isPos=posKw.some(k=>t.includes(k));const cls=isNeg?'negative':isPos?'positive':'neutral';const icon=isNeg?'&#9888;':isPos?'&#9989;':'&#128269;';const proj=allP.find(r=>r.project_id===h.id)||{};return `<div class="dash-hl-card ${cls}"><div class="dash-hl-project">${icon} ${esc(h.name||proj.project_name||'')}</div><div class="dash-hl-client">${esc(proj.client_name||'')}</div><div class="dash-hl-text">${esc(h.highlight_text)}</div></div>`;}).join('');
+}
+
+function applyDashboardFilter() { loadDashboard(); }
+function clearDashboardFilter() { loadDashboard(); }
 
 function countColor(n) {
   if (!n || n === 0) return 'zero';
@@ -1909,6 +2175,7 @@ function renderClientGroups(containerId, rows, showActions) {
                     : p.retest_status === 'started'
                       ? `<span style="font-size:10px;font-weight:700;color:#a78bfa;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:12px;padding:2px 8px">🔁 Retest Active</span>`
                       : ''}
+                  <button class="icon-btn" onclick="_openHighlight(${p.project_id})" title="Highlights" style="color:#a78bfa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></button>
                   <button class="icon-btn" onclick="_editProject(${p.project_id})" title="Edit" style="color:var(--muted)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
                   <button class="icon-btn" onclick="_deleteProject(${p.project_id})" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
                 </div>
@@ -3294,6 +3561,116 @@ async function markAllRead() {
 setInterval(() => { loadNotifications(); }, 30000);
 // Initial load
 setTimeout(() => { loadNotifications(); }, 1000);
+
+// â”€â”€ Highlight Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+let _hlProjectId = null;
+let _hlProjectData = null;
+
+function _openHighlight(pid) {
+  const p = _allClientsCache.find(x => x.project_id === pid);
+  if (!p) return;
+  _hlProjectData = p;
+  openHighlightModal(pid, p.project_name, p.client_name);
+}
+
+async function openHighlightModal(projectId, projectName, clientName) {
+  _hlProjectId = projectId;
+  const titleEl = document.getElementById('hl-modal-title');
+  const subEl = document.getElementById('hl-modal-sub');
+  if (titleEl) titleEl.textContent = '\uD83D\uDCDD ' + projectName;
+  if (subEl) subEl.textContent = 'Client: ' + clientName;
+  document.getElementById('hl-result-wrap').style.display = 'none';
+  document.getElementById('hl-err').classList.remove('show');
+  document.getElementById('hl-ai-status').textContent = '';
+  const container = document.getElementById('hl-notes-container');
+  container.innerHTML = '';
+  try {
+    const data = await apiFetch('/api/projects/' + projectId + '/highlight');
+    (data.highlight_notes && data.highlight_notes.length ? data.highlight_notes : ['']).forEach(n => hlAddNote(n));
+    if (data.highlight_text) {
+      document.getElementById('hl-result-text').value = data.highlight_text;
+      document.getElementById('hl-result-wrap').style.display = '';
+    }
+  } catch { hlAddNote(''); }
+  document.getElementById('modal-highlight').classList.add('open');
+}
+
+function hlAddNote(val) {
+  const container = document.getElementById('hl-notes-container');
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;align-items:center';
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.value = val || '';
+  inp.placeholder = 'Contoh: Assessment selesai lebih awal 2 hari';
+  inp.style.cssText = 'flex:1;padding:9px 12px;border-radius:8px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none';
+  const del = document.createElement('button');
+  del.type = 'button';
+  del.innerHTML = '\u2715';
+  del.title = 'Hapus';
+  del.style.cssText = 'background:none;border:none;color:#f87171;cursor:pointer;font-size:16px;padding:4px;line-height:1';
+  del.onclick = () => row.remove();
+  row.appendChild(inp);
+  row.appendChild(del);
+  container.appendChild(inp.focus ? (inp.focus(), row) : row);
+}
+
+function _hlGetNotes() {
+  return [...document.querySelectorAll('#hl-notes-container input')].map(i => i.value.trim()).filter(Boolean);
+}
+
+async function hlGenerate() {
+  const apiKey = localStorage.getItem('vulnvault_gemini_key');
+  const model = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.0-flash';
+  if (!apiKey) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = 'Simpan Gemini API Key terlebih dahulu di menu AI Estimator.';
+    errEl.classList.add('show'); return;
+  }
+  const notes = _hlGetNotes();
+  if (!notes.length) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = 'Tambahkan minimal 1 poin highlight.';
+    errEl.classList.add('show'); return;
+  }
+  document.getElementById('hl-err').classList.remove('show');
+  const btn = document.getElementById('hl-gen-btn');
+  const statusEl = document.getElementById('hl-ai-status');
+  btn.disabled = true;
+  statusEl.textContent = '\u23F3 Generating...';
+  try {
+    const p = _hlProjectData || {};
+    const res = await apiFetch('/api/projects/' + _hlProjectId + '/highlight/generate', 'POST', {
+      api_key: apiKey, model, notes,
+      project_name: p.project_name || '', client_name: p.client_name || '',
+      project_type: p.project_type || '', kickoff_date: p.kickoff_date || '',
+      initial_report_date: p.initial_report_date || '', final_report_date: p.final_report_date || ''
+    });
+    document.getElementById('hl-result-text').value = res.highlight_text;
+    document.getElementById('hl-result-wrap').style.display = '';
+    statusEl.textContent = '\u2705 Done';
+  } catch(e) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = e.message; errEl.classList.add('show');
+    statusEl.textContent = '';
+  } finally { btn.disabled = false; }
+}
+
+async function hlSave() {
+  const notes = _hlGetNotes();
+  const text = document.getElementById('hl-result-text').value.trim();
+  const btn = document.getElementById('hl-save-btn');
+  btn.disabled = true;
+  try {
+    await apiFetch('/api/projects/' + _hlProjectId + '/highlight', 'PUT', { highlight_notes: notes, highlight_text: text });
+    document.getElementById('modal-highlight').classList.remove('open');
+    showToast('Highlight disimpan!', 'success');
+    loadDashboard();
+  } catch(e) {
+    const errEl = document.getElementById('hl-err');
+    errEl.textContent = e.message; errEl.classList.add('show');
+  } finally { btn.disabled = false; }
+}
 </script>
 </body>
 </html>

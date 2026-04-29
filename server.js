@@ -839,6 +839,70 @@ app.get('/api/projects/:projectId/findings', (req, res) => {
   });
 });
 
+// ── Project Highlights ─────────────────────────────────────────────────────────
+app.get('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), (req, res) => {
+  const id = Number(req.params.id);
+  db.getProjectHighlight(id, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'Project not found' });
+    res.json({ id: row.id, name: row.name, highlight_notes: row.highlight_notes ? JSON.parse(row.highlight_notes) : [], highlight_text: row.highlight_text || '' });
+  });
+});
+
+app.put('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), (req, res) => {
+  const id = Number(req.params.id);
+  const { highlight_notes, highlight_text } = req.body;
+  db.updateProjectHighlight(id, {
+    highlight_notes: highlight_notes ? JSON.stringify(highlight_notes) : null,
+    highlight_text: highlight_text || null
+  }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'update_highlight', details:`Updated highlight for project ID ${id}` });
+    res.json({ ok: true });
+  });
+});
+
+app.post('/api/projects/:id/highlight/generate', auth.requireRole('pm','admin','manager'), async (req, res) => {
+  const id = Number(req.params.id);
+  const { api_key, model, notes, project_name, client_name, project_type, kickoff_date, initial_report_date, final_report_date } = req.body;
+  if (!api_key) return res.status(400).json({ error: 'API key is required' });
+  if (!notes || !notes.length) return res.status(400).json({ error: 'At least one highlight note is required' });
+
+  const notesList = Array.isArray(notes) ? notes.filter(n => n.trim()) : [];
+  if (!notesList.length) return res.status(400).json({ error: 'Notes cannot be empty' });
+
+  const aiModel = model || 'gemini-2.0-flash';
+  const prompt = `Kamu adalah asisten project manager untuk perusahaan cybersecurity. Tugas kamu adalah membuat highlight ringkas (2-4 kalimat) untuk laporan progress project.
+
+Data Project:
+- Nama Klien: ${client_name || 'N/A'}
+- Nama Project: ${project_name || 'N/A'}
+- Jenis: ${project_type || 'N/A'}
+- Kickoff: ${kickoff_date || 'N/A'}
+- Target Initial Report: ${initial_report_date || 'N/A'}
+- Final Report: ${final_report_date || 'N/A'}
+
+Poin-poin highlight dari PM:
+${notesList.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+
+Buatlah satu paragraf highlight yang profesional dalam Bahasa Indonesia. Jika ada poin kendala atau masalah, tolong sebutkan secara jelas. Jika project berjalan lancar atau selesai lebih awal, highlight hal positif tersebut. Gunakan bahasa formal dan ringkas.`;
+
+  try {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(api_key);
+    const aiModelObj = genAI.getGenerativeModel({ model: aiModel });
+    const result = await aiModelObj.generateContent(prompt);
+    const text = result.response.text();
+    res.json({ highlight_text: text.trim() });
+  } catch (e) {
+    const msg = e?.message || 'AI generation failed';
+    // log but don't expose internal error details
+    fs.appendFileSync(path.join(__dirname, 'ai_error.log'), `[${new Date().toISOString()}] highlight: ${msg}\n`);
+    res.status(500).json({ error: msg.includes('API key') ? 'Invalid API key' : msg });
+  }
+});
+
 // ── AI Mandays Estimator ───────────────────────────────────────────────────────
 app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), async (req, res) => {
   const {

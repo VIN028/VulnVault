@@ -99,6 +99,8 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN retest_assist_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN project_method TEXT DEFAULT 'blackbox'`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN mandays_assessment INTEGER DEFAULT 0`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN highlight_notes TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN highlight_text TEXT`, () => {});
   });
 
   db.run(`
@@ -814,6 +816,22 @@ function updateProjectReportStatus(id, statuses, callback) {
   getDb().run(q, params, function (err) { callback(err, { changes: this?.changes }); });
 }
 
+// ─── Project Highlights ────────────────────────────────────────────────────────
+function getProjectHighlight(projectId, callback) {
+  getDb().get(
+    'SELECT id, name, highlight_notes, highlight_text FROM projects WHERE id = ?',
+    [projectId], callback
+  );
+}
+
+function updateProjectHighlight(projectId, { highlight_notes, highlight_text }, callback) {
+  getDb().run(
+    'UPDATE projects SET highlight_notes = ?, highlight_text = ? WHERE id = ?',
+    [highlight_notes || null, highlight_text || null, projectId],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
 function startRetest(id, { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date }, callback) {
   getDb().run(
     `UPDATE projects SET
@@ -952,6 +970,8 @@ module.exports = {
   removeVulnerabilityFromProject,
   getProjectFullVulnerabilities,
   getProjectExportData,
+  getProjectHighlight,
+  updateProjectHighlight,
   // Users (multi-role auth)
   getUserByUsername,
   getAllUsers,
