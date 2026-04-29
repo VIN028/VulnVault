@@ -1944,7 +1944,7 @@ function renderDashAlloc(rows) {
     if(!engMap.size){
       html+=`<div class="empty-state" style="padding:10px;font-size:11px">Belum ada data engineer di sistem</div>`;
     } else {
-      [...engMap.values()].sort((a,b)=>b.used-a.used || a.name.localeCompare(b.name)).forEach(e=>{const pct=available>0?Math.min(Math.round((e.used/available)*100),100):0;const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';html+=`<div class="dash-alloc-row"><span class="dash-alloc-name">${escA(e.name)}</span><div class="dash-alloc-bar-track"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col}">${pct}%</span></div>`;});
+      [...engMap.values()].sort((a,b)=>b.used-a.used || a.name.localeCompare(b.name)).forEach(e=>{const pct=available>0?Math.min(Math.round((e.used/available)*100),100):0;const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';html+=`<div class="dash-alloc-row"><span class="dash-alloc-name">${escA(e.name)}</span><div class="dash-alloc-bar-track"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col};min-width:65px">${Math.round(e.used*10)/10}d <span style="font-size:10px;color:var(--muted);font-weight:600">(${pct}%)</span></span></div>`;});
     }
     html+=`<div style="font-size:10px;color:var(--muted);margin-top:4px">${available} hari kerja tersedia</div></div>`;
   }
