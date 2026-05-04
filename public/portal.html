@@ -2305,6 +2305,7 @@ function renderDashAlloc(rows, refDate = new Date()) {
 
 function renderDashActiveProjects(rows, refDate) {
   const tbody=document.getElementById('dash-active-tbody');if(!tbody)return;
+  const today = new Date(); today.setHours(0,0,0,0);
   const active=rows.filter(r=>{
      if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
      return r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
