@@ -277,7 +277,7 @@ function updateAccessRequest({ id, status, reviewedBy }, callback) {
 function getDashboardSummary(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name,
-           p.id AS project_id, p.name AS project_name,
+           p.id AS project_id, p.name AS project_name, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
@@ -657,19 +657,15 @@ function createProject(clientId, name, opts, callback) {
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
   const { project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = opts || {};
-  // Auto-assign to first board status
-  db.get('SELECT id FROM board_statuses ORDER BY sort_order ASC LIMIT 1', [], (err0, firstStatus) => {
-    const boardStatusId = firstStatus ? firstStatus.id : null;
-    db.run(
-      `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, board_status_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, boardStatusId],
-      function (err) {
-        if (err) return callback(err);
-        callback(null, { id: this.lastID });
-      }
-    );
-  });
+  db.run(
+    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, board_status_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0],
+    function (err) {
+      if (err) return callback(err);
+      callback(null, { id: this.lastID });
+    }
+  );
 }
 
 function deleteProject(projectId, callback) {
@@ -1005,6 +1001,14 @@ function updateProjectBoardStatus(projectId, statusId, callback) {
   );
 }
 
+function updateProjectBoardStatusAndCompletion(projectId, statusId, finalReportStatus, finalCompletedAt, callback) {
+  getDb().run(
+    'UPDATE projects SET board_status_id = ?, final_report_status = ?, final_completed_at = ? WHERE id = ?',
+    [statusId, finalReportStatus, finalCompletedAt, projectId],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
 function getProjectsForBoard(callback) {
   getDb().all(`
     SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
@@ -1102,6 +1106,7 @@ module.exports = {
   deleteBoardStatus,
   reorderBoardStatuses,
   updateProjectBoardStatus,
+  updateProjectBoardStatusAndCompletion,
   getProjectsForBoard,
 };
 

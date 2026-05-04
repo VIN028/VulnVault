@@ -79,25 +79,47 @@ async function fetchHolidaysFromGoogle(year) {
   });
 }
 
+async function getHolidaysSet(year) {
+  const cached = _holidayCache.get(year);
+  if (cached && Date.now() - cached.fetchedAt < HOLIDAY_CACHE_TTL) {
+    return { source: cached.source, dates: cached.dates };
+  }
+  const googleDates = await fetchHolidaysFromGoogle(year);
+  if (googleDates) {
+    _holidayCache.set(year, { fetchedAt: Date.now(), dates: googleDates, source: 'google' });
+    return { source: 'google', dates: googleDates };
+  }
+  const fallback = new Set([...ID_HOLIDAYS_FALLBACK].filter(d => d.startsWith(`${year}-`)));
+  _holidayCache.set(year, { fetchedAt: Date.now(), dates: fallback, source: 'fallback' });
+  return { source: 'fallback', dates: fallback };
+}
+
+async function calculateFinalReportDate(initialReportDate) {
+  if (!initialReportDate) return null;
+  let d = new Date(initialReportDate);
+  if (isNaN(d)) return null;
+  
+  let daysToAdd = 63; // 60 remediation + 2 retest + 1 final report
+  while (daysToAdd > 0) {
+    d.setDate(d.getDate() + 1);
+    const day = d.getDay();
+    if (day === 0 || day === 6) continue; // Skip weekends
+    
+    const { dates: holidays } = await getHolidaysSet(d.getFullYear());
+    const dateStr = d.toLocaleDateString('en-CA'); // YYYY-MM-DD local time
+    if (holidays.has(dateStr)) continue;
+    
+    daysToAdd--;
+  }
+  return d.toLocaleDateString('en-CA');
+}
+
 app.get('/api/holidays', async (req, res) => {
   const year = parseInt(req.query.year) || new Date().getFullYear();
   if (year < 2020 || year > 2035) return res.status(400).json({ error: 'Invalid year' });
 
-  const cached = _holidayCache.get(year);
-  if (cached && Date.now() - cached.fetchedAt < HOLIDAY_CACHE_TTL) {
-    return res.json({ year, source: cached.source, dates: [...cached.dates] });
-  }
-
-  const googleDates = await fetchHolidaysFromGoogle(year);
-  if (googleDates) {
-    _holidayCache.set(year, { fetchedAt: Date.now(), dates: googleDates, source: 'google' });
-    return res.json({ year, source: 'google', dates: [...googleDates] });
-  }
-
-  // Fallback: filter hardcoded set by year
-  const fallback = new Set([...ID_HOLIDAYS_FALLBACK].filter(d => d.startsWith(`${year}-`)));
-  _holidayCache.set(year, { fetchedAt: Date.now(), dates: fallback, source: 'fallback' });
-  return res.json({ year, source: 'fallback', dates: [...fallback] });
+  const { source, dates } = await getHolidaysSet(year);
+  return res.json({ year, source, dates: [...dates] });
 });
 
 // Everything under /api below requires a valid session cookie (except routes above)
@@ -558,16 +580,21 @@ app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res
   });
 });
 
-app.post('/api/clients/:clientId/projects', (req, res) => {
+app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  const { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
   }
   if (!trimName) return res.status(400).json({ error: 'Project name is required' });
+  
+  if (initial_report_date && !final_report_date) {
+    final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
+  }
+  
   db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0 }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
@@ -685,12 +712,17 @@ app.put('/api/clients/:id', (req, res) => {
   });
 });
 
-app.put('/api/projects/:id', (req, res) => {
+app.put('/api/projects/:id', async (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  const { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
+  
+  if (initial_report_date && !final_report_date) {
+    final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
+  }
+  
   db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
@@ -953,10 +985,17 @@ app.delete('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res)
 app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
   const { board_status_id } = req.body;
-  db.updateProjectBoardStatus(id, board_status_id, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+  
+  // board_status_id === -1 is the hardcoded "Closed" status
+  const isClosed = (board_status_id === -1);
+  const final_report_status = isClosed ? 'completed' : 'pending';
+  // Gunakan tanggal lokal format YYYY-MM-DD agar seragam dengan fungsi lain
+  const final_completed_at = isClosed ? new Date().toLocaleDateString('en-CA') : null;
+
+  db.updateProjectBoardStatusAndCompletion(id, board_status_id, final_report_status, final_completed_at, (err2, result) => {
+    if (err2) return res.status(500).json({ error: err2.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-    res.json({ ok: true });
+    res.json({ ok: true, isClosed, final_completed_at });
   });
 });
 

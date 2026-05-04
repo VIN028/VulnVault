@@ -588,7 +588,7 @@
 
     /* Detail Panel */
     .board-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .board-detail-item { }
+
     .board-detail-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
     .board-detail-value { font-size: 13px; font-weight: 500; color: var(--text); }
   </style>
@@ -678,12 +678,88 @@
     <div class="topbar">
       <div>
         <div class="page-title">Dashboard</div>
-        <div class="page-sub" id="dash-month-sub">Overview bulan berjalan</div>
       </div>
-      <button class="btn-refresh" id="refresh-dashboard" onclick="doRefresh('dashboard')" title="Refresh">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
-      </button>
+      
+      <div style="display:flex; align-items:center; gap:12px;">
+        <!-- The Main Dark Filter Bar -->
+        <div style="display:flex; align-items:center; background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:4px 12px; gap:16px;">
+           
+           <!-- Filter Type -->
+           <div style="display:flex; align-items:center; gap:8px;">
+             <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">TYPE</span>
+             <select id="dash-filter-type" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; cursor:pointer; height:30px;" onchange="updateDashFilterUI()">
+               <option value="month">Month</option>
+               <option value="quarter">Quarter</option>
+               <option value="year">Year</option>
+               <option value="custom">Custom</option>
+             </select>
+           </div>
+           
+           <div style="width:1px; height:16px; background:#334155;"></div>
+
+           <!-- Bulan -->
+           <div id="dash-filter-month-ui" style="display:flex; align-items:center; gap:8px;">
+             <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+             <select id="dash-month-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px;">
+               <option value="0">Jan</option>
+               <option value="1">Feb</option>
+               <option value="2">Mar</option>
+               <option value="3">Apr</option>
+               <option value="4">Mei</option>
+               <option value="5">Jun</option>
+               <option value="6">Jul</option>
+               <option value="7">Agu</option>
+               <option value="8">Sep</option>
+               <option value="9">Okt</option>
+               <option value="10">Nov</option>
+               <option value="11">Des</option>
+             </select>
+             <select id="dash-year-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+           </div>
+           
+           <!-- Kuartal -->
+           <div id="dash-filter-quarter-ui" style="display:none; align-items:center; gap:8px;">
+             <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+             <select id="dash-quarter-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px;">
+               <option value="1">Q1</option>
+               <option value="2">Q2</option>
+               <option value="3">Q3</option>
+               <option value="4">Q4</option>
+             </select>
+             <select id="dash-quarter-year-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+           </div>
+           
+           <!-- Tahun -->
+           <div id="dash-filter-year-ui" style="display:none; align-items:center; gap:8px;">
+             <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+             <select id="dash-year-only-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+           </div>
+           
+           <!-- Custom -->
+           <div id="dash-filter-custom-ui" style="display:none; align-items:center; gap:8px;">
+             <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">RANGE</span>
+             <input type="date" id="dash-custom-start" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; color-scheme:dark;">
+             <span style="color:#64748b; font-size:12px;">to</span>
+             <input type="date" id="dash-custom-end" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; color-scheme:dark;">
+           </div>
+           
+           <div style="width:1px; height:16px; background:#334155;"></div>
+           
+           <a href="#" onclick="applyDashFilter(); return false;" style="font-size:12px; color:#94a3b8; text-decoration:underline; cursor:pointer; font-weight:500;">Apply Filters</a>
+        </div>
+
+        <!-- The 'Showing' Badge -->
+        <div id="dash-showing-badge" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:0 12px; font-size:13px; font-weight:600; color:#818cf8; display:flex; align-items:center; height:32px; white-space:nowrap;">
+           Showing: All
+        </div>
+
+        <!-- Refresh button -->
+        <button class="btn-refresh" id="refresh-dashboard" onclick="doRefresh('dashboard')" title="Refresh" style="background:#1e293b; border:1px solid #334155; border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; color:#94a3b8; cursor:pointer; margin:0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+        </button>
+      </div>
     </div>
+
     <!-- Section 1: KPI Cards -->
     <div class="dash-section-wrap" style="padding-top:24px">
       <div class="kpi-grid-new" id="kpi-grid-new">
@@ -1371,7 +1447,6 @@
           </div>
           <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
         </div>
-        <!-- Final report date is set automatically when PM starts retest -->
         <div class="form-group" style="grid-column:1/-1">
           <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
           <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
@@ -1983,6 +2058,88 @@ function renderCapacityView() {
 // -- Dashboard (4 Sections) --
 let _dashboardRows = [];
 let _dashTrendChart = null;
+let _dashFilter = null; // {start, end, prevStart, prevEnd, label, deltaLabel, refDate}
+
+function initDashFilterUI() {
+  const ySel = document.getElementById('dash-year-sel');
+  const qySel = document.getElementById('dash-quarter-year-sel');
+  const yoSel = document.getElementById('dash-year-only-sel');
+  const cy = new Date().getFullYear();
+  let opts = '';
+  for(let i=cy-5; i<=cy+5; i++) opts += `<option value="${i}">${i}</option>`;
+  if(ySel) ySel.innerHTML = opts;
+  if(qySel) qySel.innerHTML = opts;
+  if(yoSel) yoSel.innerHTML = opts;
+  
+  if(ySel) ySel.value = cy;
+  if(qySel) qySel.value = cy;
+  if(yoSel) yoSel.value = cy;
+  
+  const mSel = document.getElementById('dash-month-sel');
+  if(mSel) mSel.value = new Date().getMonth();
+}
+
+function updateDashFilterUI() {
+  const type = document.getElementById('dash-filter-type').value;
+  document.getElementById('dash-filter-month-ui').style.display = type === 'month' ? 'flex' : 'none';
+  document.getElementById('dash-filter-quarter-ui').style.display = type === 'quarter' ? 'flex' : 'none';
+  document.getElementById('dash-filter-year-ui').style.display = type === 'year' ? 'flex' : 'none';
+  document.getElementById('dash-filter-custom-ui').style.display = type === 'custom' ? 'flex' : 'none';
+}
+
+function applyDashFilter() {
+  const type = document.getElementById('dash-filter-type').value;
+  let start, end, prevStart, prevEnd, label, deltaLabel;
+  const today = new Date(); today.setHours(0,0,0,0);
+  
+  if (type === 'month') {
+    const y = parseInt(document.getElementById('dash-year-sel').value);
+    const m = parseInt(document.getElementById('dash-month-sel').value);
+    start = new Date(y, m, 1);
+    end = new Date(y, m+1, 0);
+    prevStart = new Date(y, m-1, 1);
+    prevEnd = new Date(y, m, 0);
+    label = start.toLocaleDateString('en-GB', {month:'long', year:'numeric'});
+    deltaLabel = 'bulan lalu';
+  } else if (type === 'quarter') {
+    const y = parseInt(document.getElementById('dash-quarter-year-sel').value);
+    const q = parseInt(document.getElementById('dash-quarter-sel').value);
+    start = new Date(y, (q-1)*3, 1);
+    end = new Date(y, q*3, 0);
+    prevStart = new Date(y, (q-2)*3, 1);
+    prevEnd = new Date(y, (q-1)*3, 0);
+    label = `Q${q} ${y}`;
+    deltaLabel = 'kuartal lalu';
+  } else if (type === 'year') {
+    const y = parseInt(document.getElementById('dash-year-only-sel').value);
+    start = new Date(y, 0, 1);
+    end = new Date(y, 11, 31);
+    prevStart = new Date(y-1, 0, 1);
+    prevEnd = new Date(y-1, 11, 31);
+    label = `${y}`;
+    deltaLabel = 'tahun lalu';
+  } else {
+    const s = document.getElementById('dash-custom-start').value;
+    const e = document.getElementById('dash-custom-end').value;
+    if (!s || !e) { showToast('Pilih tanggal start dan end', 'error'); return; }
+    start = new Date(s);
+    end = new Date(e);
+    if (start > end) { showToast('Start melebihi End', 'error'); return; }
+    const diff = end.getTime() - start.getTime();
+    prevEnd = new Date(start.getTime() - 86400000);
+    prevStart = new Date(prevEnd.getTime() - diff);
+    label = `${start.toLocaleDateString('en-GB', {day:'2-digit', month:'short'})} - ${end.toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'})}`;
+    deltaLabel = 'periode sebelumnya';
+  }
+  
+  _dashFilter = {
+    start, end, prevStart, prevEnd, label, deltaLabel,
+    refDate: end >= today ? today : end,
+    prevRefDate: prevEnd >= today ? today : prevEnd
+  };
+  
+  loadDashboard(false);
+}
 
 async function loadDashboard() {
   try {
@@ -1996,31 +2153,83 @@ async function loadDashboard() {
       rows = await apiFetch('/api/dashboard/summary');
     }
     _dashboardRows = rows;
+    if (!_dashFilter) {
+       initDashFilterUI();
+       applyDashFilter();
+       return; // applyDashFilter will call loadDashboard(false)
+    }
+    
+    _dashboardRows = rows;
+    const f = _dashFilter;
     const today = new Date(); today.setHours(0,0,0,0);
-    const cy = today.getFullYear(), cm = today.getMonth();
-    const pm = cm===0?11:cm-1, py = cm===0?cy-1:cy;
-    const subEl = document.getElementById('dash-month-sub');
-    if(subEl) subEl.textContent = 'Data per '+today.toLocaleDateString('id-ID',{month:'long',year:'numeric'});
+    const subEl = document.getElementById('dash-showing-badge');
+    if(subEl) subEl.textContent = `Showing: ${f.label}`;
+    
     const allP = rows.filter(r=>r.project_id);
-    const inMonth=(r,y,m)=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===y&&new Date(r.kickoff_date).getMonth()===m;
-    const isActive=r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=today&&r.final_report_status!=='completed';
-    const isOnTrack=r=>isActive(r)&&(!r.initial_report_date||new Date(r.initial_report_date)>=today);
-    const isOffTrack=r=>isActive(r)&&r.initial_report_date&&new Date(r.initial_report_date)<today&&r.initial_report_status!=='completed';
-    const doneIn=(r,y,m)=>r.project_id&&r.initial_report_status==='completed'&&r.initial_completed_at&&new Date(r.initial_completed_at).getFullYear()===y&&new Date(r.initial_completed_at).getMonth()===m;
-    const prevEnd=new Date(cy,cm,0);
-    const prevIsActive=r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&(r.final_report_status!=='completed'||(r.final_completed_at&&new Date(r.final_completed_at)>prevEnd));
-    const cur={total:allP.filter(isActive).length,ontrack:allP.filter(isOnTrack).length,offtrack:allP.filter(isOffTrack).length,started:allP.filter(r=>inMonth(r,cy,cm)).length,completed:allP.filter(r=>doneIn(r,cy,cm)).length};
-    const prev={total:allP.filter(prevIsActive).length,ontrack:allP.filter(r=>prevIsActive(r)&&(!r.initial_report_date||new Date(r.initial_report_date)>=prevEnd)).length,offtrack:allP.filter(r=>prevIsActive(r)&&r.initial_report_date&&new Date(r.initial_report_date)<prevEnd&&(r.initial_report_status!=='completed'||(r.initial_completed_at&&new Date(r.initial_completed_at)>prevEnd))).length,started:allP.filter(r=>inMonth(r,py,pm)).length,completed:allP.filter(r=>doneIn(r,py,pm)).length};
+    const isStartedIn = (r, start, end) => r.project_id && r.kickoff_date && new Date(r.kickoff_date) >= start && new Date(r.kickoff_date) <= end;
+    const isDoneIn = (r, start, end) => r.project_id && r.final_report_status === 'completed' && r.final_completed_at && new Date(r.final_completed_at) >= start && new Date(r.final_completed_at) <= end;
+    
+    const isTotalProject = (r, start, end, refDate) => {
+       if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
+       const isActiveAtRef = r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
+       return isActiveAtRef || isDoneIn(r, start, end);
+    };
+    
+    const isOnTrack = (r, start, end, refDate) => {
+       if (!isTotalProject(r, start, end, refDate)) return false;
+       if (!r.final_report_date) return true;
+       const isCompletedAtRef = r.final_report_status === 'completed' && r.final_completed_at && new Date(r.final_completed_at) <= refDate;
+       if (isCompletedAtRef) {
+          return new Date(r.final_completed_at) <= new Date(r.final_report_date);
+       } else {
+          return new Date(r.final_report_date) >= refDate;
+       }
+    };
+    
+    const isOffTrack = (r, start, end, refDate) => {
+       if (!isTotalProject(r, start, end, refDate)) return false;
+       if (!r.final_report_date) return false;
+       const isCompletedAtRef = r.final_report_status === 'completed' && r.final_completed_at && new Date(r.final_completed_at) <= refDate;
+       if (isCompletedAtRef) {
+          return new Date(r.final_completed_at) > new Date(r.final_report_date);
+       } else {
+          return new Date(r.final_report_date) < refDate;
+       }
+    };
+
+    const cur = {
+      total: allP.filter(r => isTotalProject(r, f.start, f.end, f.refDate)).length,
+      ontrack: allP.filter(r => isOnTrack(r, f.start, f.end, f.refDate)).length,
+      offtrack: allP.filter(r => isOffTrack(r, f.start, f.end, f.refDate)).length,
+      started: allP.filter(r => isStartedIn(r, f.start, f.end)).length,
+      completed: allP.filter(r => isDoneIn(r, f.start, f.end)).length
+    };
+    
+    const prev = {
+      total: allP.filter(r => isTotalProject(r, f.prevStart, f.prevEnd, f.prevRefDate)).length,
+      ontrack: allP.filter(r => isOnTrack(r, f.prevStart, f.prevEnd, f.prevRefDate)).length,
+      offtrack: allP.filter(r => isOffTrack(r, f.prevStart, f.prevEnd, f.prevRefDate)).length,
+      started: allP.filter(r => isStartedIn(r, f.prevStart, f.prevEnd)).length,
+      completed: allP.filter(r => isDoneIn(r, f.prevStart, f.prevEnd)).length
+    };
+
     const setV=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-    const setD=(id,c,p)=>{const e=document.getElementById(id);if(!e)return;const d=c-p;if(d===0){e.className='kpi-delta neutral';e.innerHTML='sama dengan bulan lalu';}else if(d>0){e.className='kpi-delta up';e.innerHTML='+'+d+' dari bulan lalu';}else{e.className='kpi-delta down';e.innerHTML=d+' dari bulan lalu';}};
+    const setD=(id,c,p)=>{
+      const e=document.getElementById(id);if(!e)return;
+      const d=c-p;
+      if(d===0){e.className='kpi-delta neutral';e.innerHTML=`sama dengan ${f.deltaLabel}`;}
+      else if(d>0){e.className='kpi-delta up';e.innerHTML=`+${d} dari ${f.deltaLabel}`;}
+      else{e.className='kpi-delta down';e.innerHTML=`${d} dari ${f.deltaLabel}`;}
+    };
+    
     setV('kpi-total',cur.total);setD('kpi-total-delta',cur.total,prev.total);
     setV('kpi-ontrack',cur.ontrack);setD('kpi-ontrack-delta',cur.ontrack,prev.ontrack);
     setV('kpi-offtrack',cur.offtrack);setD('kpi-offtrack-delta',cur.offtrack,prev.offtrack);
     setV('kpi-started',cur.started);setD('kpi-started-delta',cur.started,prev.started);
     setV('kpi-completed',cur.completed);setD('kpi-completed-delta',cur.completed,prev.completed);
-    renderDashTrendChart(rows, today);
-    renderDashAlloc(rows);
-    renderDashActiveProjects(rows, today);
+    renderDashTrendChart(rows, f.refDate);
+    renderDashAlloc(rows, f.refDate);
+    renderDashActiveProjects(rows, f.refDate);
     renderDashHighlights(rows);
   } catch(e) { showToast('Dashboard error: '+e.message,'error'); }
 }
@@ -2034,9 +2243,9 @@ function renderDashTrendChart(rows, today) {
   _dashTrendChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.12)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#6366f1',fill:true,tension:0.35}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}}}});
 }
 
-function renderDashAlloc(rows) {
+function renderDashAlloc(rows, refDate = new Date()) {
   const body=document.getElementById('dash-alloc-body');if(!body)return;
-  const today=new Date();today.setHours(0,0,0,0);
+  const today=new Date(refDate);today.setHours(0,0,0,0);
   const monthsData=[];
   for(let i=0;i<3;i++){
     const d=new Date(today.getFullYear(),today.getMonth()+i,1);
@@ -2094,9 +2303,12 @@ function renderDashAlloc(rows) {
   body.innerHTML=html;
 }
 
-function renderDashActiveProjects(rows, today) {
+function renderDashActiveProjects(rows, refDate) {
   const tbody=document.getElementById('dash-active-tbody');if(!tbody)return;
-  const active=rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=today&&r.final_report_status!=='completed');
+  const active=rows.filter(r=>{
+     if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
+     return r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
+  });
   if(!active.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">Tidak ada project aktif.</div></td></tr>';return;}
   const tl={web:'Web',api:'API',mobile:'Mobile',infra:'Infrastructure',phishing:'Phishing'};
   tbody.innerHTML=active.map(p=>{
@@ -3740,14 +3952,21 @@ function renderBoard() {
   const uncategorized = _boardProjects.filter(p => !p.board_status_id || !_boardStatuses.find(s => s.id === p.board_status_id));
   let html = '<div class="board-container">';
   // Uncategorized column (if any)
-  if (uncategorized.length) {
-    html += _renderColumn({ id: null, name: 'Uncategorized', color: '#64748b' }, uncategorized);
+  if (uncategorized.length || _boardStatuses.length === 0 || true) {
+    // Selalu tampilkan kolom default 'Projects' ini sebagai kolom pertama jika ada project yang null, ATAU selalu tampilkan.
+    // Sesuai permintaan: "Satu default status yaitu 'Projects'... Status ini adalah status sebelum status nomor 1."
+    html += _renderColumn({ id: null, name: 'Projects', color: '#64748b' }, uncategorized);
   }
   // Status columns
   _boardStatuses.forEach(status => {
     const cards = _boardProjects.filter(p => p.board_status_id === status.id);
     html += _renderColumn(status, cards);
   });
+  
+  // Always append Closed column at the rightmost end
+  const closedCards = _boardProjects.filter(p => p.board_status_id === -1);
+  html += _renderColumn({ id: -1, name: 'Closed', color: '#10b981' }, closedCards);
+
   html += '</div>';
   body.innerHTML = html;
 }
@@ -3822,21 +4041,33 @@ async function openBoardSetup() {
 
 function _renderSetupList() {
   const list = document.getElementById('setup-status-list');
+  let inner = '';
   if (!_boardStatuses.length) {
-    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Belum ada status. Tambahkan status pertama di bawah.</div>';
-    return;
+    inner = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Belum ada status. Tambahkan status pertama di bawah.</div>';
+  } else {
+    inner = _boardStatuses.map((s, i) => `<div class="setup-status-item" draggable="true" data-id="${s.id}"
+      ondragstart="_setupDragStart(event)" ondragend="_setupDragEnd(event)"
+      ondragover="_setupDragOver(event)" ondrop="_setupDrop(event)">
+      <span class="setup-status-drag">&#9776;</span>
+      <input type="color" class="setup-status-color" value="${s.color || '#6366f1'}" onchange="_updateStatusColor(${s.id}, this.value)" title="Ubah warna" />
+      <span class="setup-status-name">${escA(s.name)}</span>
+      <span class="setup-status-order">#${i+1}</span>
+      <button class="setup-status-del" onclick="_deleteStatus(${s.id})" title="Hapus">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      </button>
+    </div>`).join('');
   }
-  list.innerHTML = _boardStatuses.map((s, i) => `<div class="setup-status-item" draggable="true" data-id="${s.id}"
-    ondragstart="_setupDragStart(event)" ondragend="_setupDragEnd(event)"
-    ondragover="_setupDragOver(event)" ondrop="_setupDrop(event)">
-    <span class="setup-status-drag">&#9776;</span>
-    <input type="color" class="setup-status-color" value="${s.color || '#6366f1'}" onchange="_updateStatusColor(${s.id}, this.value)" title="Ubah warna" />
-    <span class="setup-status-name">${escA(s.name)}</span>
-    <span class="setup-status-order">#${i+1}${i===0?' (default)':''}</span>
-    <button class="setup-status-del" onclick="_deleteStatus(${s.id})" title="Hapus">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
-    </button>
-  </div>`).join('');
+  
+  // Always render fixed Closed status at the bottom
+  inner += `
+    <div class="setup-status-item" style="background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.2);margin-top:8px;">
+      <span class="setup-status-drag" style="color:transparent;cursor:default;">&#9776;</span>
+      <div style="width:24px;height:24px;border-radius:4px;background:#10b981;flex-shrink:0;"></div>
+      <span class="setup-status-name" style="font-weight:600;color:#10b981;">Closed (Default)</span>
+      <span class="setup-status-order" style="margin-left:auto;font-size:11px;color:var(--muted);">Kolom Penyelesaian Akhir</span>
+    </div>
+  `;
+  list.innerHTML = inner;
 }
 
 let _setupDragId = null;
@@ -3870,7 +4101,7 @@ async function addBoardStatus() {
 }
 
 async function _deleteStatus(id) {
-  if (!confirm('Hapus status ini? Project yang menggunakan status ini akan menjadi Uncategorized.')) return;
+  if (!confirm('Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.')) return;
   try {
     await apiFetch('/api/board-statuses/' + id, 'DELETE');
     _boardStatuses = _boardStatuses.filter(s => s.id !== id);
@@ -3903,8 +4134,16 @@ function openBoardDetail(projectId) {
   const fmt = d => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
   const typeLabel = {web:'Web Pentest',api:'API Pentest',mobile:'Mobile Pentest',infra:'Infrastructure',phishing:'Phishing'}[p.project_type] || p.project_type;
   const methodLabel = {blackbox:'Black Box',greybox:'Grey Box',whitebox:'White Box',external:'External',internal:'Internal',combination:'Combination'}[p.project_method] || p.project_method || '—';
-  const statusName = _boardStatuses.find(s => s.id === p.board_status_id)?.name || 'Uncategorized';
-  const statusColor = _boardStatuses.find(s => s.id === p.board_status_id)?.color || '#64748b';
+  
+  let statusName = 'Projects';
+  let statusColor = '#64748b';
+  if (p.board_status_id === -1) {
+    statusName = 'Closed';
+    statusColor = '#10b981';
+  } else if (p.board_status_id != null) {
+    statusName = _boardStatuses.find(s => s.id === p.board_status_id)?.name || 'Projects';
+    statusColor = _boardStatuses.find(s => s.id === p.board_status_id)?.color || '#64748b';
+  }
 
   let initBadge = '';
   if (p.initial_report_status === 'completed') initBadge = '<span class="badge-completed" style="font-size:10px">&#10003; Completed</span>';
