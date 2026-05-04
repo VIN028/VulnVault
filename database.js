@@ -101,7 +101,18 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN mandays_assessment INTEGER DEFAULT 0`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN highlight_notes TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN highlight_text TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN board_status_id INTEGER`, () => {});
   });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS board_statuses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      color TEXT DEFAULT '#6366f1',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS project_vulnerabilities (
@@ -646,15 +657,19 @@ function createProject(clientId, name, opts, callback) {
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
   const { project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = opts || {};
-  db.run(
-    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0],
-    function (err) {
-      if (err) return callback(err);
-      callback(null, { id: this.lastID });
-    }
-  );
+  // Auto-assign to first board status
+  db.get('SELECT id FROM board_statuses ORDER BY sort_order ASC LIMIT 1', [], (err0, firstStatus) => {
+    const boardStatusId = firstStatus ? firstStatus.id : null;
+    db.run(
+      `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, board_status_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, boardStatusId],
+      function (err) {
+        if (err) return callback(err);
+        callback(null, { id: this.lastID });
+      }
+    );
+  });
 }
 
 function deleteProject(projectId, callback) {
@@ -938,6 +953,84 @@ function markNotificationsRead(userId, callback) {
   );
 }
 
+// ─── Board Statuses (Kanban) ──────────────────────────────────────────────────
+function getBoardStatuses(callback) {
+  getDb().all('SELECT * FROM board_statuses ORDER BY sort_order ASC', callback);
+}
+
+function createBoardStatus({ name, color, sort_order }, callback) {
+  getDb().run(
+    'INSERT INTO board_statuses (name, color, sort_order) VALUES (?, ?, ?)',
+    [name, color || '#6366f1', sort_order ?? 0],
+    function(err) { callback(err, err ? null : { id: this.lastID }); }
+  );
+}
+
+function updateBoardStatus(id, { name, color, sort_order }, callback) {
+  const updates = [], params = [];
+  if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+  if (color !== undefined) { updates.push('color = ?'); params.push(color); }
+  if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
+  if (!updates.length) return callback(null, { changes: 0 });
+  params.push(id);
+  getDb().run(`UPDATE board_statuses SET ${updates.join(', ')} WHERE id = ?`, params,
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
+function deleteBoardStatus(id, callback) {
+  const db = getDb();
+  db.serialize(() => {
+    db.run('UPDATE projects SET board_status_id = NULL WHERE board_status_id = ?', [id]);
+    db.run('DELETE FROM board_statuses WHERE id = ?', [id], function(err) {
+      callback(err, { changes: this?.changes });
+    });
+  });
+}
+
+function reorderBoardStatuses(orderedIds, callback) {
+  const db = getDb();
+  db.serialize(() => {
+    const stmt = db.prepare('UPDATE board_statuses SET sort_order = ? WHERE id = ?');
+    orderedIds.forEach((id, idx) => stmt.run([idx, id]));
+    stmt.finalize(callback);
+  });
+}
+
+function updateProjectBoardStatus(projectId, statusId, callback) {
+  getDb().run(
+    'UPDATE projects SET board_status_id = ? WHERE id = ?',
+    [statusId, projectId],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
+function getProjectsForBoard(callback) {
+  getDb().all(`
+    SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
+           p.kickoff_date, p.initial_report_date, p.final_report_date,
+           p.initial_report_status, p.final_report_status,
+           p.retest_status, p.retest_start_date, p.retest_end_date,
+           p.assigned_engineer_id, p.assist_engineer_id,
+           p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.link_report_en, p.link_report_id, p.project_links,
+           p.retest_pic_id, p.retest_assist_id,
+           c.id AS client_id, c.name AS client_name,
+           u.display_name AS engineer_name,
+           u2.display_name AS assist_engineer_name,
+           u3.display_name AS retest_pic_name,
+           u4.display_name AS retest_assist_name,
+           (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    LEFT JOIN users u  ON u.id  = p.assigned_engineer_id
+    LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
+    LEFT JOIN users u3 ON u3.id = p.retest_pic_id
+    LEFT JOIN users u4 ON u4.id = p.retest_assist_id
+    ORDER BY c.name, p.name
+  `, callback);
+}
+
 module.exports = {
   getDb,
   // Vulnerabilities
@@ -1002,5 +1095,13 @@ module.exports = {
   notifyManagement,
   getNotifications,
   markNotificationsRead,
+  // Board statuses (Kanban)
+  getBoardStatuses,
+  createBoardStatus,
+  updateBoardStatus,
+  deleteBoardStatus,
+  reorderBoardStatuses,
+  updateProjectBoardStatus,
+  getProjectsForBoard,
 };
 

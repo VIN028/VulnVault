@@ -522,6 +522,75 @@
     .dash-hl-project { font-size: 12px; font-weight: 700; margin-bottom: 3px; display: flex; align-items: center; gap: 8px; }
     .dash-hl-client  { font-size: 10px; color: var(--muted); margin-bottom: 8px; }
     .dash-hl-text    { font-size: 13px; color: var(--text); line-height: 1.65; }
+
+    /* ── Kanban Board ── */
+    .board-container { display: flex; gap: 16px; overflow-x: auto; padding-bottom: 16px; min-height: 400px; align-items: flex-start; }
+    .board-column {
+      min-width: 280px; max-width: 320px; flex: 0 0 280px;
+      background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+      display: flex; flex-direction: column; max-height: calc(100vh - 200px);
+    }
+    .board-col-header {
+      padding: 14px 16px; display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border); user-select: none; flex-shrink: 0;
+    }
+    .board-col-title { font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .board-col-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .board-col-count {
+      font-size: 10px; font-weight: 700; background: rgba(255,255,255,0.08);
+      color: var(--muted); border-radius: 10px; padding: 1px 8px; margin-left: 4px;
+    }
+    .board-col-body {
+      padding: 10px; flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+      min-height: 80px; transition: background 0.15s;
+    }
+    .board-col-body.drag-over { background: rgba(99,102,241,0.06); }
+    .board-card {
+      background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px;
+      padding: 14px 16px; cursor: grab; transition: transform 0.12s, box-shadow 0.12s, opacity 0.15s;
+      position: relative;
+    }
+    .board-card:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,0,0,0.3); border-color: rgba(99,102,241,0.3); }
+    .board-card.dragging { opacity: 0.4; transform: scale(0.96); }
+    .board-card-client { font-size: 11px; font-weight: 700; color: var(--accent); margin-bottom: 4px; letter-spacing: 0.02em; }
+    .board-card-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 8px; line-height: 1.4; }
+    .board-card-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .board-card-tag {
+      font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+      background: rgba(99,102,241,0.12); color: #a5b4fc;
+    }
+    .board-card-info { font-size: 10px; color: var(--muted); display: flex; align-items: center; gap: 3px; }
+    .board-card-info svg { width: 11px; height: 11px; }
+    .board-empty-col { text-align: center; padding: 24px 12px; color: var(--muted); font-size: 12px; opacity: 0.6; }
+    .board-setup-banner {
+      background: rgba(99,102,241,0.06); border: 1px dashed rgba(99,102,241,0.3);
+      border-radius: var(--radius); padding: 40px; text-align: center; color: var(--muted);
+    }
+    .board-setup-banner h3 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+    .board-setup-banner p { font-size: 13px; margin-bottom: 20px; line-height: 1.6; }
+
+    /* Setup Status Modal */
+    .setup-status-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; min-height: 40px; }
+    .setup-status-item {
+      display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border); border-radius: 10px;
+      cursor: grab; transition: background 0.1s;
+    }
+    .setup-status-item:hover { background: rgba(255,255,255,0.07); }
+    .setup-status-item.dragging { opacity: 0.4; }
+    .setup-status-drag { color: var(--muted); font-size: 14px; cursor: grab; }
+    .setup-status-color { width: 16px; height: 16px; border-radius: 50%; border: none; cursor: pointer; flex-shrink: 0; padding: 0; }
+    .setup-status-name { flex: 1; font-size: 13px; font-weight: 600; }
+    .setup-status-order { font-size: 10px; color: var(--muted); font-weight: 600; }
+    .setup-status-del { background: none; border: none; cursor: pointer; color: var(--muted); padding: 4px; border-radius: 6px; transition: all 0.15s; }
+    .setup-status-del:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+    .setup-status-del svg { width: 14px; height: 14px; display: block; }
+
+    /* Detail Panel */
+    .board-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .board-detail-item { }
+    .board-detail-label { font-size: 10px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .board-detail-value { font-size: 13px; font-weight: 500; color: var(--text); }
   </style>
 </head>
 <body>
@@ -547,6 +616,10 @@
     <button class="nav-item" onclick="navigate('projects')" id="nav-projects">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
       Clients
+    </button>
+    <button class="nav-item" onclick="navigate('pm-board')" id="nav-pm-board">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+      Projects
     </button>
     <button class="nav-item" onclick="navigate('actlog')" id="nav-actlog">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
@@ -643,15 +716,13 @@
     </div>
     <!-- Section 2: Trend Chart + Resource Allocation -->
     <div class="dash-section-wrap">
-      <div class="dash-row-2">
-        <div class="dash-chart-card">
-          <div class="dash-card-title">&#128200; Trend Project per Bulan</div>
-          <div class="dash-chart-area"><canvas id="dash-trend-chart"></canvas></div>
-        </div>
-        <div class="dash-chart-card" style="overflow-y:auto;max-height:280px">
-          <div class="dash-card-title">&#128197; Resource Allocation (3 Bulan)</div>
-          <div id="dash-alloc-body"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
-        </div>
+      <div class="dash-chart-card" style="margin-bottom: 20px;">
+        <div class="dash-card-title">&#128200; Trend Project per Bulan</div>
+        <div class="dash-chart-area"><canvas id="dash-trend-chart"></canvas></div>
+      </div>
+      <div class="dash-chart-card">
+        <div class="dash-card-title">&#128197; Resource Allocation (3 Bulan)</div>
+        <div id="dash-alloc-body"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
       </div>
     </div>
     <!-- Section 3: Active Projects -->
@@ -668,6 +739,28 @@
     <div class="dash-section-wrap" style="padding-bottom:40px">
       <div class="dash-section-title">Project Highlights</div>
       <div class="dash-highlights" id="dash-highlights-body"><div class="empty-state">Loading&#8230;</div></div>
+    </div>
+  </section>
+
+  <!-- Projects Board (Kanban) -->
+  <section class="section" id="section-pm-board">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Projects</div>
+        <div class="page-sub">Kanban board untuk tracking progress project</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-refresh" onclick="doRefresh('pm-board')" title="Refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+        </button>
+        <button class="btn-primary" onclick="openBoardSetup()" style="font-size:12px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          Setup Status
+        </button>
+      </div>
+    </div>
+    <div style="padding:24px 32px 40px">
+      <div id="board-body"><div class="empty-state">Loading&#8230;</div></div>
     </div>
   </section>
 
@@ -1373,6 +1466,38 @@
   </div>
 </div>
 
+<!-- ── Board Setup Modal ── -->
+<div class="modal-overlay" id="modal-board-setup" onclick="closeModal(event)">
+  <div class="modal" style="max-width:500px" onclick="event.stopPropagation()">
+    <div class="modal-title">&#9881;&#65039; Setup Status Flow</div>
+    <p style="color:var(--muted);font-size:12px;margin:-14px 0 20px;line-height:1.6">Buat dan atur urutan status untuk tracking project. Drag untuk mengubah urutan. Status pertama akan menjadi default untuk project baru.</p>
+
+    <div class="setup-status-list" id="setup-status-list"></div>
+
+    <div style="display:flex;gap:8px;margin-bottom:20px">
+      <input id="setup-new-name" placeholder="Nama status baru…" style="flex:1;padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none" />
+      <input type="color" id="setup-new-color" value="#6366f1" style="width:36px;height:36px;border:1px solid var(--border);border-radius:8px;background:#0f172a;cursor:pointer;padding:2px" />
+      <button class="btn-primary" onclick="addBoardStatus()" style="font-size:12px;white-space:nowrap">+ Tambah</button>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-ghost" onclick="document.getElementById('modal-board-setup').classList.remove('open')">Tutup</button>
+      <button class="btn-primary" onclick="saveBoardOrder()" style="justify-content:center">&#128190; Simpan Urutan</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Board Project Detail Modal ── -->
+<div class="modal-overlay" id="modal-board-detail" onclick="closeModal(event)">
+  <div class="modal" style="max-width:560px;max-height:85vh;overflow-y:auto" onclick="event.stopPropagation()">
+    <div class="modal-title" id="bd-title">Project Detail</div>
+    <div id="bd-body"></div>
+    <div class="modal-actions" style="margin-top:20px">
+      <button class="btn-ghost" onclick="document.getElementById('modal-board-detail').classList.remove('open')">Tutup</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Toast Container ── -->
 <div id="toast-container"></div>
 
@@ -1435,6 +1560,7 @@ function navigate(section) {
   if (section === 'actlog')     loadActivityLog();
   if (section === 'allocation') loadAllocation();
   if (section === 'ai-mandays') initAiMandaysSection();
+  if (section === 'pm-board')   loadBoard();
 }
 
 // ── AI Mandays Estimator ─────────────────────────────────────────────────────
@@ -1882,10 +2008,11 @@ async function loadDashboard() {
     const isOffTrack=r=>isActive(r)&&r.initial_report_date&&new Date(r.initial_report_date)<today&&r.initial_report_status!=='completed';
     const doneIn=(r,y,m)=>r.project_id&&r.initial_report_status==='completed'&&r.initial_completed_at&&new Date(r.initial_completed_at).getFullYear()===y&&new Date(r.initial_completed_at).getMonth()===m;
     const prevEnd=new Date(cy,cm,0);
-    const cur={total:allP.filter(r=>inMonth(r,cy,cm)).length,ontrack:allP.filter(isOnTrack).length,offtrack:allP.filter(isOffTrack).length,started:allP.filter(r=>inMonth(r,cy,cm)).length,completed:allP.filter(r=>doneIn(r,cy,cm)).length};
-    const prev={total:allP.filter(r=>inMonth(r,py,pm)).length,ontrack:allP.filter(r=>r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&r.final_report_status!=='completed'&&(!r.initial_report_date||new Date(r.initial_report_date)>=prevEnd)).length,offtrack:allP.filter(r=>r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&r.initial_report_date&&new Date(r.initial_report_date)<prevEnd&&r.initial_report_status!=='completed').length,started:allP.filter(r=>inMonth(r,py,pm)).length,completed:allP.filter(r=>doneIn(r,py,pm)).length};
+    const prevIsActive=r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date)<=prevEnd&&(r.final_report_status!=='completed'||(r.final_completed_at&&new Date(r.final_completed_at)>prevEnd));
+    const cur={total:allP.filter(isActive).length,ontrack:allP.filter(isOnTrack).length,offtrack:allP.filter(isOffTrack).length,started:allP.filter(r=>inMonth(r,cy,cm)).length,completed:allP.filter(r=>doneIn(r,cy,cm)).length};
+    const prev={total:allP.filter(prevIsActive).length,ontrack:allP.filter(r=>prevIsActive(r)&&(!r.initial_report_date||new Date(r.initial_report_date)>=prevEnd)).length,offtrack:allP.filter(r=>prevIsActive(r)&&r.initial_report_date&&new Date(r.initial_report_date)<prevEnd&&(r.initial_report_status!=='completed'||(r.initial_completed_at&&new Date(r.initial_completed_at)>prevEnd))).length,started:allP.filter(r=>inMonth(r,py,pm)).length,completed:allP.filter(r=>doneIn(r,py,pm)).length};
     const setV=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
-    const setD=(id,c,p)=>{const e=document.getElementById(id);if(!e)return;const d=c-p;if(d===0){e.className='kpi-delta neutral';e.innerHTML='&mdash; sama dengan bulan lalu';}else if(d>0){e.className='kpi-delta up';e.innerHTML='&#9650; +'+d+' dari bulan lalu';}else{e.className='kpi-delta down';e.innerHTML='&#9660; '+d+' dari bulan lalu';}};
+    const setD=(id,c,p)=>{const e=document.getElementById(id);if(!e)return;const d=c-p;if(d===0){e.className='kpi-delta neutral';e.innerHTML='sama dengan bulan lalu';}else if(d>0){e.className='kpi-delta up';e.innerHTML='+'+d+' dari bulan lalu';}else{e.className='kpi-delta down';e.innerHTML=d+' dari bulan lalu';}};
     setV('kpi-total',cur.total);setD('kpi-total-delta',cur.total,prev.total);
     setV('kpi-ontrack',cur.ontrack);setD('kpi-ontrack-delta',cur.ontrack,prev.ontrack);
     setV('kpi-offtrack',cur.offtrack);setD('kpi-offtrack-delta',cur.offtrack,prev.offtrack);
@@ -1909,46 +2036,62 @@ function renderDashTrendChart(rows, today) {
 
 function renderDashAlloc(rows) {
   const body=document.getElementById('dash-alloc-body');if(!body)return;
-  const today=new Date();today.setHours(0,0,0,0);let html='';
+  const today=new Date();today.setHours(0,0,0,0);
+  const monthsData=[];
   for(let i=0;i<3;i++){
     const d=new Date(today.getFullYear(),today.getMonth()+i,1);
     const year=d.getFullYear(),month=d.getMonth();
-    const {workdays:available}=getWorkdaysInMonth(year,month);
-    const engMap=new Map();
-    if(typeof _allEngineers!=='undefined'){_allEngineers.forEach(e=>engMap.set(e.id,{name:e.display_name,used:0}));}
-    const addEng=(id,name,md)=>{if(!id||!name)return;if(!engMap.has(id))engMap.set(id,{name,used:0});engMap.get(id).used+=md;};
-    rows.forEach(r=>{
+    const {workdays}=getWorkdaysInMonth(year,month);
+    monthsData.push({d,year,month,workdays});
+  }
+  const engMap=new Map();
+  if(typeof _allEngineers!=='undefined'){_allEngineers.forEach(e=>engMap.set(e.id,{name:e.display_name,used:[0,0,0]}));}
+  const addEng=(id,name,i,md)=>{if(!id||!name)return;if(!engMap.has(id))engMap.set(id,{name,used:[0,0,0]});engMap.get(id).used[i]+=md;};
+  rows.forEach(r=>{
+    monthsData.forEach((m,i)=>{
       if(r.kickoff_date&&r.mandays_assessment>0){
-        const md=_assessmentMandaysInMonth(r,year,month);
+        const md=_assessmentMandaysInMonth(r,m.year,m.month);
         if(md>0){
           const hasPic=r.assigned_engineer_id, hasAssist=r.assist_engineer_id;
           const numEng=(hasPic?1:0)+(hasAssist?1:0);
           const perPerson=numEng>0?md/numEng:md;
-          if(hasPic)addEng(r.assigned_engineer_id,r.engineer_name,perPerson);
-          if(hasAssist)addEng(r.assist_engineer_id,r.assist_engineer_name,perPerson);
+          if(hasPic)addEng(r.assigned_engineer_id,r.engineer_name,i,perPerson);
+          if(hasAssist)addEng(r.assist_engineer_id,r.assist_engineer_name,i,perPerson);
         }
       }
       if(r.retest_status==='started'&&r.retest_start_date&&r.retest_end_date){
-        const od=_workdaysOverlap(r.retest_start_date,r.retest_end_date,year,month);
+        const od=_workdaysOverlap(r.retest_start_date,r.retest_end_date,m.year,m.month);
         if(od>0){
           const hasPic=r.retest_pic_id, hasAssist=r.retest_assist_id;
           const numEng=(hasPic?1:0)+(hasAssist?1:0);
           const perPerson=numEng>0?od/numEng:od;
-          if(hasPic)addEng(r.retest_pic_id,r.retest_pic_name,perPerson);
-          if(hasAssist)addEng(r.retest_assist_id,r.retest_assist_name,perPerson);
+          if(hasPic)addEng(r.retest_pic_id,r.retest_pic_name,i,perPerson);
+          if(hasAssist)addEng(r.retest_assist_id,r.retest_assist_name,i,perPerson);
         }
       }
     });
-    
-    html+=`<div class="dash-alloc-month"><div class="dash-alloc-month-label">${d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})}</div>`;
-    if(!engMap.size){
-      html+=`<div class="empty-state" style="padding:10px;font-size:11px">Belum ada data engineer di sistem</div>`;
-    } else {
-      [...engMap.values()].sort((a,b)=>b.used-a.used || a.name.localeCompare(b.name)).forEach(e=>{const pct=available>0?Math.min(Math.round((e.used/available)*100),100):0;const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';html+=`<div class="dash-alloc-row"><span class="dash-alloc-name">${escA(e.name)}</span><div class="dash-alloc-bar-track"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col};min-width:65px">${Math.round(e.used*10)/10}d <span style="font-size:10px;color:var(--muted);font-weight:600">(${pct}%)</span></span></div>`;});
-    }
-    html+=`<div style="font-size:10px;color:var(--muted);margin-top:4px">${available} hari kerja tersedia</div></div>`;
+  });
+  if(!engMap.size){
+    body.innerHTML='<div class="empty-state" style="padding:20px;font-size:12px">Belum ada data engineer di sistem</div>';
+    return;
   }
-  body.innerHTML=html||'<div class="empty-state" style="padding:20px;font-size:12px">Tidak ada data alokasi</div>';
+  let html=`<div class="dash-active-table" style="overflow-x:auto;border:none;background:transparent;"><table style="min-width:600px;"><thead><tr><th style="min-width:140px;">Engineer</th>`;
+  monthsData.forEach(m=>{
+    html+=`<th>${m.d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})} <span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:lowercase;margin-left:4px">(${m.workdays} d)</span></th>`;
+  });
+  html+=`</tr></thead><tbody>`;
+  [...engMap.values()].sort((a,b)=>b.used.reduce((x,y)=>x+y,0)-a.used.reduce((x,y)=>x+y,0) || a.name.localeCompare(b.name)).forEach(e=>{
+    html+=`<tr><td style="font-weight:600;font-size:12px;color:var(--text);">${escA(e.name)}</td>`;
+    for(let i=0;i<3;i++){
+      const available=monthsData[i].workdays;
+      const pct=available>0?Math.min(Math.round((e.used[i]/available)*100),100):0;
+      const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';
+      html+=`<td><div class="dash-alloc-row" style="margin:0;"><div class="dash-alloc-bar-track" style="background:rgba(255,255,255,0.05);height:6px;min-width:60px;"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col};min-width:60px;font-size:11px;">${Math.round(e.used[i]*10)/10}d <span style="font-size:10px;color:var(--muted)">(${pct}%)</span></span></div></td>`;
+    }
+    html+=`</tr>`;
+  });
+  html+=`</tbody></table></div>`;
+  body.innerHTML=html;
 }
 
 function renderDashActiveProjects(rows, today) {
@@ -3067,6 +3210,7 @@ async function doRefresh(section) {
     if (section==='users')     await loadUsers();
     if (section==='requests')  await loadRequests();
     if (section==='actlog')    await loadActivityLog(_currentLogType);
+    if (section==='pm-board')  await loadBoard();
   } finally {
     if (btn) setTimeout(()=>btn.classList.remove('spinning'), 500);
   }
@@ -3560,6 +3704,259 @@ async function hlSave() {
     const errEl = document.getElementById('hl-err');
     errEl.textContent = e.message; errEl.classList.add('show');
   } finally { btn.disabled = false; }
+}
+
+// ── Projects Board (Kanban) ────────────────────────────────────────────────────
+let _boardStatuses = [];
+let _boardProjects = [];
+let _dragProjectId = null;
+
+async function loadBoard() {
+  try {
+    const [statuses, projects] = await Promise.all([
+      apiFetch('/api/board-statuses'),
+      apiFetch('/api/board/projects')
+    ]);
+    _boardStatuses = statuses;
+    _boardProjects = projects;
+    renderBoard();
+  } catch(e) { showToast('Board error: ' + e.message, 'error'); }
+}
+
+function renderBoard() {
+  const body = document.getElementById('board-body');
+  if (!body) return;
+  if (!_boardStatuses.length) {
+    body.innerHTML = `<div class="board-setup-banner">
+      <h3>&#128203; Belum ada Status Flow</h3>
+      <p>Buat status flow terlebih dahulu untuk mulai tracking project.<br>Contoh: Not Started → In Progress → Completed</p>
+      <button class="btn-primary" onclick="openBoardSetup()" style="margin:0 auto;font-size:13px;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Setup Status Flow
+      </button>
+    </div>`;
+    return;
+  }
+  const uncategorized = _boardProjects.filter(p => !p.board_status_id || !_boardStatuses.find(s => s.id === p.board_status_id));
+  let html = '<div class="board-container">';
+  // Uncategorized column (if any)
+  if (uncategorized.length) {
+    html += _renderColumn({ id: null, name: 'Uncategorized', color: '#64748b' }, uncategorized);
+  }
+  // Status columns
+  _boardStatuses.forEach(status => {
+    const cards = _boardProjects.filter(p => p.board_status_id === status.id);
+    html += _renderColumn(status, cards);
+  });
+  html += '</div>';
+  body.innerHTML = html;
+}
+
+function _renderColumn(status, cards) {
+  const sid = status.id || 'null';
+  return `<div class="board-column">
+    <div class="board-col-header">
+      <div class="board-col-title">
+        <span class="board-col-dot" style="background:${escA(status.color)}"></span>
+        ${escA(status.name)}
+        <span class="board-col-count">${cards.length}</span>
+      </div>
+    </div>
+    <div class="board-col-body" id="bcol-${sid}"
+         ondragover="_boardDragOver(event)" ondragleave="_boardDragLeave(event)"
+         ondrop="_boardDrop(event, ${status.id || 'null'})">
+      ${cards.length ? cards.map(p => _renderCard(p)).join('') : '<div class="board-empty-col">Tidak ada project</div>'}
+    </div>
+  </div>`;
+}
+
+function _renderCard(p) {
+  const typeLabel = {web:'Web',api:'API',mobile:'Mobile',infra:'Infra',phishing:'Phishing'}[p.project_type] || p.project_type || 'Web';
+  const typeColor = {web:'rgba(99,102,241,0.12)',api:'rgba(6,182,212,0.12)',mobile:'rgba(251,146,60,0.12)',infra:'rgba(168,85,247,0.12)',phishing:'rgba(244,63,94,0.12)'}[p.project_type] || 'rgba(99,102,241,0.12)';
+  const typeTxt = {web:'#a5b4fc',api:'#67e8f9',mobile:'#fdba74',infra:'#d8b4fe',phishing:'#fb7185'}[p.project_type] || '#a5b4fc';
+  const eng = p.engineer_name || '—';
+  const kickoff = p.kickoff_date ? new Date(p.kickoff_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '—';
+  return `<div class="board-card" draggable="true" ondragstart="_boardDragStart(event,${p.id})" ondragend="_boardDragEnd(event)" onclick="openBoardDetail(${p.id})">
+    <div class="board-card-client">${escA(p.client_name)}</div>
+    <div class="board-card-name">${escA(p.name)}</div>
+    <div class="board-card-meta">
+      <span class="board-card-tag" style="background:${typeColor};color:${typeTxt}">${typeLabel}</span>
+      <span class="board-card-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg> ${escA(eng)}</span>
+      <span class="board-card-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${kickoff}</span>
+      ${p.finding_count > 0 ? `<span class="board-card-info" style="color:#f87171">&#128270; ${p.finding_count} findings</span>` : ''}
+    </div>
+  </div>`;
+}
+
+// Drag & Drop
+function _boardDragStart(e, projectId) {
+  _dragProjectId = projectId;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function _boardDragEnd(e) { e.target.classList.remove('dragging'); }
+function _boardDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }
+function _boardDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
+async function _boardDrop(e, statusId) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (_dragProjectId === null) return;
+  const project = _boardProjects.find(p => p.id === _dragProjectId);
+  if (!project || project.board_status_id === statusId) { _dragProjectId = null; return; }
+  try {
+    await apiFetch('/api/projects/' + _dragProjectId + '/board-status', 'PATCH', { board_status_id: statusId });
+    project.board_status_id = statusId;
+    renderBoard();
+  } catch(err) { showToast('Gagal memindahkan project: ' + err.message, 'error'); }
+  _dragProjectId = null;
+}
+
+// Board Setup Modal
+async function openBoardSetup() {
+  try {
+    _boardStatuses = await apiFetch('/api/board-statuses');
+  } catch {}
+  _renderSetupList();
+  document.getElementById('modal-board-setup').classList.add('open');
+}
+
+function _renderSetupList() {
+  const list = document.getElementById('setup-status-list');
+  if (!_boardStatuses.length) {
+    list.innerHTML = '<div style="text-align:center;padding:16px;color:var(--muted);font-size:12px">Belum ada status. Tambahkan status pertama di bawah.</div>';
+    return;
+  }
+  list.innerHTML = _boardStatuses.map((s, i) => `<div class="setup-status-item" draggable="true" data-id="${s.id}"
+    ondragstart="_setupDragStart(event)" ondragend="_setupDragEnd(event)"
+    ondragover="_setupDragOver(event)" ondrop="_setupDrop(event)">
+    <span class="setup-status-drag">&#9776;</span>
+    <input type="color" class="setup-status-color" value="${s.color || '#6366f1'}" onchange="_updateStatusColor(${s.id}, this.value)" title="Ubah warna" />
+    <span class="setup-status-name">${escA(s.name)}</span>
+    <span class="setup-status-order">#${i+1}${i===0?' (default)':''}</span>
+    <button class="setup-status-del" onclick="_deleteStatus(${s.id})" title="Hapus">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+    </button>
+  </div>`).join('');
+}
+
+let _setupDragId = null;
+function _setupDragStart(e) { _setupDragId = Number(e.currentTarget.dataset.id); e.currentTarget.classList.add('dragging'); }
+function _setupDragEnd(e) { e.currentTarget.classList.remove('dragging'); }
+function _setupDragOver(e) { e.preventDefault(); }
+function _setupDrop(e) {
+  e.preventDefault();
+  const targetId = Number(e.currentTarget.dataset.id);
+  if (_setupDragId === targetId) return;
+  const fromIdx = _boardStatuses.findIndex(s => s.id === _setupDragId);
+  const toIdx = _boardStatuses.findIndex(s => s.id === targetId);
+  if (fromIdx < 0 || toIdx < 0) return;
+  const [moved] = _boardStatuses.splice(fromIdx, 1);
+  _boardStatuses.splice(toIdx, 0, moved);
+  _renderSetupList();
+}
+
+async function addBoardStatus() {
+  const nameEl = document.getElementById('setup-new-name');
+  const colorEl = document.getElementById('setup-new-color');
+  const name = nameEl.value.trim();
+  if (!name) return;
+  try {
+    const result = await apiFetch('/api/board-statuses', 'POST', { name, color: colorEl.value, sort_order: _boardStatuses.length });
+    _boardStatuses.push({ id: result.id, name, color: colorEl.value, sort_order: _boardStatuses.length });
+    nameEl.value = '';
+    _renderSetupList();
+    showToast('Status "' + name + '" ditambahkan', 'success');
+  } catch(err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function _deleteStatus(id) {
+  if (!confirm('Hapus status ini? Project yang menggunakan status ini akan menjadi Uncategorized.')) return;
+  try {
+    await apiFetch('/api/board-statuses/' + id, 'DELETE');
+    _boardStatuses = _boardStatuses.filter(s => s.id !== id);
+    _renderSetupList();
+    showToast('Status dihapus', 'success');
+  } catch(err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+async function _updateStatusColor(id, color) {
+  try { await apiFetch('/api/board-statuses/' + id, 'PUT', { color }); } catch {}
+  const s = _boardStatuses.find(s => s.id === id);
+  if (s) s.color = color;
+}
+
+async function saveBoardOrder() {
+  const ids = _boardStatuses.map(s => s.id);
+  try {
+    await apiFetch('/api/board-statuses/reorder', 'PUT', { ordered_ids: ids });
+    showToast('Urutan status disimpan!', 'success');
+    document.getElementById('modal-board-setup').classList.remove('open');
+    loadBoard();
+  } catch(err) { showToast('Error: ' + err.message, 'error'); }
+}
+
+// Project Detail Modal
+function openBoardDetail(projectId) {
+  const p = _boardProjects.find(pr => pr.id === projectId);
+  if (!p) return;
+  document.getElementById('bd-title').textContent = p.name;
+  const fmt = d => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
+  const typeLabel = {web:'Web Pentest',api:'API Pentest',mobile:'Mobile Pentest',infra:'Infrastructure',phishing:'Phishing'}[p.project_type] || p.project_type;
+  const methodLabel = {blackbox:'Black Box',greybox:'Grey Box',whitebox:'White Box',external:'External',internal:'Internal',combination:'Combination'}[p.project_method] || p.project_method || '—';
+  const statusName = _boardStatuses.find(s => s.id === p.board_status_id)?.name || 'Uncategorized';
+  const statusColor = _boardStatuses.find(s => s.id === p.board_status_id)?.color || '#64748b';
+
+  let initBadge = '';
+  if (p.initial_report_status === 'completed') initBadge = '<span class="badge-completed" style="font-size:10px">&#10003; Completed</span>';
+  else initBadge = '<span class="badge-pending" style="font-size:10px;padding:2px 8px;border-radius:10px">Pending</span>';
+  let finalBadge = '';
+  if (p.final_report_status === 'completed') finalBadge = '<span class="badge-completed" style="font-size:10px">&#10003; Completed</span>';
+  else finalBadge = '<span class="badge-pending" style="font-size:10px;padding:2px 8px;border-radius:10px">Pending</span>';
+
+  let retestHtml = '';
+  if (p.retest_status === 'started') {
+    retestHtml = `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Retest Info</div>
+      <div class="board-detail-grid">
+        <div class="board-detail-item"><div class="board-detail-label">Retest PIC</div><div class="board-detail-value">${escA(p.retest_pic_name||'—')}</div></div>
+        <div class="board-detail-item"><div class="board-detail-label">Retest Assist</div><div class="board-detail-value">${escA(p.retest_assist_name||'—')}</div></div>
+        <div class="board-detail-item"><div class="board-detail-label">Retest Start</div><div class="board-detail-value">${fmt(p.retest_start_date)}</div></div>
+        <div class="board-detail-item"><div class="board-detail-label">Retest End</div><div class="board-detail-value">${fmt(p.retest_end_date)}</div></div>
+      </div>
+    </div>`;
+  }
+
+  let linksHtml = '';
+  if (p.link_report_en || p.link_report_id) {
+    linksHtml = `<div style="border-top:1px solid var(--border);padding-top:14px;margin-top:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Report Links</div>
+      ${p.link_report_en ? `<div style="margin-bottom:6px"><a href="${escA(p.link_report_en)}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">&#128196; English Report</a></div>` : ''}
+      ${p.link_report_id ? `<div><a href="${escA(p.link_report_id)}" target="_blank" style="color:var(--accent);font-size:12px;text-decoration:none">&#128196; Indonesian Report</a></div>` : ''}
+    </div>`;
+  }
+
+  document.getElementById('bd-body').innerHTML = `
+    <div style="display:inline-flex;align-items:center;gap:6px;margin-bottom:16px;padding:4px 12px;border-radius:8px;background:rgba(255,255,255,0.04);border:1px solid var(--border)">
+      <span style="width:8px;height:8px;border-radius:50%;background:${escA(statusColor)}"></span>
+      <span style="font-size:12px;font-weight:600;color:var(--text)">${escA(statusName)}</span>
+    </div>
+    <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:14px">${escA(p.client_name)}</div>
+    <div class="board-detail-grid">
+      <div class="board-detail-item"><div class="board-detail-label">Jenis Project</div><div class="board-detail-value">${typeLabel}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Metode</div><div class="board-detail-value">${methodLabel}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">PIC</div><div class="board-detail-value">${escA(p.engineer_name||'—')}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Assist</div><div class="board-detail-value">${escA(p.assist_engineer_name||'—')}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Kickoff</div><div class="board-detail-value">${fmt(p.kickoff_date)}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Initial Report</div><div class="board-detail-value">${fmt(p.initial_report_date)} ${initBadge}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Final Report</div><div class="board-detail-value">${fmt(p.final_report_date)} ${finalBadge}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} vulnerability${p.finding_count!==1?'ies':''}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Mandays (Assessment)</div><div class="board-detail-value">${p.mandays_assessment || 0} hari</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Mandays (Kickoff)</div><div class="board-detail-value">${p.mandays_kickoff || 0} hari</div></div>
+    </div>
+    ${retestHtml}
+    ${linksHtml}
+  `;
+  document.getElementById('modal-board-detail').classList.add('open');
 }
 </script>
 </body>

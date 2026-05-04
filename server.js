@@ -903,6 +903,70 @@ Buatlah satu paragraf highlight yang profesional dalam Bahasa Indonesia. Jika ad
   }
 });
 
+// ── Board Statuses (Kanban) ────────────────────────────────────────────────────
+app.get('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
+  db.getBoardStatuses((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
+  const { name, color, sort_order } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Status name is required.' });
+  db.createBoardStatus({ name: name.trim(), color, sort_order }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}"` });
+    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0 });
+  });
+});
+
+app.put('/api/board-statuses/reorder', auth.requireRole(...mgmtRoles), (req, res) => {
+  const { ordered_ids } = req.body;
+  if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: 'ordered_ids array is required.' });
+  db.reorderBoardStatuses(ordered_ids.map(Number), (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json({ ok: true });
+  });
+});
+
+app.put('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) => {
+  const id = Number(req.params.id);
+  const { name, color, sort_order } = req.body;
+  db.updateBoardStatus(id, { name: name?.trim(), color, sort_order }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Status not found' });
+    res.json({ ok: true });
+  });
+});
+
+app.delete('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) => {
+  const id = Number(req.params.id);
+  db.deleteBoardStatus(id, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Status not found' });
+    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'delete_board_status', details: `Deleted board status ID ${id}` });
+    res.json({ ok: true });
+  });
+});
+
+app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req, res) => {
+  const id = Number(req.params.id);
+  const { board_status_id } = req.body;
+  db.updateProjectBoardStatus(id, board_status_id, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+    res.json({ ok: true });
+  });
+});
+
+app.get('/api/board/projects', auth.requireRole(...mgmtRoles), (req, res) => {
+  db.getProjectsForBoard((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 // ── AI Mandays Estimator ───────────────────────────────────────────────────────
 app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), async (req, res) => {
   const {
