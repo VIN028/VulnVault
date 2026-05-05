@@ -102,7 +102,22 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN highlight_notes TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN highlight_text TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN board_status_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN service TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_3_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_4_id INTEGER`, () => {});
   });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS engagements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL,
+      engagement_reference TEXT,
+      engagement_info TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+    )
+  `);
 
   db.run(`
     CREATE TABLE IF NOT EXISTS board_statuses (
@@ -279,15 +294,19 @@ function getDashboardSummary(callback) {
     SELECT c.id AS client_id, c.name AS client_name,
            p.id AS project_id, p.name AS project_name, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
+           p.engineer_3_id, p.engineer_4_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
            p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.team, p.service,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
+           u5.display_name AS engineer_3_name,
+           u6.display_name AS engineer_4_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -297,6 +316,8 @@ function getDashboardSummary(callback) {
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
     LEFT JOIN users u3 ON u3.id = p.retest_pic_id
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
+    LEFT JOIN users u5 ON u5.id = p.engineer_3_id
+    LEFT JOIN users u6 ON u6.id = p.engineer_4_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -325,12 +346,16 @@ function getClientsWithProjects(callback) {
            p.initial_report_status, p.final_report_status,
            p.assigned_engineer_id,
            p.assist_engineer_id,
+           p.engineer_3_id, p.engineer_4_id,
            p.link_report_en, p.link_report_id, p.project_links,
            p.project_method, p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.team, p.service,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
+           u5.display_name AS engineer_3_name,
+           u6.display_name AS engineer_4_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -340,6 +365,8 @@ function getClientsWithProjects(callback) {
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
     LEFT JOIN users u3 ON u3.id = p.retest_pic_id
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
+    LEFT JOIN users u5 ON u5.id = p.engineer_3_id
+    LEFT JOIN users u6 ON u6.id = p.engineer_4_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -632,19 +659,27 @@ function deleteClient(clientId, callback) {
 function getProjectsByClient(clientId, callback) {
   const db = getDb();
   db.all(
-    `SELECT p.id, p.client_id, p.name, p.project_type,
-            p.assigned_engineer_id, p.assist_engineer_id, p.kickoff_date,
+    `SELECT p.id, p.client_id, p.name, p.project_type, p.project_method,
+            p.assigned_engineer_id, p.assist_engineer_id,
+            p.engineer_3_id, p.engineer_4_id,
+            p.kickoff_date,
             p.initial_report_date, p.final_report_date,
             p.initial_report_status, p.final_report_status,
             p.link_report_en, p.link_report_id, p.project_links,
+            p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+            p.team, p.service,
             p.created_at,
             p.retest_status, p.retest_start_date, p.retest_end_date,
             p.retest_pic_id, p.retest_assist_id,
             u.display_name AS engineer_name,
-            u2.display_name AS assist_engineer_name
+            u2.display_name AS assist_engineer_name,
+            u5.display_name AS engineer_3_name,
+            u6.display_name AS engineer_4_name
      FROM projects p
      LEFT JOIN users u ON u.id = p.assigned_engineer_id
      LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
+     LEFT JOIN users u5 ON u5.id = p.engineer_3_id
+     LEFT JOIN users u6 ON u6.id = p.engineer_4_id
      WHERE p.client_id = ?
      ORDER BY p.name COLLATE NOCASE ASC`,
     [clientId],
@@ -656,11 +691,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = opts || {};
+  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, board_status_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0],
+    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service, board_status_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -759,7 +794,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment }, callback) {
+function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
@@ -768,15 +803,19 @@ function updateProject(id, { name, project_type, project_method, assigned_engine
        project_method = ?,
        assigned_engineer_id = ?,
        assist_engineer_id = ?,
+       engineer_3_id = ?,
+       engineer_4_id = ?,
        kickoff_date = ?,
        initial_report_date = ?,
        final_report_date = ?,
        project_links = ?,
        mandays_kickoff = ?,
        mandays_infogath = ?,
-       mandays_assessment = ?
+       mandays_assessment = ?,
+       team = ?,
+       service = ?
      WHERE id = ?`,
-    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, id],
+    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -1016,12 +1055,16 @@ function getProjectsForBoard(callback) {
            p.initial_report_status, p.final_report_status,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.assigned_engineer_id, p.assist_engineer_id,
+           p.engineer_3_id, p.engineer_4_id,
            p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
            p.link_report_en, p.link_report_id, p.project_links,
            p.retest_pic_id, p.retest_assist_id,
+           p.team, p.service,
            c.id AS client_id, c.name AS client_name,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
+           u5.display_name AS engineer_3_name,
+           u6.display_name AS engineer_4_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -1031,8 +1074,33 @@ function getProjectsForBoard(callback) {
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
     LEFT JOIN users u3 ON u3.id = p.retest_pic_id
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
+    LEFT JOIN users u5 ON u5.id = p.engineer_3_id
+    LEFT JOIN users u6 ON u6.id = p.engineer_4_id
     ORDER BY c.name, p.name
   `, callback);
+}
+
+// ─── Engagements ──────────────────────────────────────────────────────────────
+function getEngagementsByClient(clientId, callback) {
+  getDb().all(
+    'SELECT * FROM engagements WHERE client_id = ? ORDER BY created_at DESC',
+    [clientId], callback
+  );
+}
+
+function getAllEngagements(callback) {
+  getDb().all(
+    'SELECT e.*, c.name AS client_name FROM engagements e JOIN clients c ON c.id = e.client_id ORDER BY c.name, e.created_at DESC',
+    callback
+  );
+}
+
+function createEngagement(clientId, { engagement_reference, engagement_info }, callback) {
+  getDb().run(
+    'INSERT INTO engagements (client_id, engagement_reference, engagement_info) VALUES (?, ?, ?)',
+    [clientId, engagement_reference || null, engagement_info || null],
+    function(err) { callback(err, err ? null : { id: this.lastID }); }
+  );
 }
 
 module.exports = {
@@ -1108,5 +1176,9 @@ module.exports = {
   updateProjectBoardStatus,
   updateProjectBoardStatusAndCompletion,
   getProjectsForBoard,
+  // Engagements
+  getEngagementsByClient,
+  getAllEngagements,
+  createEngagement,
 };
 

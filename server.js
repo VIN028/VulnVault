@@ -536,6 +536,30 @@ app.post('/api/clients', (req, res) => {
   });
 });
 
+// ─── Engagements ──────────────────────────────────────────────────────────────
+app.get('/api/clients/:clientId/engagements', auth.requireRole('admin','manager','pm'), (req, res) => {
+  const clientId = Number(req.params.clientId);
+  db.getEngagementsByClient(clientId, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.get('/api/engagements', auth.requireRole('admin','manager','pm'), (req, res) => {
+  db.getAllEngagements((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.post('/api/clients/:clientId/engagements', auth.requireRole('admin','manager','pm'), (req, res) => {
+  const clientId = Number(req.params.clientId);
+  const { engagement_reference, engagement_info } = req.body;
+  db.createEngagement(clientId, { engagement_reference, engagement_info }, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.status(201).json({ id: result.id, client_id: clientId, engagement_reference, engagement_info });
+  });
+});
 
 app.delete('/api/clients/:id', (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete clients.' });
@@ -584,7 +608,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
@@ -595,7 +619,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0 }, (err, result) => {
+  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0, team, service }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -715,7 +739,7 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
   
@@ -723,11 +747,11 @@ app.put('/api/projects/:id', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment }, (err, result) => {
+  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, mandays_kickoff, mandays_infogath, mandays_assessment });
+    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, mandays_kickoff, mandays_infogath, mandays_assessment, team, service });
   });
 });
 

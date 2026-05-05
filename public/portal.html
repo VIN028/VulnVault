@@ -806,8 +806,8 @@
       <div class="dash-section-title">Project Aktif Berjalan</div>
       <div class="dash-active-table">
         <table>
-          <thead><tr><th>Client</th><th>Tgl Assessment</th><th>Tgl Initial Report</th><th>Jenis</th><th>Status</th></tr></thead>
-          <tbody id="dash-active-tbody"><tr><td colspan="5"><div class="empty-state">Loading&#8230;</div></td></tr></tbody>
+          <thead><tr><th>Client</th><th>Service</th><th>Total Mandays</th><th>Start Date</th><th>Assessment Date</th><th>Initial Report Date</th><th>Status</th></tr></thead>
+          <tbody id="dash-active-tbody"><tr><td colspan="7"><div class="empty-state">Loading&#8230;</div></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -1333,47 +1333,61 @@
 
 <!-- ── New Entry Modal (Client + Project — Tabbed) ── -->
 <div class="modal-overlay" id="modal-create-project" onclick="closeModal(event)">
-  <div class="modal" style="max-width:580px;max-height:88vh;overflow-y:auto" onclick="event.stopPropagation()">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
     <div class="modal-title" id="modal-create-project-title">New Entry</div>
 
-    <!-- ═══ Tab Bar (half-width with separator) ═══ -->
+    <!-- ═══ Tab Bar ═══ -->
     <div id="ne-tab-bar" style="display:flex;margin-bottom:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
       <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 0;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
       <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 0;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
     </div>
 
-    <!-- ═══ TAB 1: Client Information ═══ -->
+    <!-- ═══ TAB 1: Client Selection ═══ -->
     <div id="ne-client-section">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
-        <div class="form-group" style="grid-column:1/-1">
-          <label>Client *</label>
-          <select id="cp-client" onchange="onClientSelectChange()">
-            <option value="">— Select client —</option>
-            <option value="__new__">➕ Create New Client</option>
-          </select>
+      <!-- Search box -->
+      <input id="ne-client-search" type="search" placeholder="Search client name..." oninput="_filterClientCards()" style="width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;margin-bottom:12px" />
+
+      <!-- Client card list -->
+      <div id="ne-client-list" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        <div class="empty-state" style="padding:20px">Loading clients...</div>
+      </div>
+
+      <!-- New client inline form (hidden by default) -->
+      <div id="ne-new-client-fields" style="display:none;border:1px dashed rgba(99,102,241,0.3);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(99,102,241,0.04)">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:12px;display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Client
         </div>
-        <div class="form-group" style="grid-column:1/-1;display:none" id="ne-new-client-fields">
-          <div class="form-group">
-            <label>Client Name *</label>
-            <input id="ne-client-name" placeholder="e.g. PT Contoh Digital" oninput="_updateProjectTabState()" />
-          </div>
-          <div class="form-group">
+        <div class="form-group" style="margin-bottom:12px">
+          <label>Client Name *</label>
+          <input id="ne-client-name" placeholder="e.g. PT Contoh Digital" oninput="_updateProjectTabState()" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group" style="margin-bottom:0">
             <label>Engagement Reference</label>
-            <select id="ne-engagement-ref">
+            <select id="ne-engagement-ref" onchange="_onEngRefChange()">
               <option value="">— Select reference —</option>
               <option value="Cisometric Proposal">Cisometric Proposal</option>
               <option value="Pricing Letter">Pricing Letter</option>
               <option value="Purchase Order">Purchase Order</option>
               <option value="Cisometric Quotation">Cisometric Quotation</option>
+              <option value="__other__">Other (Custom)</option>
             </select>
+            <input id="ne-engagement-ref-custom" placeholder="Type custom reference..." style="display:none;margin-top:6px" />
           </div>
           <div class="form-group" style="margin-bottom:0">
             <label>Engagement Info</label>
-            <input id="ne-engagement-info" placeholder="e.g. PO-2025-001 or proposal reference details" />
+            <input id="ne-engagement-info" placeholder="e.g. PO-2025-001" />
           </div>
         </div>
       </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:12px">
+
+      <!-- Footer: Add New Client + Next -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+        <button type="button" id="ne-add-client-btn" onclick="_toggleNewClientForm()" style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add New Client
+        </button>
         <button type="button" class="btn-primary" style="font-size:12px;padding:8px 20px" onclick="validateAndGoToProject()">
           Next →
         </button>
@@ -1383,58 +1397,116 @@
     <!-- ═══ TAB 2: Project Details ═══ -->
     <div id="ne-project-section" style="display:none">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0 16px">
+        <!-- Project Name -->
         <div class="form-group" style="grid-column:1/-1">
-          <label>Project Name *</label>
+          <label>Nama Project *</label>
           <input id="cp-name" placeholder="e.g. Web App Pentest Q2 2025" />
         </div>
+
+        <!-- Team -->
         <div class="form-group">
-          <label>Project Type *</label>
-          <select id="cp-type" onchange="updateCpMethodOptions()">
-            <option value="web">Web</option>
-            <option value="api">API</option>
-            <option value="mobile">Mobile</option>
-            <option value="infra">Infrastructure</option>
+          <label>Team *</label>
+          <select id="cp-team" onchange="_onTeamChange()">
+            <option value="offensive">Offensive Team</option>
+            <option value="itaudit">IT Audit &amp; SE</option>
+          </select>
+        </div>
+
+        <!-- Service (conditional) -->
+        <div class="form-group">
+          <label>Service *</label>
+          <select id="cp-service" onchange="_onServiceChange()">
+            <option value="vapt">VAPT</option>
+            <option value="va">VA</option>
+            <option value="firewall_review">Firewall Review</option>
             <option value="phishing">Phishing</option>
+            <option value="__other__">Other</option>
           </select>
+          <input id="cp-service-custom" placeholder="Type custom service..." style="display:none;margin-top:6px" />
         </div>
-        <div class="form-group" id="cp-method-wrap">
-          <label>Method *</label>
-          <select id="cp-method">
-            <option value="blackbox">Black Box</option>
-            <option value="greybox">Grey Box</option>
-            <option value="whitebox">White Box</option>
-          </select>
-        </div>
+
+        <!-- Resource Count -->
         <div class="form-group">
-          <label>Assign PIC</label>
+          <label>Jumlah Resource *</label>
+          <select id="cp-resource-count" onchange="_onResourceCountChange()">
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
+        </div>
+
+        <!-- Dynamic PIC assignment -->
+        <div class="form-group" id="cp-pic-1-wrap">
+          <label>PIC 1</label>
           <select id="cp-engineer"><option value="">— Not assigned —</option></select>
         </div>
-        <div class="form-group">
-          <label>Assign Assist</label>
+        <div class="form-group" id="cp-pic-2-wrap" style="display:none">
+          <label>PIC 2</label>
           <select id="cp-assist"><option value="">— Not assigned —</option></select>
         </div>
-        <div class="form-group">
-          <label>Kickoff Date (Start) *</label>
-          <input id="cp-kickoff" type="date" oninput="updateMandaysPreview(); updateInitialReportMin()" />
+        <div class="form-group" id="cp-pic-3-wrap" style="display:none">
+          <label>PIC 3</label>
+          <select id="cp-engineer-3"><option value="">— Not assigned —</option></select>
         </div>
-        <div class="form-group">
-          <label>Initial Report Date *</label>
-          <input id="cp-initial" type="date" oninput="onInitialDateInput()" />
-          <div id="cp-initial-warn" style="font-size:11px;color:#f87171;margin-top:4px;display:none"></div>
-          <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px;display:none">🤖 Auto-calculated. Kosongkan Assessment untuk ubah manual.</div>
+        <div class="form-group" id="cp-pic-4-wrap" style="display:none">
+          <label>PIC 4</label>
+          <select id="cp-engineer-4"><option value="">— Not assigned —</option></select>
         </div>
-        <div class="form-group">
-          <label>Kickoff (hari)</label>
-          <input id="cp-md-kickoff" type="number" value="1" min="1" oninput="onMandaysParamChanged()" />
+
+        <!-- === Offensive Team Only Fields (6-11) === -->
+        <div id="cp-offensive-fields" style="display:contents">
+          <!-- Scope Type -->
+          <div class="form-group" id="cp-scope-wrap">
+            <label>Scope Type *</label>
+            <select id="cp-type">
+              <option value="web">Web</option>
+              <option value="api">API</option>
+              <option value="mobile">Mobile</option>
+              <option value="infra">Infrastructure</option>
+            </select>
+          </div>
+
+          <!-- Methodology (VAPT only) -->
+          <div class="form-group" id="cp-method-wrap">
+            <label>Methodology *</label>
+            <select id="cp-method">
+              <option value="blackbox">Black Box</option>
+              <option value="greybox">Grey Box</option>
+              <option value="whitebox">White Box</option>
+            </select>
+          </div>
+
+          <!-- Kick Off Date -->
+          <div class="form-group">
+            <label>Kick Off Date *</label>
+            <input id="cp-kickoff" type="date" oninput="onMandaysParamChanged()" />
+          </div>
+
+          <!-- Initial Report Date (auto) -->
+          <div class="form-group">
+            <label>Initial Report Date</label>
+            <input id="cp-initial" type="date" readonly style="opacity:0.65;cursor:not-allowed" />
+            <div id="cp-initial-warn" style="font-size:11px;color:#f87171;margin-top:4px;display:none"></div>
+            <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px">🤖 Auto-calculated from mandays</div>
+          </div>
+
+          <!-- Assessment Mandays -->
+          <div class="form-group">
+            <label>Assessment Mandays *</label>
+            <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
+          </div>
+
+          <!-- Info Gathering Mandays -->
+          <div class="form-group">
+            <label>Info Gathering Mandays</label>
+            <input id="cp-md-infogath" type="number" value="5" min="0" oninput="onMandaysParamChanged()" />
+          </div>
+
+          <!-- Hidden: kickoff mandays always 1 -->
+          <input id="cp-md-kickoff" type="hidden" value="1" />
         </div>
-        <div class="form-group">
-          <label>Info Gathering (hari)</label>
-          <input id="cp-md-infogath" type="number" value="5" min="0" oninput="onMandaysParamChanged()" />
-        </div>
-        <div class="form-group">
-          <label>Assessment (hari) <span style="font-size:10px;font-weight:400;color:var(--muted)">(optional — mengunci Initial Report Date)</span></label>
-          <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
-        </div>
+
         <!-- Live mandays preview -->
         <div id="cp-mandays-preview" style="display:none;grid-column:1/-1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:14px 18px">
           <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.05em">MANDAYS ESTIMATE</div>
@@ -1447,6 +1519,8 @@
           </div>
           <div id="cp-md-r-note" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
         </div>
+
+        <!-- Resource Links -->
         <div class="form-group" style="grid-column:1/-1">
           <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
           <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
@@ -2310,13 +2384,21 @@ function renderDashActiveProjects(rows, refDate) {
      if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
      return r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
   });
-  if(!active.length){tbody.innerHTML='<tr><td colspan="5"><div class="empty-state">Tidak ada project aktif.</div></td></tr>';return;}
+  if(!active.length){tbody.innerHTML='<tr><td colspan="7"><div class="empty-state">Tidak ada project aktif.</div></td></tr>';return;}
   const tl={web:'Web',api:'API',mobile:'Mobile',infra:'Infrastructure',phishing:'Phishing'};
   tbody.innerHTML=active.map(p=>{
     const isOff=p.initial_report_date&&new Date(p.initial_report_date)<today&&p.initial_report_status!=='completed';
     const isDone=p.initial_report_status==='completed';
     const badge=isDone?'<span class="badge-completed">&#10003; Initial Done</span>':isOff?'<span class="badge-off-track">&#9888; Off Track</span>':'<span class="badge-on-track">&#10003; On Track</span>';
-    return `<tr><td style="font-weight:600">${esc(p.client_name)}</td><td style="color:var(--muted);font-size:12px">${fmt(p.kickoff_date)}</td><td style="color:var(--muted);font-size:12px">${fmt(p.initial_report_date)}</td><td><span class="badge badge-${p.project_type||'web'}">${tl[p.project_type]||p.project_type||'Web'}</span></td><td>${badge}</td></tr>`;
+    const ko = p.mandays_kickoff ?? 1;
+    const ig = p.mandays_infogath ?? 5;
+    const as = p.mandays_assessment ?? 0;
+    let igDate = '—', asDate = '—';
+    if (p.kickoff_date) {
+      igDate = fmt(addWorkingDays(p.kickoff_date, ko + 1));
+      asDate = fmt(addWorkingDays(p.kickoff_date, ko + ig + 1));
+    }
+    return `<tr><td style="font-weight:600">${esc(p.client_name)}</td><td><span class="badge badge-${p.project_type||'web'}">${tl[p.project_type]||p.project_type||'Web'}</span></td><td style="font-weight:600;color:var(--accent)">${as} <span style="font-size:10px;font-weight:400;color:var(--muted)">hari</span></td><td style="color:var(--muted);font-size:12px">${igDate}</td><td style="color:var(--muted);font-size:12px">${asDate}</td><td style="color:var(--muted);font-size:12px">${fmt(p.initial_report_date)}</td><td>${badge}</td></tr>`;
   }).join('');
 }
 
@@ -2664,41 +2746,61 @@ async function editProjectPortal(proj) {
   if (clientSection) clientSection.style.display = 'none';
   const tabBar = document.getElementById('ne-tab-bar');
   if (tabBar) tabBar.style.display = 'none';
-  // Show project section directly
   const projSection = document.getElementById('ne-project-section');
   if (projSection) projSection.style.display = '';
+  const submitWrap = document.getElementById('ne-submit-wrap');
+  if (submitWrap) submitWrap.style.display = '';
 
-  // Pre-fill all fields from existing project data
+  // Pre-fill project name
   document.getElementById('cp-name').value = proj.project_name || '';
+
+  // Pre-fill Team & Service
+  const teamEl = document.getElementById('cp-team');
+  teamEl.value = proj.team || 'offensive';
+  _onTeamChange(); // rebuild service options
+
+  // Set service value
+  const serviceSel = document.getElementById('cp-service');
+  const serviceVal = proj.service || '';
+  // Check if service is a known option
+  const knownOption = [...serviceSel.options].find(o => o.value === serviceVal);
+  if (knownOption) {
+    serviceSel.value = serviceVal;
+  } else if (serviceVal) {
+    serviceSel.value = '__other__';
+    document.getElementById('cp-service-custom').value = serviceVal;
+    document.getElementById('cp-service-custom').style.display = 'block';
+  }
+  _onServiceChange();
+
+  // Pre-fill Scope Type & Methodology
   document.getElementById('cp-type').value = proj.project_type || 'web';
-  updateCpMethodOptions();
   if (proj.project_method) {
     const methodEl = document.getElementById('cp-method');
     if (methodEl) methodEl.value = proj.project_method;
   }
+
+  // Pre-fill Resource Count & PICs
+  let resourceCount = 1;
+  if (proj.engineer_4_id) resourceCount = 4;
+  else if (proj.engineer_3_id) resourceCount = 3;
+  else if (proj.assist_engineer_id) resourceCount = 2;
+  document.getElementById('cp-resource-count').value = String(resourceCount);
+  _onResourceCountChange();
 
   // Pre-fill dates
   document.getElementById('cp-kickoff').value = proj.kickoff_date || '';
   document.getElementById('cp-initial').value = proj.initial_report_date || '';
 
   // Pre-fill mandays
-  const mkEl = document.getElementById('cp-md-kickoff');
-  const miEl = document.getElementById('cp-md-infogath');
-  const maEl = document.getElementById('cp-md-assessment');
-  if (mkEl) mkEl.value = proj.mandays_kickoff ?? 1;
-  if (miEl) miEl.value = proj.mandays_infogath ?? 5;
-  if (maEl) maEl.value = proj.mandays_assessment ?? 0;
+  document.getElementById('cp-md-kickoff').value = proj.mandays_kickoff ?? 1;
+  document.getElementById('cp-md-infogath').value = proj.mandays_infogath ?? 5;
+  document.getElementById('cp-md-assessment').value = proj.mandays_assessment ?? 0;
 
   // Handle assessment mode
-  const assessment = proj.mandays_assessment ?? 0;
-  if (assessment > 0) {
-    _setInitialReadonly(true);
-  } else {
-    _setInitialReadonly(false);
+  if ((proj.mandays_assessment ?? 0) > 0) {
+    _computeAndSetInitialDate();
   }
-
-  // Update mandays preview and min-date validation
-  _updateModeAMinDate();
   updateMandaysPreview();
 
   // Clear error
@@ -2709,53 +2811,60 @@ async function editProjectPortal(proj) {
   // Populate existing project links
   populateProjectLinks(proj.project_links || '');
 
-  // Load clients into select and pre-select current client
-  const clientSel = document.getElementById('cp-client');
-  clientSel.disabled = true;
-  try {
-    const clients = await apiFetch('/api/clients');
-    clientSel.innerHTML = '<option value="">— Select client —</option>' +
-      clients.map(c => `<option value="${c.id}" ${Number(c.id)===Number(proj.client_id)?'selected':''}>${esc(c.name)}</option>`).join('');
-  } catch { clientSel.innerHTML = '<option value="">Failed to load</option>'; }
+  // Set client ID for reference
+  _neSelectedClientId = String(proj.client_id);
 
-  // Load engineers and pre-select current PIC and Assist
-  const engSel = document.getElementById('cp-engineer');
-  const assistSel = document.getElementById('cp-assist');
+  // Load engineers and pre-select current PICs
+  const picConfigs = [
+    { selId: 'cp-engineer', projField: proj.assigned_engineer_id },
+    { selId: 'cp-assist', projField: proj.assist_engineer_id },
+    { selId: 'cp-engineer-3', projField: proj.engineer_3_id },
+    { selId: 'cp-engineer-4', projField: proj.engineer_4_id },
+  ];
   try {
     const engs = await apiFetch('/api/users/engineers');
-    const optPIC = '<option value="">— Not assigned —</option>' + 
-      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(proj.assigned_engineer_id)?'selected':''}>${esc(e.display_name)}</option>`).join('');
-    const optAssist = '<option value="">— Not assigned —</option>' + 
-      engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(proj.assist_engineer_id)?'selected':''}>${esc(e.display_name)}</option>`).join('');
-    engSel.innerHTML = optPIC;
-    if(assistSel) assistSel.innerHTML = optAssist;
-  } catch { 
-    engSel.innerHTML = '<option value="">Failed to load</option>'; 
-    if(assistSel) assistSel.innerHTML = '<option value="">Failed to load</option>'; 
+    picConfigs.forEach(({ selId, projField }) => {
+      const el = document.getElementById(selId);
+      if (!el) return;
+      el.innerHTML = '<option value="">— Not assigned —</option>' +
+        engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(projField)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+    });
+  } catch {
+    picConfigs.forEach(({ selId }) => {
+      const el = document.getElementById(selId);
+      if (el) el.innerHTML = '<option value="">Failed to load</option>';
+    });
   }
 
   const btn = document.getElementById('cp-btn');
   btn.innerHTML = 'Save Changes';
   btn.onclick = async () => {
-    const project_type = document.getElementById('cp-type').value;
-    const project_method = (project_type !== 'phishing') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
-    const assigned_engineer_id = engSel.value || null;
-    const assist_engineer_id = (assistSel && assistSel.value) || null;
-    const kickoff_date = document.getElementById('cp-kickoff').value || null;
-    const initial_report_date = document.getElementById('cp-initial').value || null;
-    const mandays_kickoff = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
-    const mandays_infogath = parseInt(document.getElementById('cp-md-infogath').value) || 5;
-    const mandays_assessment = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
+    const team = document.getElementById('cp-team').value;
+    const isOffensive = team === 'offensive';
+    let service = document.getElementById('cp-service').value;
+    if (service === '__other__') service = (document.getElementById('cp-service-custom')?.value || '').trim();
+
+    const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (proj.project_type || 'web');
+    const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
+    const assigned_engineer_id = document.getElementById('cp-engineer')?.value || null;
+    const assist_engineer_id = document.getElementById('cp-assist')?.value || null;
+    const engineer_3_id = document.getElementById('cp-engineer-3')?.value || null;
+    const engineer_4_id = document.getElementById('cp-engineer-4')?.value || null;
+    const kickoff_date = isOffensive ? (document.getElementById('cp-kickoff').value || null) : null;
+    const initial_report_date = isOffensive ? (document.getElementById('cp-initial').value || null) : null;
+    const mandays_kickoff = isOffensive ? (parseInt(document.getElementById('cp-md-kickoff').value) || 1) : 1;
+    const mandays_infogath = isOffensive ? (parseInt(document.getElementById('cp-md-infogath').value) || 5) : 0;
+    const mandays_assessment = isOffensive ? (parseInt(document.getElementById('cp-md-assessment')?.value) || 0) : 0;
     const project_links = getProjectLinksFromForm();
     btn.disabled = true;
     try {
-      await apiFetch(`/api/projects/${proj.project_id}`, 'PUT', { 
-        name: document.getElementById('cp-name').value.trim(), 
-        project_type, project_method, 
-        assigned_engineer_id, assist_engineer_id, 
-        kickoff_date, initial_report_date, 
+      await apiFetch(`/api/projects/${proj.project_id}`, 'PUT', {
+        name: document.getElementById('cp-name').value.trim(),
+        project_type, project_method,
+        assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id,
+        kickoff_date, initial_report_date,
         mandays_kickoff, mandays_infogath, mandays_assessment,
-        project_links 
+        project_links, team, service
       });
       modal.classList.remove('open');
       showToast('Project updated!', 'success');
@@ -2769,29 +2878,124 @@ async function editProjectPortal(proj) {
 }
 
 // ── New Entry (combined Client + Project) ─────────────────────────────────────
-// onClientSelectChange: toggle new-client fields when "➕ Create New Client" is selected
-function onClientSelectChange() {
-  const sel = document.getElementById('cp-client');
+let _neSelectedClientId = null; // null = none selected, '__new__' = creating new
+let _neClientsData = [];
+
+// ── Client card rendering ──
+function _renderClientCards(clients) {
+  const list = document.getElementById('ne-client-list');
+  if (!list) return;
+  if (!clients.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:20px">No clients yet. Click "Add New Client" to create one.</div>';
+    return;
+  }
+  list.innerHTML = clients.map(c => {
+    const isSelected = _neSelectedClientId === String(c.id);
+    return `<div class="ne-client-card" data-cid="${c.id}" onclick="_selectClient('${c.id}')" style="padding:12px 16px;border-radius:10px;border:1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};background:${isSelected ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)'};cursor:pointer;transition:all .15s;display:flex;justify-content:space-between;align-items:center" onmouseover="if(!this.classList.contains('sel'))this.style.borderColor='rgba(99,102,241,0.4)'" onmouseout="if(!this.classList.contains('sel'))this.style.borderColor='var(--border)'">
+      <div>
+        <div style="font-weight:600;font-size:14px;color:var(--text)">${esc(c.name)}</div>
+        ${c.engagement_reference ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(c.engagement_reference)}${c.engagement_info ? ' — ' + esc(c.engagement_info) : ''}</div>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--muted)">${isSelected ? '<span style="color:var(--accent);font-weight:700">✓ Selected</span>' : ''}</div>
+    </div>`;
+  }).join('');
+}
+
+function _selectClient(cid) {
+  _neSelectedClientId = String(cid);
+  // Hide new client form if visible
   const newFields = document.getElementById('ne-new-client-fields');
-  if (!sel || !newFields) return;
-  if (sel.value === '__new__') {
-    newFields.style.display = 'block';
+  if (newFields) newFields.style.display = 'none';
+  // Re-render to update selected state
+  _renderClientCards(_neClientsData);
+  _updateProjectTabState();
+}
+
+function _filterClientCards() {
+  const q = (document.getElementById('ne-client-search')?.value || '').toLowerCase().trim();
+  const filtered = q ? _neClientsData.filter(c => c.name.toLowerCase().includes(q)) : _neClientsData;
+  const list = document.getElementById('ne-client-list');
+  if (!filtered.length && q) {
+    list.innerHTML = '<div class="empty-state" style="padding:16px;font-size:12px">No matching clients found.</div>';
+    return;
+  }
+  _renderClientCards(filtered);
+}
+
+function _toggleNewClientForm() {
+  const newFields = document.getElementById('ne-new-client-fields');
+  if (!newFields) return;
+  const isHidden = newFields.style.display === 'none';
+  newFields.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    _neSelectedClientId = '__new__';
+    // Deselect any card
+    _renderClientCards(_neClientsData);
+    document.getElementById('ne-client-name')?.focus();
   } else {
-    newFields.style.display = 'none';
-    // If an existing client is selected, auto-switch to project details tab
-    if (sel.value) switchNeTab('project');
+    _neSelectedClientId = null;
   }
   _updateProjectTabState();
 }
 
+function _onEngRefChange() {
+  const sel = document.getElementById('ne-engagement-ref');
+  const custom = document.getElementById('ne-engagement-ref-custom');
+  if (!sel || !custom) return;
+  custom.style.display = sel.value === '__other__' ? 'block' : 'none';
+  if (sel.value === '__other__') custom.focus();
+}
+
+// ── Team / Service logic ──
+function _onTeamChange() {
+  const team = document.getElementById('cp-team')?.value;
+  const serviceSel = document.getElementById('cp-service');
+  const offensiveFields = document.getElementById('cp-offensive-fields');
+  if (!serviceSel) return;
+  
+  if (team === 'offensive') {
+    serviceSel.innerHTML = '<option value="vapt">VAPT</option><option value="va">VA</option><option value="firewall_review">Firewall Review</option><option value="phishing">Phishing</option><option value="__other__">Other</option>';
+    if (offensiveFields) offensiveFields.style.display = 'contents';
+  } else {
+    serviceSel.innerHTML = '<option value="it_audit">IT Audit</option><option value="pdp">PDP</option><option value="maturity_assessment">Maturity Assessment</option><option value="__other__">Other</option>';
+    if (offensiveFields) offensiveFields.style.display = 'none';
+  }
+  document.getElementById('cp-service-custom').style.display = 'none';
+  _onServiceChange();
+}
+
+function _onServiceChange() {
+  const serviceSel = document.getElementById('cp-service');
+  const customInput = document.getElementById('cp-service-custom');
+  const methodWrap = document.getElementById('cp-method-wrap');
+  if (!serviceSel) return;
+  
+  // Show/hide custom input
+  if (customInput) {
+    customInput.style.display = serviceSel.value === '__other__' ? 'block' : 'none';
+    if (serviceSel.value === '__other__') customInput.focus();
+  }
+  
+  // Methodology only for VAPT
+  if (methodWrap) {
+    methodWrap.style.display = serviceSel.value === 'vapt' ? '' : 'none';
+  }
+}
+
+function _onResourceCountChange() {
+  const count = parseInt(document.getElementById('cp-resource-count')?.value) || 1;
+  document.getElementById('cp-pic-1-wrap').style.display = '';
+  document.getElementById('cp-pic-2-wrap').style.display = count >= 2 ? '' : 'none';
+  document.getElementById('cp-pic-3-wrap').style.display = count >= 3 ? '' : 'none';
+  document.getElementById('cp-pic-4-wrap').style.display = count >= 4 ? '' : 'none';
+}
+
 // Check if a client has been selected or new-client name filled
 function _isClientReady() {
-  const sel = document.getElementById('cp-client');
-  if (!sel) return false;
-  if (sel.value === '__new__') {
+  if (_neSelectedClientId === '__new__') {
     return (document.getElementById('ne-client-name')?.value || '').trim().length > 0;
   }
-  return sel.value !== '';
+  return _neSelectedClientId != null && _neSelectedClientId !== '';
 }
 
 // Update the project tab appearance based on client readiness
@@ -2806,12 +3010,11 @@ function _updateProjectTabState() {
 function validateAndGoToProject() {
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
-  const sel = document.getElementById('cp-client');
-  if (!sel || !sel.value) {
+  if (!_neSelectedClientId) {
     errEl.textContent = 'Please select a client or create a new one first.';
     errEl.classList.add('show'); return;
   }
-  if (sel.value === '__new__') {
+  if (_neSelectedClientId === '__new__') {
     const name = (document.getElementById('ne-client-name')?.value || '').trim();
     if (!name) {
       errEl.textContent = 'Please enter a client name.';
@@ -2821,7 +3024,7 @@ function validateAndGoToProject() {
   switchNeTab('project');
 }
 
-// switchNeTab: switch between 'client' and 'project' tabs in the New Entry modal
+// switchNeTab: switch between 'client' and 'project' tabs
 function switchNeTab(tab) {
   const clientSection = document.getElementById('ne-client-section');
   const projectSection = document.getElementById('ne-project-section');
@@ -2830,7 +3033,6 @@ function switchNeTab(tab) {
   const submitWrap = document.getElementById('ne-submit-wrap');
   if (!clientSection || !projectSection || !tabClient || !tabProject) return;
 
-  // Block switching to project tab if no client selected
   if (tab === 'project' && !_isClientReady()) {
     const errEl = document.getElementById('cp-err');
     errEl.textContent = 'Please select or create a client first.';
@@ -2860,81 +3062,92 @@ function switchNeTab(tab) {
 }
 
 async function openNewEntry() {
-  // Reset form and reset modal state in case it was polluted by editProjectPortal
   const titleEl = document.getElementById('modal-create-project-title');
   if (titleEl) titleEl.textContent = 'New Entry';
 
-  // Show tab bar and reset to client tab
   const tabBar = document.getElementById('ne-tab-bar');
   if (tabBar) tabBar.style.display = '';
+  
+  // Reset selection state
+  _neSelectedClientId = null;
+  
   switchNeTab('client');
 
-  // Show client section
   const clientSection = document.getElementById('ne-client-section');
   if (clientSection) clientSection.style.display = '';
 
-  const clientSel = document.getElementById('cp-client');
-  clientSel.disabled = false;
   const btn = document.getElementById('cp-btn');
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Create Entry`;
   btn.onclick = submitNewEntry;
 
   // Reset client fields
+  document.getElementById('ne-client-search').value = '';
   const neClientName = document.getElementById('ne-client-name');
   const neEngRef = document.getElementById('ne-engagement-ref');
   const neEngInfo = document.getElementById('ne-engagement-info');
+  const neEngRefCustom = document.getElementById('ne-engagement-ref-custom');
   if (neClientName) neClientName.value = '';
   if (neEngRef) neEngRef.value = '';
   if (neEngInfo) neEngInfo.value = '';
+  if (neEngRefCustom) { neEngRefCustom.value = ''; neEngRefCustom.style.display = 'none'; }
   const newFields = document.getElementById('ne-new-client-fields');
   if (newFields) newFields.style.display = 'none';
 
   // Reset project fields
-  ['cp-name','cp-kickoff','cp-initial'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('cp-name').value = '';
+  document.getElementById('cp-team').value = 'offensive';
+  document.getElementById('cp-service').value = 'vapt';
+  document.getElementById('cp-service-custom').value = '';
+  document.getElementById('cp-service-custom').style.display = 'none';
+  document.getElementById('cp-resource-count').value = '1';
   document.getElementById('cp-type').value = 'web';
+  document.getElementById('cp-method').value = 'blackbox';
+  document.getElementById('cp-kickoff').value = '';
+  document.getElementById('cp-initial').value = '';
   document.getElementById('cp-err').classList.remove('show');
   document.getElementById('cp-links-container').innerHTML = '';
-  // Reset mandays fields
-  const mkEl = document.getElementById('cp-md-kickoff');
-  const miEl = document.getElementById('cp-md-infogath');
-  const maEl = document.getElementById('cp-md-assessment');
-  if (mkEl) mkEl.value = 1;
-  if (miEl) miEl.value = 5;
-  if (maEl) maEl.value = 0;
-  _setInitialReadonly(false); // ensure date field is editable on open
-  const initEl = document.getElementById('cp-initial');
-  if (initEl) { initEl.min = ''; initEl.value = ''; }
+
+  // Reset mandays
+  document.getElementById('cp-md-kickoff').value = 1;
+  document.getElementById('cp-md-infogath').value = 5;
+  document.getElementById('cp-md-assessment').value = 0;
   const warnEl = document.getElementById('cp-initial-warn');
   if (warnEl) warnEl.style.display = 'none';
   const prev = document.getElementById('cp-mandays-preview');
   if (prev) prev.style.display = 'none';
 
-  // Load clients into select (with Create New option)
+  // Reset team-based visibility
+  _onTeamChange();
+  _onResourceCountChange();
+
+  // Load clients as cards
   try {
     const clients = await apiFetch('/api/clients');
-    clientSel.innerHTML = '<option value="">— Select client —</option>' +
-      '<option value="__new__">➕ Create New Client</option>' +
-      clients.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  } catch { clientSel.innerHTML = '<option value="">Failed to load clients</option>'; }
+    _neClientsData = clients;
+    _renderClientCards(clients);
+  } catch { _neClientsData = []; _renderClientCards([]); }
 
-  // Load engineers into select
-  const engSel = document.getElementById('cp-engineer');
-  const assistSel = document.getElementById('cp-assist');
+  // Load engineers into all PIC selects
+  const picSelects = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4'];
   try {
     const engs = await apiFetch('/api/users/engineers');
     const options = '<option value="">— Not assigned —</option>' +
       engs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
-    engSel.innerHTML = options;
-    if (assistSel) assistSel.innerHTML = options;
-  } catch { 
-    engSel.innerHTML = '<option value="">Failed to load engineers</option>'; 
-    if (assistSel) assistSel.innerHTML = '<option value="">Failed to load engineers</option>'; 
+    picSelects.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = options;
+    });
+  } catch {
+    picSelects.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = '<option value="">Failed to load</option>';
+    });
   }
 
   document.getElementById('modal-create-project').classList.add('open');
 }
 
-// Backward compatibility: openCreateProject now calls openNewEntry
+// Backward compatibility
 async function openCreateProject() { return openNewEntry(); }
 
 // ── Mandays helpers ───────────────────────────────────────────────────────────
@@ -3084,43 +3297,46 @@ function updateInitialReportMin() { _updateModeAMinDate(); }
 
 
 async function submitNewEntry() {
-  const clientSelVal = document.getElementById('cp-client').value;
   const name       = document.getElementById('cp-name').value.trim();
-  const project_type = document.getElementById('cp-type').value;
-  const project_method = (project_type !== 'phishing') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
+  const team       = document.getElementById('cp-team').value;
+  const isOffensive = team === 'offensive';
+
+  // Resolve service value
+  let service = document.getElementById('cp-service').value;
+  if (service === '__other__') {
+    service = (document.getElementById('cp-service-custom')?.value || '').trim();
+  }
+
+  const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : 'web';
+  const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
+
   const assigned_engineer_id = document.getElementById('cp-engineer').value || null;
-  const assistSel  = document.getElementById('cp-assist');
-  const assist_engineer_id = (assistSel && assistSel.value) || null;
-  const kickoff_date        = document.getElementById('cp-kickoff').value || null;
-  const initial_report_date = document.getElementById('cp-initial').value || null;
-  const final_report_date   = null; // set via Start Retest
-  const mandays_kickoff     = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
-  const mandays_infogath    = parseInt(document.getElementById('cp-md-infogath').value) || 5;
-  const mandays_assessment  = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
+  const assist_engineer_id = document.getElementById('cp-assist')?.value || null;
+  const engineer_3_id = document.getElementById('cp-engineer-3')?.value || null;
+  const engineer_4_id = document.getElementById('cp-engineer-4')?.value || null;
+
+  const kickoff_date        = isOffensive ? (document.getElementById('cp-kickoff').value || null) : null;
+  const initial_report_date = isOffensive ? (document.getElementById('cp-initial').value || null) : null;
+  const final_report_date   = null;
+  const mandays_kickoff     = isOffensive ? (parseInt(document.getElementById('cp-md-kickoff').value) || 1) : 1;
+  const mandays_infogath    = isOffensive ? (parseInt(document.getElementById('cp-md-infogath').value) || 5) : 0;
+  const mandays_assessment  = isOffensive ? (parseInt(document.getElementById('cp-md-assessment')?.value) || 0) : 0;
+
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
 
-  // Determine client ID — create new or use existing
-  let clientId = clientSelVal;
-  const isNewClient = (clientSelVal === '__new__');
+  // Determine client ID
+  let clientId = _neSelectedClientId;
+  const isNewClient = (clientId === '__new__');
 
   if (isNewClient) {
     const newClientName = (document.getElementById('ne-client-name')?.value || '').trim();
     if (!newClientName) { errEl.textContent = 'Client name is required for new client.'; errEl.classList.add('show'); return; }
-    // We'll create the client first, then use the returned ID
   } else if (!clientId) {
     errEl.textContent = 'Please select a client.'; errEl.classList.add('show'); return;
   }
   if (!name) { errEl.textContent = 'Project name is required.'; errEl.classList.add('show'); return; }
-
-  // Validate: initial report date must be at least kickoff + total mandays working days
-  if (kickoff_date && initial_report_date) {
-    const minEl = document.getElementById('cp-initial');
-    if (minEl.min && initial_report_date < minEl.min) {
-      errEl.textContent = `Initial Report Date harus minimal ${minEl.min} (kickoff + ${mandays_kickoff+mandays_infogath+mandays_assessment} hari kerja).`;
-      errEl.classList.add('show'); return;
-    }
-  }
+  if (!service) { errEl.textContent = 'Service is required.'; errEl.classList.add('show'); return; }
 
   const btn = document.getElementById('cp-btn');
   btn.disabled = true;
@@ -3128,22 +3344,32 @@ async function submitNewEntry() {
     // Step 1: If new client, create it first
     if (isNewClient) {
       const newClientName = document.getElementById('ne-client-name').value.trim();
-      const engagement_reference = document.getElementById('ne-engagement-ref')?.value || null;
+      let engagement_reference = document.getElementById('ne-engagement-ref')?.value || null;
+      if (engagement_reference === '__other__') {
+        engagement_reference = (document.getElementById('ne-engagement-ref-custom')?.value || '').trim() || null;
+      }
       const engagement_info = (document.getElementById('ne-engagement-info')?.value || '').trim() || null;
       const clientResult = await apiFetch('/api/clients', 'POST', { name: newClientName, engagement_reference, engagement_info });
       clientId = clientResult.id;
+      // Also create an engagement record
+      if (engagement_reference || engagement_info) {
+        try { await apiFetch(`/api/clients/${clientId}/engagements`, 'POST', { engagement_reference, engagement_info }); } catch {}
+      }
       showToast(`Client "${newClientName}" created!`, 'success');
     }
 
     // Step 2: Create the project under the client
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
-      name, project_type, project_method, assigned_engineer_id, assist_engineer_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment
+      name, project_type, project_method, assigned_engineer_id, assist_engineer_id,
+      engineer_3_id, engineer_4_id,
+      kickoff_date, initial_report_date, final_report_date, project_links,
+      mandays_kickoff, mandays_infogath, mandays_assessment,
+      team, service
     });
     document.getElementById('modal-create-project').classList.remove('open');
     showToast('Project created!', 'success');
     loadProjects(); loadDashboard();
-    // auto-expand the client group
     const clGrp = document.getElementById('cg-'+clientId);
     if (clGrp && clGrp.style.display==='none') toggleGroup('cg-'+clientId);
   } catch(e) {
@@ -3359,11 +3585,8 @@ async function submitChangePassword() {
 // ── Add Client (now redirects to New Entry) ──────────────────────────────────
 function openCreateClient() {
   openNewEntry();
-  // Auto-select "Create New Client" after modal opens
-  setTimeout(() => {
-    const sel = document.getElementById('cp-client');
-    if (sel) { sel.value = '__new__'; onClientSelectChange(); }
-  }, 100);
+  // Auto-toggle the new client form after modal opens
+  setTimeout(() => { _toggleNewClientForm(); }, 150);
 }
 
 // Legacy submitCreateClient — no longer used (kept for safety)
