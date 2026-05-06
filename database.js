@@ -106,6 +106,12 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN service TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN engineer_3_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN engineer_4_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_5_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_6_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_7_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_8_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_9_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN engineer_10_id INTEGER`, () => {});
   });
 
   db.run(`
@@ -151,12 +157,37 @@ function initializeDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT NOT NULL UNIQUE,
       display_name TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin','manager','pm','engineer')),
+      role TEXT NOT NULL CHECK(role IN ('admin','manager','pm','engineer','consultant')),
       password_hash TEXT NOT NULL,
+      team TEXT DEFAULT 'offensive',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `, (err) => {
     if (!err) seedDefaultUsers();
+    db.run(`ALTER TABLE users ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    // Migration: recreate users table to update CHECK constraint for 'consultant' role
+    db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
+      if (err || !row) return;
+      if (row.sql && !row.sql.includes('consultant')) {
+        console.log('[DB] Migrating users table to support consultant role...');
+        db.serialize(() => {
+          db.run(`CREATE TABLE users_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL UNIQUE,
+            display_name TEXT NOT NULL,
+            role TEXT NOT NULL CHECK(role IN ('admin','manager','pm','engineer','consultant')),
+            password_hash TEXT NOT NULL,
+            team TEXT DEFAULT 'offensive',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )`);
+          db.run(`INSERT INTO users_new SELECT id, username, display_name, role, password_hash, COALESCE(team,'offensive'), created_at FROM users`);
+          db.run(`DROP TABLE users`);
+          db.run(`ALTER TABLE users_new RENAME TO users`, () => {
+            console.log('[DB] Users table migration complete.');
+          });
+        });
+      }
+    });
   });
 
   db.run(`
@@ -175,9 +206,9 @@ function initializeDb() {
 
 async function seedDefaultUsers() {
   const defaults = [
-    { username: 'admin',   display_name: 'Admin',   role: 'admin'   },
-    { username: 'manager', display_name: 'Manager', role: 'manager' },
-    { username: 'pm',      display_name: 'PM',      role: 'pm'      },
+    { username: 'admin',   display_name: 'Admin',   role: 'admin',   team: 'offensive' },
+    { username: 'manager', display_name: 'Manager', role: 'manager', team: 'offensive' },
+    { username: 'pm',      display_name: 'PM',      role: 'pm',      team: 'offensive' },
   ];
 
   for (const u of defaults) {
@@ -185,8 +216,8 @@ async function seedDefaultUsers() {
       if (!row) {
         const hash = await bcrypt.hash(DEFAULT_PASSWORD, SALT_ROUNDS);
         db.run(
-          'INSERT INTO users (username, display_name, role, password_hash) VALUES (?,?,?,?)',
-          [u.username, u.display_name, u.role, hash],
+          'INSERT INTO users (username, display_name, role, password_hash, team) VALUES (?,?,?,?,?)',
+          [u.username, u.display_name, u.role, hash, u.team],
           (e) => { if (!e) console.log(`[auth] Seeded user: ${u.username}`); }
         );
       }
@@ -202,17 +233,17 @@ function getUserByUsername(username, callback) {
 
 function getAllUsers(callback) {
   getDb().all(
-    'SELECT id, username, display_name, role, created_at FROM users ORDER BY role, username',
+    'SELECT id, username, display_name, role, team, created_at FROM users ORDER BY role, username',
     callback
   );
 }
 
-function createUser({ username, display_name, role, password }, callback) {
+function createUser({ username, display_name, role, password, team }, callback) {
   bcrypt.hash(password, SALT_ROUNDS, (err, hash) => {
     if (err) return callback(err);
     getDb().run(
-      'INSERT INTO users (username, display_name, role, password_hash) VALUES (?,?,?,?)',
-      [username, display_name, role, hash],
+      'INSERT INTO users (username, display_name, role, password_hash, team) VALUES (?,?,?,?,?)',
+      [username, display_name, role, hash, team || 'offensive'],
       function(e) { callback(e, this?.lastID); }
     );
   });
@@ -244,8 +275,7 @@ function changePassword(id, newPasswordHash, callback) {
 
 function getAllEngineers(callback) {
   getDb().all(
-    'SELECT id, username, display_name FROM users WHERE role = ? ORDER BY display_name',
-    ['engineer'],
+    'SELECT id, username, display_name, team, role FROM users WHERE role IN ("engineer","consultant") ORDER BY display_name',
     callback
   );
 }
@@ -294,7 +324,7 @@ function getDashboardSummary(callback) {
     SELECT c.id AS client_id, c.name AS client_name,
            p.id AS project_id, p.name AS project_name, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
-           p.engineer_3_id, p.engineer_4_id,
+           p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
@@ -307,6 +337,12 @@ function getDashboardSummary(callback) {
            u2.display_name AS assist_engineer_name,
            u5.display_name AS engineer_3_name,
            u6.display_name AS engineer_4_name,
+           u7.display_name AS engineer_5_name,
+           u8.display_name AS engineer_6_name,
+           u9.display_name AS engineer_7_name,
+           u10.display_name AS engineer_8_name,
+           u11.display_name AS engineer_9_name,
+           u12.display_name AS engineer_10_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -318,6 +354,12 @@ function getDashboardSummary(callback) {
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
     LEFT JOIN users u5 ON u5.id = p.engineer_3_id
     LEFT JOIN users u6 ON u6.id = p.engineer_4_id
+    LEFT JOIN users u7 ON u7.id = p.engineer_5_id
+    LEFT JOIN users u8 ON u8.id = p.engineer_6_id
+    LEFT JOIN users u9 ON u9.id = p.engineer_7_id
+    LEFT JOIN users u10 ON u10.id = p.engineer_8_id
+    LEFT JOIN users u11 ON u11.id = p.engineer_9_id
+    LEFT JOIN users u12 ON u12.id = p.engineer_10_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -330,10 +372,18 @@ function getClientsByEngineer(engineerId, callback) {
     JOIN projects p ON p.client_id = c.id
     WHERE p.assigned_engineer_id = ?
        OR p.assist_engineer_id = ?
+       OR p.engineer_3_id = ?
+       OR p.engineer_4_id = ?
+       OR p.engineer_5_id = ?
+       OR p.engineer_6_id = ?
+       OR p.engineer_7_id = ?
+       OR p.engineer_8_id = ?
+       OR p.engineer_9_id = ?
+       OR p.engineer_10_id = ?
        OR p.retest_pic_id = ?
        OR p.retest_assist_id = ?
     ORDER BY c.name
-  `, [engineerId, engineerId, engineerId, engineerId], callback);
+  `, [engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId], callback);
 }
 
 // All clients with their projects (LEFT JOIN so empty clients appear too)
@@ -346,7 +396,7 @@ function getClientsWithProjects(callback) {
            p.initial_report_status, p.final_report_status,
            p.assigned_engineer_id,
            p.assist_engineer_id,
-           p.engineer_3_id, p.engineer_4_id,
+           p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.link_report_en, p.link_report_id, p.project_links,
            p.project_method, p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
            p.team, p.service,
@@ -356,6 +406,12 @@ function getClientsWithProjects(callback) {
            u2.display_name AS assist_engineer_name,
            u5.display_name AS engineer_3_name,
            u6.display_name AS engineer_4_name,
+           u7.display_name AS engineer_5_name,
+           u8.display_name AS engineer_6_name,
+           u9.display_name AS engineer_7_name,
+           u10.display_name AS engineer_8_name,
+           u11.display_name AS engineer_9_name,
+           u12.display_name AS engineer_10_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -367,6 +423,12 @@ function getClientsWithProjects(callback) {
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
     LEFT JOIN users u5 ON u5.id = p.engineer_3_id
     LEFT JOIN users u6 ON u6.id = p.engineer_4_id
+    LEFT JOIN users u7 ON u7.id = p.engineer_5_id
+    LEFT JOIN users u8 ON u8.id = p.engineer_6_id
+    LEFT JOIN users u9 ON u9.id = p.engineer_7_id
+    LEFT JOIN users u10 ON u10.id = p.engineer_8_id
+    LEFT JOIN users u11 ON u11.id = p.engineer_9_id
+    LEFT JOIN users u12 ON u12.id = p.engineer_10_id
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -661,7 +723,7 @@ function getProjectsByClient(clientId, callback) {
   db.all(
     `SELECT p.id, p.client_id, p.name, p.project_type, p.project_method,
             p.assigned_engineer_id, p.assist_engineer_id,
-            p.engineer_3_id, p.engineer_4_id,
+            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
             p.kickoff_date,
             p.initial_report_date, p.final_report_date,
             p.initial_report_status, p.final_report_status,
@@ -674,12 +736,24 @@ function getProjectsByClient(clientId, callback) {
             u.display_name AS engineer_name,
             u2.display_name AS assist_engineer_name,
             u5.display_name AS engineer_3_name,
-            u6.display_name AS engineer_4_name
+            u6.display_name AS engineer_4_name,
+            u7.display_name AS engineer_5_name,
+            u8.display_name AS engineer_6_name,
+            u9.display_name AS engineer_7_name,
+            u10.display_name AS engineer_8_name,
+            u11.display_name AS engineer_9_name,
+            u12.display_name AS engineer_10_name
      FROM projects p
      LEFT JOIN users u ON u.id = p.assigned_engineer_id
      LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
      LEFT JOIN users u5 ON u5.id = p.engineer_3_id
      LEFT JOIN users u6 ON u6.id = p.engineer_4_id
+     LEFT JOIN users u7 ON u7.id = p.engineer_5_id
+     LEFT JOIN users u8 ON u8.id = p.engineer_6_id
+     LEFT JOIN users u9 ON u9.id = p.engineer_7_id
+     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
+     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
+     LEFT JOIN users u12 ON u12.id = p.engineer_10_id
      WHERE p.client_id = ?
      ORDER BY p.name COLLATE NOCASE ASC`,
     [clientId],
@@ -691,11 +765,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = opts || {};
+  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service, board_status_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null],
+    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service, board_status_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -794,7 +868,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, callback) {
+function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
@@ -805,6 +879,12 @@ function updateProject(id, { name, project_type, project_method, assigned_engine
        assist_engineer_id = ?,
        engineer_3_id = ?,
        engineer_4_id = ?,
+       engineer_5_id = ?,
+       engineer_6_id = ?,
+       engineer_7_id = ?,
+       engineer_8_id = ?,
+       engineer_9_id = ?,
+       engineer_10_id = ?,
        kickoff_date = ?,
        initial_report_date = ?,
        final_report_date = ?,
@@ -815,7 +895,7 @@ function updateProject(id, { name, project_type, project_method, assigned_engine
        team = ?,
        service = ?
      WHERE id = ?`,
-    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null, id],
+    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -1055,7 +1135,7 @@ function getProjectsForBoard(callback) {
            p.initial_report_status, p.final_report_status,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.assigned_engineer_id, p.assist_engineer_id,
-           p.engineer_3_id, p.engineer_4_id,
+           p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
            p.link_report_en, p.link_report_id, p.project_links,
            p.retest_pic_id, p.retest_assist_id,
@@ -1065,6 +1145,12 @@ function getProjectsForBoard(callback) {
            u2.display_name AS assist_engineer_name,
            u5.display_name AS engineer_3_name,
            u6.display_name AS engineer_4_name,
+           u7.display_name AS engineer_5_name,
+           u8.display_name AS engineer_6_name,
+           u9.display_name AS engineer_7_name,
+           u10.display_name AS engineer_8_name,
+           u11.display_name AS engineer_9_name,
+           u12.display_name AS engineer_10_name,
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
@@ -1076,6 +1162,12 @@ function getProjectsForBoard(callback) {
     LEFT JOIN users u4 ON u4.id = p.retest_assist_id
     LEFT JOIN users u5 ON u5.id = p.engineer_3_id
     LEFT JOIN users u6 ON u6.id = p.engineer_4_id
+    LEFT JOIN users u7 ON u7.id = p.engineer_5_id
+    LEFT JOIN users u8 ON u8.id = p.engineer_6_id
+    LEFT JOIN users u9 ON u9.id = p.engineer_7_id
+    LEFT JOIN users u10 ON u10.id = p.engineer_8_id
+    LEFT JOIN users u11 ON u11.id = p.engineer_9_id
+    LEFT JOIN users u12 ON u12.id = p.engineer_10_id
     ORDER BY c.name, p.name
   `, callback);
 }

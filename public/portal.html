@@ -467,6 +467,33 @@
       font-size: 11px; color: var(--muted); margin-top: 2px; padding-left: 156px;
     }
 
+    /* Sidebar nav dropdown */
+    .nav-dropdown { position: relative; }
+    .nav-dropdown .nav-dropdown-arrow { flex-shrink: 0; }
+    .nav-dropdown.open .nav-dropdown-arrow { transform: rotate(180deg); }
+    .nav-sub-items {
+      padding-left: 20px;
+    }
+    .nav-sub-item {
+      display: flex; align-items: center;
+      width: 100%; text-align: left;
+      padding: 7px 12px 7px 18px;
+      font-size: 12px; font-weight: 500;
+      color: var(--muted); background: none; border: none;
+      cursor: pointer; font-family: inherit;
+      border-radius: 6px; transition: all 0.15s;
+    }
+    .nav-sub-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .nav-sub-item.active { color: var(--accent); background: rgba(99,102,241,0.1); font-weight: 600; }
+
+    /* Resource Allocation team section header */
+    .capacity-team-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 0 8px; margin-top: 16px;
+      font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
+      border-top: 1px solid var(--border);
+    }
+    .capacity-team-header:first-child { border-top: none; margin-top: 0; }
     /* == New Dashboard Sections == */
     .dash-section-wrap { padding: 0 32px; margin-bottom: 28px; }
     .dash-section-title {
@@ -613,10 +640,21 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
       Dashboard
     </button>
-    <button class="nav-item" onclick="navigate('projects')" id="nav-projects">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-      Clients
-    </button>
+    <div class="nav-dropdown" id="nav-dropdown-clients">
+      <button class="nav-item" onclick="toggleNavDropdown('clients')" id="nav-projects">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
+        Clients
+        <svg class="nav-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;transition:transform 0.2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="nav-sub-items" style="display:none">
+        <button class="nav-sub-item" onclick="navigateClients('offensive')" id="nav-projects-offensive">
+          <span style="color:#ef4444;font-size:8px;margin-right:6px">●</span> Offensive Team
+        </button>
+        <button class="nav-sub-item" onclick="navigateClients('itaudit')" id="nav-projects-itaudit">
+          <span style="color:#3b82f6;font-size:8px;margin-right:6px">●</span> IT Audit &amp; SE
+        </button>
+      </div>
+    </div>
     <button class="nav-item" onclick="navigate('pm-board')" id="nav-pm-board">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
       Projects
@@ -629,7 +667,7 @@
     <div class="nav-section">Management</div>
     <button class="nav-item" onclick="navigate('users')" id="nav-users">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-      Users
+      User Management
     </button>
     <button class="nav-item" onclick="navigate('requests')" id="nav-requests">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
@@ -792,13 +830,25 @@
     </div>
     <!-- Section 2: Trend Chart + Resource Allocation -->
     <div class="dash-section-wrap">
-      <div class="dash-chart-card" style="margin-bottom: 20px;">
-        <div class="dash-card-title">&#128200; Trend Project per Bulan</div>
-        <div class="dash-chart-area"><canvas id="dash-trend-chart"></canvas></div>
+      <div class="dash-row-2" style="margin-bottom: 20px;">
+        <div class="dash-chart-card">
+          <div class="dash-card-title">&#128200; Trend Project per Bulan</div>
+          <div class="dash-chart-area"><canvas id="dash-trend-chart"></canvas></div>
+        </div>
+        <div class="dash-chart-card">
+          <div class="dash-card-title">&#128202; Distribusi Project per Tim</div>
+          <div class="dash-chart-area"><canvas id="dash-team-chart"></canvas></div>
+        </div>
       </div>
-      <div class="dash-chart-card">
-        <div class="dash-card-title">&#128197; Resource Allocation (3 Bulan)</div>
-        <div id="dash-alloc-body"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
+      <div class="dash-row-2" style="margin-bottom: 20px;">
+        <div class="dash-chart-card">
+          <div class="dash-card-title"><span style="color:#ef4444">●</span> Resource Allocation — Offensive (3 Bulan)</div>
+          <div id="dash-alloc-off"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
+        </div>
+        <div class="dash-chart-card">
+          <div class="dash-card-title"><span style="color:#3b82f6">●</span> Resource Allocation — IT Audit &amp; SE (3 Bulan)</div>
+          <div id="dash-alloc-ita"><div class="empty-state" style="padding:20px">Loading&#8230;</div></div>
+        </div>
       </div>
     </div>
     <!-- Section 3: Active Projects -->
@@ -938,9 +988,9 @@
       </div>
       <div class="table-wrap">
         <table>
-          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Created</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Team</th><th>Created</th><th></th></tr></thead>
           <tbody id="users-tbody">
-            <tr><td colspan="5"><div class="empty-state">Loading…</div></td></tr>
+            <tr><td colspan="6"><div class="empty-state">Loading…</div></td></tr>
           </tbody>
         </table>
       </div>
@@ -1433,6 +1483,12 @@
             <option value="2">2</option>
             <option value="3">3</option>
             <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9">9</option>
+            <option value="10">10</option>
           </select>
         </div>
 
@@ -1453,10 +1509,34 @@
           <label>PIC 4</label>
           <select id="cp-engineer-4"><option value="">— Not assigned —</option></select>
         </div>
+        <div class="form-group" id="cp-pic-5-wrap" style="display:none">
+          <label>PIC 5</label>
+          <select id="cp-engineer-5"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group" id="cp-pic-6-wrap" style="display:none">
+          <label>PIC 6</label>
+          <select id="cp-engineer-6"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group" id="cp-pic-7-wrap" style="display:none">
+          <label>PIC 7</label>
+          <select id="cp-engineer-7"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group" id="cp-pic-8-wrap" style="display:none">
+          <label>PIC 8</label>
+          <select id="cp-engineer-8"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group" id="cp-pic-9-wrap" style="display:none">
+          <label>PIC 9</label>
+          <select id="cp-engineer-9"><option value="">— Not assigned —</option></select>
+        </div>
+        <div class="form-group" id="cp-pic-10-wrap" style="display:none">
+          <label>PIC 10</label>
+          <select id="cp-engineer-10"><option value="">— Not assigned —</option></select>
+        </div>
 
-        <!-- === Offensive Team Only Fields (6-11) === -->
+        <!-- === Team-Specific Fields === -->
         <div id="cp-offensive-fields" style="display:contents">
-          <!-- Scope Type -->
+          <!-- Scope Type (Dropdown - Offensive only) -->
           <div class="form-group" id="cp-scope-wrap">
             <label>Scope Type *</label>
             <select id="cp-type">
@@ -1466,17 +1546,27 @@
               <option value="infra">Infrastructure</option>
             </select>
           </div>
+        </div>
 
-          <!-- Methodology (VAPT only) -->
-          <div class="form-group" id="cp-method-wrap">
+        <div id="cp-itaudit-fields" style="display:none">
+          <!-- Scope (Text - IT Audit only) -->
+          <div class="form-group" id="cp-scope-text-wrap">
+            <label>Scope *</label>
+            <input id="cp-scope-text" placeholder="Type scope details..." />
+          </div>
+        </div>
+
+        <div id="cp-method-wrap" class="form-group">
             <label>Methodology *</label>
             <select id="cp-method">
               <option value="blackbox">Black Box</option>
               <option value="greybox">Grey Box</option>
               <option value="whitebox">White Box</option>
             </select>
-          </div>
+        </div>
 
+        <!-- Shared Fields (Dates & Mandays) -->
+        <div id="cp-shared-dates-mandays" style="display:contents">
           <!-- Kick Off Date -->
           <div class="form-group">
             <label>Kick Off Date *</label>
@@ -1485,7 +1575,7 @@
 
           <!-- Initial Report Date (auto) -->
           <div class="form-group">
-            <label>Initial Report Date</label>
+            <label>Report Date</label>
             <input id="cp-initial" type="date" readonly style="opacity:0.65;cursor:not-allowed" />
             <div id="cp-initial-warn" style="font-size:11px;color:#f87171;margin-top:4px;display:none"></div>
             <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px">🤖 Auto-calculated from mandays</div>
@@ -1569,12 +1659,23 @@
     </div>
     <div class="form-group">
       <label>Role *</label>
-      <select id="cu-role">
+      <select id="cu-role" onchange="_onCuRoleChange()">
         <option value="engineer">Engineer</option>
+        <option value="consultant">Consultant</option>
         <option value="pm">PM</option>
         <option value="manager">Manager</option>
         <option value="admin" id="admin-opt" style="display:none">Admin</option>
       </select>
+    </div>
+    <div class="form-group" id="cu-team-wrap" style="display:none">
+      <label>Team *</label>
+      <select id="cu-team">
+        <option value="offensive">Offensive Team</option>
+        <option value="itaudit">IT Audit &amp; SE Team</option>
+      </select>
+    </div>
+    <div class="form-group" id="cu-team-auto" style="font-size:12px;color:var(--muted);padding:4px 0">
+      <span id="cu-team-auto-label">Tim otomatis: <strong style="color:#ef4444">Offensive Team</strong></span>
     </div>
     <div class="form-group">
       <label>Password *</label>
@@ -1691,9 +1792,12 @@ let currentUser = null;
 })();
 
 // ── Navigation ────────────────────────────────────────────────────────────────
+let _projectsTeamFilter = null; // 'offensive' | 'itaudit' | null
+
 function navigate(section) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.nav-sub-item').forEach(n => n.classList.remove('active'));
   
   const secEl = document.getElementById('section-' + section);
   const navEl = document.getElementById('nav-' + section);
@@ -1710,6 +1814,55 @@ function navigate(section) {
   if (section === 'allocation') loadAllocation();
   if (section === 'ai-mandays') initAiMandaysSection();
   if (section === 'pm-board')   loadBoard();
+}
+
+function toggleNavDropdown(name) {
+  const dd = document.getElementById('nav-dropdown-' + name);
+  if (!dd) return;
+  const sub = dd.querySelector('.nav-sub-items');
+  const isOpen = dd.classList.toggle('open');
+  if (sub) sub.style.display = isOpen ? '' : 'none';
+}
+
+function navigateClients(team) {
+  _projectsTeamFilter = team;
+  // Highlight the correct sub-item
+  document.querySelectorAll('.nav-sub-item').forEach(n => n.classList.remove('active'));
+  const subEl = document.getElementById('nav-projects-' + team);
+  if (subEl) subEl.classList.add('active');
+  // Ensure dropdown is open
+  const dd = document.getElementById('nav-dropdown-clients');
+  if (dd && !dd.classList.contains('open')) {
+    dd.classList.add('open');
+    const sub = dd.querySelector('.nav-sub-items');
+    if (sub) sub.style.display = '';
+  }
+  // Update page title
+  const titleEl = document.querySelector('#section-projects .page-title');
+  if (titleEl) titleEl.textContent = team === 'offensive' ? 'Clients — Offensive Team' : 'Clients — IT Audit & SE';
+  navigate('projects');
+}
+
+// ── Create User Role → Team auto-logic ──
+function _onCuRoleChange() {
+  const role = document.getElementById('cu-role').value;
+  const teamWrap = document.getElementById('cu-team-wrap');
+  const teamAuto = document.getElementById('cu-team-auto');
+  const autoLabel = document.getElementById('cu-team-auto-label');
+  if (role === 'engineer') {
+    teamWrap.style.display = 'none';
+    teamAuto.style.display = '';
+    autoLabel.innerHTML = 'Tim otomatis: <strong style="color:#ef4444">Offensive Team</strong>';
+    document.getElementById('cu-team').value = 'offensive';
+  } else if (role === 'consultant') {
+    teamWrap.style.display = 'none';
+    teamAuto.style.display = '';
+    autoLabel.innerHTML = 'Tim otomatis: <strong style="color:#3b82f6">IT Audit & SE Team</strong>';
+    document.getElementById('cu-team').value = 'itaudit';
+  } else {
+    teamWrap.style.display = '';
+    teamAuto.style.display = 'none';
+  }
 }
 
 // ── AI Mandays Estimator ─────────────────────────────────────────────────────
@@ -2035,95 +2188,113 @@ function renderCapacityView() {
   const year = Number(yearStr), month = Number(monStr) - 1;
   const { workdays: availableDays, holidays } = getWorkdaysInMonth(year, month);
   const rows = _allocationRows;
-  const engMap = new Map();
 
-  rows.forEach(r => {
-    // Assessment phase — only mandays_assessment, with carry-over
-    if (r.kickoff_date && r.mandays_assessment > 0) {
-      const md = _assessmentMandaysInMonth(r, year, month);
-      if (md > 0) {
-        const hasPic = r.assigned_engineer_id && r.engineer_name;
-        const hasAssist = r.assist_engineer_id && r.assist_engineer_name;
-        const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
-        const mdPerPerson = numEng > 0 ? md / numEng : md;
-        
-        if (hasPic) {
-          if (!engMap.has(r.assigned_engineer_id)) engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
-          engMap.get(r.assigned_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'PIC', roleClass: 'pic', mandaysInMonth: mdPerPerson });
-        }
-        if (hasAssist) {
-          if (!engMap.has(r.assist_engineer_id)) engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
-          engMap.get(r.assist_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Assist', roleClass: 'assist', mandaysInMonth: mdPerPerson });
-        }
-      }
-    }
-    // Retest phase — unchanged
-    if (r.retest_status === 'started' && r.retest_start_date && r.retest_end_date) {
-      const overlapDays = _workdaysOverlap(r.retest_start_date, r.retest_end_date, year, month);
-      if (overlapDays > 0) {
-        const hasPic = r.retest_pic_id;
-        const hasAssist = r.retest_assist_id;
-        const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
-        const mdPerPerson = numEng > 0 ? overlapDays / numEng : overlapDays;
-
-        if (hasPic) {
-          const nm = r.retest_pic_name || _allEngineers.find(e => e.id === r.retest_pic_id)?.display_name || `Eng #${r.retest_pic_id}`;
-          if (!engMap.has(r.retest_pic_id)) engMap.set(r.retest_pic_id, { name: nm, projects: [] });
-          engMap.get(r.retest_pic_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest PIC', roleClass: 'retest', mandaysInMonth: mdPerPerson });
-        }
-        if (hasAssist) {
-          const nm = r.retest_assist_name || _allEngineers.find(e => e.id === r.retest_assist_id)?.display_name || `Eng #${r.retest_assist_id}`;
-          if (!engMap.has(r.retest_assist_id)) engMap.set(r.retest_assist_id, { name: nm, projects: [] });
-          engMap.get(r.retest_assist_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest Assist', roleClass: 'retest', mandaysInMonth: mdPerPerson });
+  // Build engineer map for a given team filter
+  function buildEngMap(teamFilter) {
+    const engMap = new Map();
+    const teamRows = rows.filter(r => teamFilter === 'offensive' ? r.team !== 'itaudit' : r.team === 'itaudit');
+    
+    teamRows.forEach(r => {
+      if (r.kickoff_date && r.mandays_assessment > 0) {
+        const md = _assessmentMandaysInMonth(r, year, month);
+        if (md > 0) {
+          const hasPic = r.assigned_engineer_id && r.engineer_name;
+          const hasAssist = r.assist_engineer_id && r.assist_engineer_name;
+          const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
+          const mdPerPerson = numEng > 0 ? md / numEng : md;
+          if (hasPic) {
+            if (!engMap.has(r.assigned_engineer_id)) engMap.set(r.assigned_engineer_id, { name: r.engineer_name, projects: [] });
+            engMap.get(r.assigned_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'PIC', roleClass: 'pic', mandaysInMonth: mdPerPerson });
+          }
+          if (hasAssist) {
+            if (!engMap.has(r.assist_engineer_id)) engMap.set(r.assist_engineer_id, { name: r.assist_engineer_name, projects: [] });
+            engMap.get(r.assist_engineer_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Assist', roleClass: 'assist', mandaysInMonth: mdPerPerson });
+          }
         }
       }
+      if (r.retest_status === 'started' && r.retest_start_date && r.retest_end_date) {
+        const overlapDays = _workdaysOverlap(r.retest_start_date, r.retest_end_date, year, month);
+        if (overlapDays > 0) {
+          const hasPic = r.retest_pic_id;
+          const hasAssist = r.retest_assist_id;
+          const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
+          const mdPerPerson = numEng > 0 ? overlapDays / numEng : overlapDays;
+          if (hasPic) {
+            const nm = r.retest_pic_name || _allEngineers.find(e => e.id === r.retest_pic_id)?.display_name || `Eng #${r.retest_pic_id}`;
+            if (!engMap.has(r.retest_pic_id)) engMap.set(r.retest_pic_id, { name: nm, projects: [] });
+            engMap.get(r.retest_pic_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest PIC', roleClass: 'retest', mandaysInMonth: mdPerPerson });
+          }
+          if (hasAssist) {
+            const nm = r.retest_assist_name || _allEngineers.find(e => e.id === r.retest_assist_id)?.display_name || `Eng #${r.retest_assist_id}`;
+            if (!engMap.has(r.retest_assist_id)) engMap.set(r.retest_assist_id, { name: nm, projects: [] });
+            engMap.get(r.retest_assist_id).projects.push({ name: r.project_name, client: r.client_name, role: 'Retest Assist', roleClass: 'retest', mandaysInMonth: mdPerPerson });
+          }
+        }
+      }
+    });
+    // Add all engineers of this team (even if 0 allocation)
+    _allEngineers.filter(e => e.team === teamFilter).forEach(e => {
+      if (!engMap.has(e.id)) engMap.set(e.id, { name: e.display_name, projects: [] });
+    });
+    return engMap;
+  }
+
+  function renderTeamSection(engMap, teamLabel, teamColor, idPrefix) {
+    const sortedEngs = [...engMap.entries()].sort((a, b) => {
+      const aU = a[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
+      const bU = b[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
+      return bU - aU || a[1].name.localeCompare(b[1].name);
+    });
+    
+    let html = `<div class="capacity-team-header"><span style="color:${teamColor};font-size:12px">●</span> ${teamLabel} <span style="font-size:11px;font-weight:400;color:var(--muted)">(${sortedEngs.length} members)</span></div>`;
+    if (!sortedEngs.length) {
+      html += '<div style="padding:12px 0;color:var(--muted);font-size:13px">No team members found.</div>';
+      return html;
     }
-  });
+    html += '<div class="capacity-list">';
+    sortedEngs.forEach(([engId, eng], idx) => {
+      const uid = idPrefix + '-' + idx;
+      const used = Math.round(eng.projects.reduce((s, p) => s + p.mandaysInMonth, 0) * 10) / 10;
+      const pct = availableDays > 0 ? Math.round((used / availableDays) * 100) : 0;
+      const barPct = Math.min(pct, 100);
+      const colorClass = pct <= 50 ? 'green' : pct <= 80 ? 'amber' : 'red';
+      const statColor = pct <= 50 ? '#4ade80' : pct <= 80 ? '#fbbf24' : '#f87171';
+      const hasProjects = eng.projects.length > 0;
 
-  _allEngineers.forEach(e => { if (!engMap.has(e.id)) engMap.set(e.id, { name: e.display_name, projects: [] }); });
+      html += `<div class="capacity-row">
+        <div class="capacity-row-top">
+          <div class="capacity-card-name" id="cap-name-${uid}" ${hasProjects ? `onclick="_toggleEngRow('${uid}')"` : ''}>
+            ${escA(eng.name)}
+            ${hasProjects ? '<span class="caret">&#9654;</span>' : ''}
+          </div>
+          <div class="capacity-bar-track"><div class="capacity-bar-fill ${colorClass}" style="width:${barPct}%"></div></div>
+          <div class="capacity-card-stat" style="color:${statColor}">${used} / ${availableDays} <span style="font-size:11px;font-weight:400;color:var(--muted)">mandays</span> <span style="font-size:12px">(${pct}%)</span></div>
+        </div>`;
+      if (hasProjects) {
+        html += `<ul class="capacity-project-list" id="cap-list-${uid}">${eng.projects.map(p =>
+          `<li class="capacity-project-item">
+            <div><span class="capacity-project-name">${escA(p.client)}</span><span style="color:var(--muted)"> — ${escA(p.name)}</span><span class="capacity-project-role ${p.roleClass}">${p.role}</span></div>
+            <div class="capacity-project-days" style="color:${statColor}">${Math.round(p.mandaysInMonth*10)/10} <span style="font-size:10px;font-weight:400;color:var(--muted)">d</span></div>
+          </li>`
+        ).join('')}</ul>`;
+      }
+      html += `</div>`;
+    });
+    html += '</div>';
+    return html;
+  }
 
-  if (!engMap.size) {
+  const offMap = buildEngMap('offensive');
+  const itMap = buildEngMap('itaudit');
+
+  if (!offMap.size && !itMap.size) {
     document.getElementById('capacity-body').innerHTML = '<div class="capacity-empty">No engineers found.</div>';
     return;
   }
 
-  const sortedEngs = [...engMap.entries()].sort((a, b) => {
-    const aU = a[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
-    const bU = b[1].projects.reduce((s, p) => s + p.mandaysInMonth, 0);
-    return bU - aU || a[1].name.localeCompare(b[1].name);
-  });
-
-  let html = '<div class="capacity-list">';
-  sortedEngs.forEach(([engId, eng], idx) => {
-    const used = Math.round(eng.projects.reduce((s, p) => s + p.mandaysInMonth, 0) * 10) / 10;
-    const pct = availableDays > 0 ? Math.round((used / availableDays) * 100) : 0;
-    const barPct = Math.min(pct, 100);
-    const colorClass = pct <= 50 ? 'green' : pct <= 80 ? 'amber' : 'red';
-    const statColor = pct <= 50 ? '#4ade80' : pct <= 80 ? '#fbbf24' : '#f87171';
-    const hasProjects = eng.projects.length > 0;
-
-    html += `<div class="capacity-row">
-      <div class="capacity-row-top">
-        <div class="capacity-card-name" id="cap-name-${idx}" ${hasProjects ? `onclick="_toggleEngRow(${idx})"` : ''}>
-          ${escA(eng.name)}
-          ${hasProjects ? '<span class="caret">&#9654;</span>' : ''}
-        </div>
-        <div class="capacity-bar-track"><div class="capacity-bar-fill ${colorClass}" style="width:${barPct}%"></div></div>
-        <div class="capacity-card-stat" style="color:${statColor}">${used} / ${availableDays} <span style="font-size:11px;font-weight:400;color:var(--muted)">mandays</span> <span style="font-size:12px">(${pct}%)</span></div>
-      </div>`;
-
-    if (hasProjects) {
-      html += `<ul class="capacity-project-list" id="cap-list-${idx}">${eng.projects.map(p =>
-        `<li class="capacity-project-item">
-          <div><span class="capacity-project-name">${escA(p.client)}</span><span style="color:var(--muted)"> — ${escA(p.name)}</span><span class="capacity-project-role ${p.roleClass}">${p.role}</span></div>
-          <div class="capacity-project-days" style="color:${statColor}">${Math.round(p.mandaysInMonth*10)/10} <span style="font-size:10px;font-weight:400;color:var(--muted)">d</span></div>
-        </li>`
-      ).join('')}</ul>`;
-    }
-    html += `</div>`;
-  });
-
-  html += `</div><div class="capacity-avail-note" style="padding-left:0;margin-top:12px">${availableDays} workdays in ${_monthNames[month]} ${year}${holidays ? ` (${holidays} public holiday${holidays>1?'s':''} excluded)` : ''}</div>`;
+  let html = renderTeamSection(offMap, 'Offensive Team', '#ef4444', 'off');
+  html += renderTeamSection(itMap, 'IT Audit & SE Team', '#3b82f6', 'ita');
+  html += `<div class="capacity-avail-note" style="padding-left:0;margin-top:12px">${availableDays} workdays in ${_monthNames[month]} ${year}${holidays ? ` (${holidays} public holiday${holidays>1?'s':''} excluded)` : ''}</div>`;
   document.getElementById('capacity-body').innerHTML = html;
 }
 
@@ -2132,6 +2303,7 @@ function renderCapacityView() {
 // -- Dashboard (4 Sections) --
 let _dashboardRows = [];
 let _dashTrendChart = null;
+let _dashTeamChart = null;
 let _dashFilter = null; // {start, end, prevStart, prevEnd, label, deltaLabel, refDate}
 
 function initDashFilterUI() {
@@ -2302,6 +2474,7 @@ async function loadDashboard() {
     setV('kpi-started',cur.started);setD('kpi-started-delta',cur.started,prev.started);
     setV('kpi-completed',cur.completed);setD('kpi-completed-delta',cur.completed,prev.completed);
     renderDashTrendChart(rows, f.refDate);
+    renderDashTeamChart(rows, f.refDate);
     renderDashAlloc(rows, f.refDate);
     renderDashActiveProjects(rows, f.refDate);
     renderDashHighlights(rows);
@@ -2317,8 +2490,43 @@ function renderDashTrendChart(rows, today) {
   _dashTrendChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.12)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#6366f1',fill:true,tension:0.35}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}}}});
 }
 
+function renderDashTeamChart(rows, today) {
+  if (typeof Chart === 'undefined') return;
+  const labels=[], dataOffensive=[], dataITAudit=[];
+  const d=new Date(today.getFullYear(),today.getMonth(),1);
+  labels.push(d.toLocaleDateString('id-ID',{month:'long',year:'numeric'}));
+  const monthRows = rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===d.getFullYear()&&new Date(r.kickoff_date).getMonth()===d.getMonth());
+  dataOffensive.push(monthRows.filter(r=>r.team!=='itaudit').length);
+  dataITAudit.push(monthRows.filter(r=>r.team==='itaudit').length);
+  
+  const ctx=document.getElementById('dash-team-chart');if(!ctx)return;
+  if(_dashTeamChart)_dashTeamChart.destroy();
+  _dashTeamChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[
+        {label:'Offensive',data:dataOffensive,backgroundColor:'#ef4444',borderRadius:4},
+        {label:'IT Audit & SE',data:dataITAudit,backgroundColor:'#3b82f6',borderRadius:4}
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{display:true,position:'bottom',labels:{usePointStyle:true,boxWidth:8,font:{size:10}}}
+      },
+      scales:{
+        x:{stacked:false,grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},
+        y:{stacked:false,grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}
+      }
+    }
+  });
+}
+
 function renderDashAlloc(rows, refDate = new Date()) {
-  const body=document.getElementById('dash-alloc-body');if(!body)return;
+  const offBody=document.getElementById('dash-alloc-off');
+  const itaBody=document.getElementById('dash-alloc-ita');
+  if(!offBody && !itaBody) return;
   const today=new Date(refDate);today.setHours(0,0,0,0);
   const monthsData=[];
   for(let i=0;i<3;i++){
@@ -2327,54 +2535,63 @@ function renderDashAlloc(rows, refDate = new Date()) {
     const {workdays}=getWorkdaysInMonth(year,month);
     monthsData.push({d,year,month,workdays});
   }
-  const engMap=new Map();
-  if(typeof _allEngineers!=='undefined'){_allEngineers.forEach(e=>engMap.set(e.id,{name:e.display_name,used:[0,0,0]}));}
-  const addEng=(id,name,i,md)=>{if(!id||!name)return;if(!engMap.has(id))engMap.set(id,{name,used:[0,0,0]});engMap.get(id).used[i]+=md;};
-  rows.forEach(r=>{
-    monthsData.forEach((m,i)=>{
-      if(r.kickoff_date&&r.mandays_assessment>0){
-        const md=_assessmentMandaysInMonth(r,m.year,m.month);
-        if(md>0){
-          const hasPic=r.assigned_engineer_id, hasAssist=r.assist_engineer_id;
-          const numEng=(hasPic?1:0)+(hasAssist?1:0);
-          const perPerson=numEng>0?md/numEng:md;
-          if(hasPic)addEng(r.assigned_engineer_id,r.engineer_name,i,perPerson);
-          if(hasAssist)addEng(r.assist_engineer_id,r.assist_engineer_name,i,perPerson);
+
+  function buildTeamTable(teamFilter, targetBody) {
+    if (!targetBody) return;
+    const engMap=new Map();
+    const teamEngineers = (typeof _allEngineers!=='undefined') ? _allEngineers.filter(e=>e.team===teamFilter) : [];
+    teamEngineers.forEach(e=>engMap.set(e.id,{name:e.display_name,used:[0,0,0]}));
+    const addEng=(id,name,i,md)=>{if(!id||!name)return;if(!engMap.has(id))engMap.set(id,{name,used:[0,0,0]});engMap.get(id).used[i]+=md;};
+    const teamRows = rows.filter(r=> teamFilter==='offensive' ? r.team!=='itaudit' : r.team==='itaudit');
+    teamRows.forEach(r=>{
+      monthsData.forEach((m,i)=>{
+        if(r.kickoff_date&&r.mandays_assessment>0){
+          const md=_assessmentMandaysInMonth(r,m.year,m.month);
+          if(md>0){
+            const hasPic=r.assigned_engineer_id, hasAssist=r.assist_engineer_id;
+            const numEng=(hasPic?1:0)+(hasAssist?1:0);
+            const perPerson=numEng>0?md/numEng:md;
+            if(hasPic)addEng(r.assigned_engineer_id,r.engineer_name,i,perPerson);
+            if(hasAssist)addEng(r.assist_engineer_id,r.assist_engineer_name,i,perPerson);
+          }
         }
-      }
-      if(r.retest_status==='started'&&r.retest_start_date&&r.retest_end_date){
-        const od=_workdaysOverlap(r.retest_start_date,r.retest_end_date,m.year,m.month);
-        if(od>0){
-          const hasPic=r.retest_pic_id, hasAssist=r.retest_assist_id;
-          const numEng=(hasPic?1:0)+(hasAssist?1:0);
-          const perPerson=numEng>0?od/numEng:od;
-          if(hasPic)addEng(r.retest_pic_id,r.retest_pic_name,i,perPerson);
-          if(hasAssist)addEng(r.retest_assist_id,r.retest_assist_name,i,perPerson);
+        if(r.retest_status==='started'&&r.retest_start_date&&r.retest_end_date){
+          const od=_workdaysOverlap(r.retest_start_date,r.retest_end_date,m.year,m.month);
+          if(od>0){
+            const hasPic=r.retest_pic_id, hasAssist=r.retest_assist_id;
+            const numEng=(hasPic?1:0)+(hasAssist?1:0);
+            const perPerson=numEng>0?od/numEng:od;
+            if(hasPic)addEng(r.retest_pic_id,r.retest_pic_name,i,perPerson);
+            if(hasAssist)addEng(r.retest_assist_id,r.retest_assist_name,i,perPerson);
+          }
         }
-      }
+      });
     });
-  });
-  if(!engMap.size){
-    body.innerHTML='<div class="empty-state" style="padding:20px;font-size:12px">Belum ada data engineer di sistem</div>';
-    return;
-  }
-  let html=`<div class="dash-active-table" style="overflow-x:auto;border:none;background:transparent;"><table style="min-width:600px;"><thead><tr><th style="min-width:140px;">Engineer</th>`;
-  monthsData.forEach(m=>{
-    html+=`<th>${m.d.toLocaleDateString('id-ID',{month:'long',year:'numeric'})} <span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:lowercase;margin-left:4px">(${m.workdays} d)</span></th>`;
-  });
-  html+=`</tr></thead><tbody>`;
-  [...engMap.values()].sort((a,b)=>b.used.reduce((x,y)=>x+y,0)-a.used.reduce((x,y)=>x+y,0) || a.name.localeCompare(b.name)).forEach(e=>{
-    html+=`<tr><td style="font-weight:600;font-size:12px;color:var(--text);">${escA(e.name)}</td>`;
-    for(let i=0;i<3;i++){
-      const available=monthsData[i].workdays;
-      const pct=available>0?Math.min(Math.round((e.used[i]/available)*100),100):0;
-      const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';
-      html+=`<td><div class="dash-alloc-row" style="margin:0;"><div class="dash-alloc-bar-track" style="background:rgba(255,255,255,0.05);height:6px;min-width:60px;"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col};min-width:60px;font-size:11px;">${Math.round(e.used[i]*10)/10}d <span style="font-size:10px;color:var(--muted)">(${pct}%)</span></span></div></td>`;
+    if(!engMap.size){
+      targetBody.innerHTML='<div class="empty-state" style="padding:20px;font-size:12px">Belum ada data</div>';
+      return;
     }
-    html+=`</tr>`;
-  });
-  html+=`</tbody></table></div>`;
-  body.innerHTML=html;
+    let html=`<div class="dash-active-table" style="overflow-x:auto;border:none;background:transparent;"><table style="min-width:400px;"><thead><tr><th style="min-width:120px;">Engineer</th>`;
+    monthsData.forEach(m=>{
+      html+=`<th>${m.d.toLocaleDateString('id-ID',{month:'short',year:'2-digit'})} <span style="font-size:9px;font-weight:600;color:var(--muted);text-transform:lowercase">(${m.workdays}d)</span></th>`;
+    });
+    html+=`</tr></thead><tbody>`;
+    [...engMap.values()].sort((a,b)=>b.used.reduce((x,y)=>x+y,0)-a.used.reduce((x,y)=>x+y,0) || a.name.localeCompare(b.name)).forEach(e=>{
+      html+=`<tr><td style="font-weight:600;font-size:11px;color:var(--text);">${escA(e.name)}</td>`;
+      for(let i=0;i<3;i++){
+        const available=monthsData[i].workdays;
+        const pct=available>0?Math.min(Math.round((e.used[i]/available)*100),100):0;
+        const col=pct<=50?'#22c55e':pct<=80?'#f59e0b':'#ef4444';
+        html+=`<td><div class="dash-alloc-row" style="margin:0;"><div class="dash-alloc-bar-track" style="background:rgba(255,255,255,0.05);height:5px;min-width:40px;"><div class="dash-alloc-bar-fill" style="width:${pct}%;background:${col}"></div></div><span class="dash-alloc-pct" style="color:${col};min-width:40px;font-size:10px;">${Math.round(e.used[i]*10)/10}d <span style="font-size:9px;color:var(--muted)">(${pct}%)</span></span></div></td>`;
+      }
+      html+=`</tr>`;
+    });
+    html+=`</tbody></table></div>`;
+    targetBody.innerHTML=html;
+  }
+
+  buildTeamTable('offensive', offBody);
+  buildTeamTable('itaudit', itaBody);
 }
 
 function renderDashActiveProjects(rows, refDate) {
@@ -2615,8 +2832,12 @@ async function loadProjects() {
   const acc = document.getElementById('projects-accordion');
   acc.innerHTML = '<div class="empty-state">Loading…</div>';
   try {
-    const rows = await apiFetch('/api/clients/full');
+    let rows = await apiFetch('/api/clients/full');
     _allClientsCache = rows;
+    // Apply team filter from sidebar navigation
+    if (_projectsTeamFilter) {
+      rows = rows.filter(r => !r.project_id || r.team === _projectsTeamFilter);
+    }
     renderClientGroups('projects-accordion', rows, true);
     if (_projectViewMode === 'category') renderCategoryGroups(rows);
   } catch(e) { acc.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`; showToast('Clients error: ' + e.message, 'error'); }
@@ -2627,6 +2848,10 @@ function filterProjects() {
   const from = document.getElementById('client-date-from')?.value || '';
   const to   = document.getElementById('client-date-to')?.value || '';
   let rows = _allClientsCache;
+  // Apply team filter
+  if (_projectsTeamFilter) {
+    rows = rows.filter(r => !r.project_id || r.team === _projectsTeamFilter);
+  }
   if (q) rows = rows.filter(r =>
     r.client_name?.toLowerCase().includes(q)||
     r.project_name?.toLowerCase().includes(q)||
@@ -2774,7 +2999,14 @@ async function editProjectPortal(proj) {
   _onServiceChange();
 
   // Pre-fill Scope Type & Methodology
-  document.getElementById('cp-type').value = proj.project_type || 'web';
+  if (proj.team === 'offensive') {
+    document.getElementById('cp-type').value = proj.project_type || 'web';
+    document.getElementById('cp-scope-text').value = '';
+  } else {
+    document.getElementById('cp-type').value = 'web';
+    document.getElementById('cp-scope-text').value = proj.project_type || '';
+  }
+
   if (proj.project_method) {
     const methodEl = document.getElementById('cp-method');
     if (methodEl) methodEl.value = proj.project_method;
@@ -2782,7 +3014,13 @@ async function editProjectPortal(proj) {
 
   // Pre-fill Resource Count & PICs
   let resourceCount = 1;
-  if (proj.engineer_4_id) resourceCount = 4;
+  if (proj.engineer_10_id) resourceCount = 10;
+  else if (proj.engineer_9_id) resourceCount = 9;
+  else if (proj.engineer_8_id) resourceCount = 8;
+  else if (proj.engineer_7_id) resourceCount = 7;
+  else if (proj.engineer_6_id) resourceCount = 6;
+  else if (proj.engineer_5_id) resourceCount = 5;
+  else if (proj.engineer_4_id) resourceCount = 4;
   else if (proj.engineer_3_id) resourceCount = 3;
   else if (proj.assist_engineer_id) resourceCount = 2;
   document.getElementById('cp-resource-count').value = String(resourceCount);
@@ -2820,14 +3058,23 @@ async function editProjectPortal(proj) {
     { selId: 'cp-assist', projField: proj.assist_engineer_id },
     { selId: 'cp-engineer-3', projField: proj.engineer_3_id },
     { selId: 'cp-engineer-4', projField: proj.engineer_4_id },
+    { selId: 'cp-engineer-5', projField: proj.engineer_5_id },
+    { selId: 'cp-engineer-6', projField: proj.engineer_6_id },
+    { selId: 'cp-engineer-7', projField: proj.engineer_7_id },
+    { selId: 'cp-engineer-8', projField: proj.engineer_8_id },
+    { selId: 'cp-engineer-9', projField: proj.engineer_9_id },
+    { selId: 'cp-engineer-10', projField: proj.engineer_10_id },
   ];
   try {
     const engs = await apiFetch('/api/users/engineers');
+    window._engineersCache = engs;
+    const currentTeam = proj.team || 'offensive';
+    const filteredEngs = engs.filter(e => e.team === currentTeam);
     picConfigs.forEach(({ selId, projField }) => {
       const el = document.getElementById(selId);
       if (!el) return;
-      el.innerHTML = '<option value="">— Not assigned —</option>' +
-        engs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(projField)?'selected':''}>${esc(e.display_name)}</option>`).join('');
+      el.innerHTML = '<option value="">- Not assigned -</option>' +
+        filteredEngs.map(e => `<option value="${e.id}" ${Number(e.id)===Number(projField)?'selected':''}>${esc(e.display_name)}</option>`).join('');
     });
   } catch {
     picConfigs.forEach(({ selId }) => {
@@ -2844,17 +3091,23 @@ async function editProjectPortal(proj) {
     let service = document.getElementById('cp-service').value;
     if (service === '__other__') service = (document.getElementById('cp-service-custom')?.value || '').trim();
 
-    const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (proj.project_type || 'web');
+    const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (document.getElementById('cp-scope-text')?.value.trim() || 'IT Audit');
     const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
     const assigned_engineer_id = document.getElementById('cp-engineer')?.value || null;
     const assist_engineer_id = document.getElementById('cp-assist')?.value || null;
     const engineer_3_id = document.getElementById('cp-engineer-3')?.value || null;
     const engineer_4_id = document.getElementById('cp-engineer-4')?.value || null;
-    const kickoff_date = isOffensive ? (document.getElementById('cp-kickoff').value || null) : null;
-    const initial_report_date = isOffensive ? (document.getElementById('cp-initial').value || null) : null;
-    const mandays_kickoff = isOffensive ? (parseInt(document.getElementById('cp-md-kickoff').value) || 1) : 1;
-    const mandays_infogath = isOffensive ? (parseInt(document.getElementById('cp-md-infogath').value) || 5) : 0;
-    const mandays_assessment = isOffensive ? (parseInt(document.getElementById('cp-md-assessment')?.value) || 0) : 0;
+    const engineer_5_id = document.getElementById('cp-engineer-5')?.value || null;
+    const engineer_6_id = document.getElementById('cp-engineer-6')?.value || null;
+    const engineer_7_id = document.getElementById('cp-engineer-7')?.value || null;
+    const engineer_8_id = document.getElementById('cp-engineer-8')?.value || null;
+    const engineer_9_id = document.getElementById('cp-engineer-9')?.value || null;
+    const engineer_10_id = document.getElementById('cp-engineer-10')?.value || null;
+    const kickoff_date = document.getElementById('cp-kickoff').value || null;
+    const initial_report_date = document.getElementById('cp-initial').value || null;
+    const mandays_kickoff = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
+    const mandays_infogath = parseInt(document.getElementById('cp-md-infogath').value) || 5;
+    const mandays_assessment = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
     const project_links = getProjectLinksFromForm();
     btn.disabled = true;
     try {
@@ -2862,6 +3115,7 @@ async function editProjectPortal(proj) {
         name: document.getElementById('cp-name').value.trim(),
         project_type, project_method,
         assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id,
+        engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
         kickoff_date, initial_report_date,
         mandays_kickoff, mandays_infogath, mandays_assessment,
         project_links, team, service
@@ -2953,12 +3207,31 @@ function _onTeamChange() {
   const offensiveFields = document.getElementById('cp-offensive-fields');
   if (!serviceSel) return;
   
+  if (window._engineersCache) {
+    const picSelects = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4', 'cp-engineer-5', 'cp-engineer-6', 'cp-engineer-7', 'cp-engineer-8', 'cp-engineer-9', 'cp-engineer-10'];
+    const filteredEngs = window._engineersCache.filter(e => e.team === team);
+    const options = '<option value="">- Not assigned -</option>' +
+      filteredEngs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
+    
+    picSelects.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const currentVal = el.value;
+      el.innerHTML = options;
+      if (filteredEngs.some(e => e.id.toString() === currentVal)) el.value = currentVal;
+    });
+  }
+  
+  const itauditFields = document.getElementById('cp-itaudit-fields');
+  
   if (team === 'offensive') {
     serviceSel.innerHTML = '<option value="vapt">VAPT</option><option value="va">VA</option><option value="firewall_review">Firewall Review</option><option value="phishing">Phishing</option><option value="__other__">Other</option>';
     if (offensiveFields) offensiveFields.style.display = 'contents';
+    if (itauditFields) itauditFields.style.display = 'none';
   } else {
     serviceSel.innerHTML = '<option value="it_audit">IT Audit</option><option value="pdp">PDP</option><option value="maturity_assessment">Maturity Assessment</option><option value="__other__">Other</option>';
     if (offensiveFields) offensiveFields.style.display = 'none';
+    if (itauditFields) itauditFields.style.display = 'contents';
   }
   document.getElementById('cp-service-custom').style.display = 'none';
   _onServiceChange();
@@ -2984,10 +3257,10 @@ function _onServiceChange() {
 
 function _onResourceCountChange() {
   const count = parseInt(document.getElementById('cp-resource-count')?.value) || 1;
-  document.getElementById('cp-pic-1-wrap').style.display = '';
-  document.getElementById('cp-pic-2-wrap').style.display = count >= 2 ? '' : 'none';
-  document.getElementById('cp-pic-3-wrap').style.display = count >= 3 ? '' : 'none';
-  document.getElementById('cp-pic-4-wrap').style.display = count >= 4 ? '' : 'none';
+  for (let i = 1; i <= 10; i++) {
+    const wrap = document.getElementById('cp-pic-' + i + '-wrap');
+    if (wrap) wrap.style.display = count >= i ? '' : 'none';
+  }
 }
 
 // Check if a client has been selected or new-client name filled
@@ -3101,6 +3374,7 @@ async function openNewEntry() {
   document.getElementById('cp-service-custom').style.display = 'none';
   document.getElementById('cp-resource-count').value = '1';
   document.getElementById('cp-type').value = 'web';
+  document.getElementById('cp-scope-text').value = '';
   document.getElementById('cp-method').value = 'blackbox';
   document.getElementById('cp-kickoff').value = '';
   document.getElementById('cp-initial').value = '';
@@ -3128,11 +3402,14 @@ async function openNewEntry() {
   } catch { _neClientsData = []; _renderClientCards([]); }
 
   // Load engineers into all PIC selects
-  const picSelects = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4'];
+  const picSelects = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4', 'cp-engineer-5', 'cp-engineer-6', 'cp-engineer-7', 'cp-engineer-8', 'cp-engineer-9', 'cp-engineer-10'];
   try {
     const engs = await apiFetch('/api/users/engineers');
+    window._engineersCache = engs;
+    const team = document.getElementById('cp-team')?.value || 'offensive';
+    const filteredEngs = engs.filter(e => e.team === team);
     const options = '<option value="">— Not assigned —</option>' +
-      engs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
+      filteredEngs.map(e => `<option value="${e.id}">${esc(e.display_name)}</option>`).join('');
     picSelects.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.innerHTML = options;
@@ -3307,20 +3584,26 @@ async function submitNewEntry() {
     service = (document.getElementById('cp-service-custom')?.value || '').trim();
   }
 
-  const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : 'web';
+  const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (document.getElementById('cp-scope-text')?.value.trim() || 'IT Audit');
   const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
 
   const assigned_engineer_id = document.getElementById('cp-engineer').value || null;
   const assist_engineer_id = document.getElementById('cp-assist')?.value || null;
   const engineer_3_id = document.getElementById('cp-engineer-3')?.value || null;
   const engineer_4_id = document.getElementById('cp-engineer-4')?.value || null;
+  const engineer_5_id = document.getElementById('cp-engineer-5')?.value || null;
+  const engineer_6_id = document.getElementById('cp-engineer-6')?.value || null;
+  const engineer_7_id = document.getElementById('cp-engineer-7')?.value || null;
+  const engineer_8_id = document.getElementById('cp-engineer-8')?.value || null;
+  const engineer_9_id = document.getElementById('cp-engineer-9')?.value || null;
+  const engineer_10_id = document.getElementById('cp-engineer-10')?.value || null;
 
-  const kickoff_date        = isOffensive ? (document.getElementById('cp-kickoff').value || null) : null;
-  const initial_report_date = isOffensive ? (document.getElementById('cp-initial').value || null) : null;
+  const kickoff_date        = document.getElementById('cp-kickoff').value || null;
+  const initial_report_date = document.getElementById('cp-initial').value || null;
   const final_report_date   = null;
-  const mandays_kickoff     = isOffensive ? (parseInt(document.getElementById('cp-md-kickoff').value) || 1) : 1;
-  const mandays_infogath    = isOffensive ? (parseInt(document.getElementById('cp-md-infogath').value) || 5) : 0;
-  const mandays_assessment  = isOffensive ? (parseInt(document.getElementById('cp-md-assessment')?.value) || 0) : 0;
+  const mandays_kickoff     = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
+  const mandays_infogath    = parseInt(document.getElementById('cp-md-infogath').value) || 5;
+  const mandays_assessment  = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
 
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
@@ -3362,7 +3645,7 @@ async function submitNewEntry() {
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
       name, project_type, project_method, assigned_engineer_id, assist_engineer_id,
-      engineer_3_id, engineer_4_id,
+      engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
       kickoff_date, initial_report_date, final_report_date, project_links,
       mandays_kickoff, mandays_infogath, mandays_assessment,
       team, service
@@ -3455,12 +3738,13 @@ async function loadUsers() {
     const users = await apiFetch('/api/users');
     _allUsersCache = users;
     const tbody = document.getElementById('users-tbody');
-    if (!users.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state">No users yet.</div></td></tr>'; return; }
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state">No users yet.</div></td></tr>'; return; }
     tbody.innerHTML = users.map(u => `
       <tr>
         <td style="font-weight:600">${esc(u.display_name)}</td>
         <td style="color:var(--muted)">@${esc(u.username)}</td>
         <td><span class="badge badge-${u.role}">${u.role}</span></td>
+        <td style="color:var(--muted);font-size:12px;text-transform:capitalize;">${u.team === 'itaudit' ? 'IT Audit &amp; SE' : 'Offensive'}</td>
         <td style="color:var(--muted);font-size:12px">${new Date(u.created_at).toLocaleDateString()}</td>
         <td style="display:flex;gap:4px;align-items:center">
           <button class="icon-btn" onclick="_openChangePw(${u.id})" title="Change Password" style="color:var(--muted)">
@@ -3472,7 +3756,7 @@ async function loadUsers() {
         </td>
       </tr>`).join('');
   } catch(e) {
-    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="5"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
+    document.getElementById('users-tbody').innerHTML = `<tr><td colspan="6"><div class="empty-state">${esc(e.message)}</div></td></tr>`;
   }
 }
 
@@ -3517,6 +3801,7 @@ function openCreateUser() {
   ['cu-name','cu-username','cu-password'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('cu-role').value = 'engineer';
   document.getElementById('cu-err').classList.remove('show');
+  _onCuRoleChange(); // Reset team UI based on default role
   document.getElementById('modal-create-user').classList.add('open');
 }
 
@@ -3538,7 +3823,8 @@ async function submitCreateUser() {
   const btn = document.getElementById('cu-btn');
   btn.disabled = true;
   try {
-    await apiFetch('/api/users', 'POST', { username, display_name, role, password });
+    const team = document.getElementById('cu-team').value;
+    await apiFetch('/api/users', 'POST', { username, display_name, role, password, team });
     document.getElementById('modal-create-user').classList.remove('open');
     showToast('User created successfully', 'success');
     loadUsers();

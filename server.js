@@ -184,25 +184,31 @@ app.get('/api/users/engineers', auth.requireRole(...mgmtRoles), (req, res) => {
 });
 
 app.post('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
-  const { username, display_name, role, password } = req.body;
+  let { username, display_name, role, password, team } = req.body;
   if (!username || !display_name || !role || !password) {
     return res.status(400).json({ error: 'username, display_name, role, and password are required.' });
   }
-  const allowedRoles = ['engineer', 'pm', 'manager'];
+  const allowedRoles = ['engineer', 'consultant', 'pm', 'manager'];
   // Only admin can create other admins
   if (role === 'admin' && req.session.role !== 'admin') {
     return res.status(403).json({ error: 'Only admin can create another admin.' });
   }
   if (!allowedRoles.includes(role) && role !== 'admin') {
-    return res.status(400).json({ error: 'Invalid role. Must be engineer, pm, manager, or admin.' });
+    return res.status(400).json({ error: 'Invalid role. Must be engineer, consultant, pm, manager, or admin.' });
   }
-  db.createUser({ username, display_name, role, password }, (err, id) => {
+  // Auto-assign team based on role
+  if (role === 'engineer') team = 'offensive';
+  else if (role === 'consultant') team = 'itaudit';
+  else if (!team || (team !== 'offensive' && team !== 'itaudit')) {
+    return res.status(400).json({ error: 'Team is required for this role. Must be offensive or itaudit.' });
+  }
+  db.createUser({ username, display_name, role, password, team }, (err, id) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Username already exists.' });
       return res.status(500).json({ error: err.message });
     }
-    db.writeActivityLog({ type:'user', actorId: req.session.userId, action:'create_user', details:`Created user @${username} (${role})` });
-    res.status(201).json({ id, username, display_name, role });
+    db.writeActivityLog({ type:'user', actorId: req.session.userId, action:'create_user', details:`Created user @${username} (${role}, ${team})` });
+    res.status(201).json({ id, username, display_name, role, team });
   });
 });
 
@@ -608,7 +614,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
@@ -619,7 +625,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0, team, service }, (err, result) => {
+  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0, team, service }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -739,7 +745,7 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
   
@@ -747,11 +753,11 @@ app.put('/api/projects/:id', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, (err, result) => {
+  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, kickoff_date, initial_report_date, final_report_date, mandays_kickoff, mandays_infogath, mandays_assessment, team, service });
+    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, mandays_kickoff, mandays_infogath, mandays_assessment, team, service });
   });
 });
 
