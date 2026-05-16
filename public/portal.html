@@ -1388,8 +1388,8 @@
 
     <!-- ═══ Tab Bar ═══ -->
     <div id="ne-tab-bar" style="display:flex;margin-bottom:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
-      <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 0;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
-      <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 0;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
+      <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 16px;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
+      <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 16px;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
     </div>
 
     <!-- ═══ TAB 1: Client Selection ═══ -->
@@ -1611,7 +1611,7 @@
         </div>
 
         <!-- Resource Links -->
-        <div class="form-group" style="grid-column:1/-1">
+        <div class="form-group" style="grid-column:1/-1;margin-top:8px">
           <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
           <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
         </div>
@@ -2151,7 +2151,7 @@ function getWorkdaysInMonth(year, month) {
   for (let d = 1; d <= daysInMonth; d++) {
     const dt = new Date(year, month, d);
     if (dt.getDay() === 0 || dt.getDay() === 6) continue;
-    if (idHolidaySet.has(dt.toISOString().slice(0, 10))) { holidays++; continue; }
+    if (idHolidaySet.has(dt.toLocaleDateString('en-CA'))) { holidays++; continue; }
     workdays++;
   }
   return { workdays, holidays };
@@ -2166,7 +2166,7 @@ function _workdaysOverlap(startStr, endStr, year, month) {
   const oS = new Date(Math.max(mS, rS));
   const oE = new Date(Math.min(mE, rE));
   if (oS > oE) return 0;
-  return workingDaysBetween(oS.toISOString().slice(0,10), oE.toISOString().slice(0,10)).days;
+  return workingDaysBetween(oS.toLocaleDateString('en-CA'), oE.toLocaleDateString('en-CA')).days;
 }
 
 /**
@@ -2429,8 +2429,6 @@ async function loadDashboard() {
        applyDashFilter();
        return; // applyDashFilter will call loadDashboard(false)
     }
-    
-    _dashboardRows = rows;
     const f = _dashFilter;
     const today = new Date(); today.setHours(0,0,0,0);
     const subEl = document.getElementById('dash-showing-badge');
@@ -2441,7 +2439,7 @@ async function loadDashboard() {
     const isDoneIn = (r, start, end) => r.project_id && r.final_report_status === 'completed' && r.final_completed_at && new Date(r.final_completed_at) >= start && new Date(r.final_completed_at) <= end;
     
     const isTotalProject = (r, start, end, refDate) => {
-       if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
+       if (!r.project_id || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
        const isActiveAtRef = r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
        return isActiveAtRef || isDoneIn(r, start, end);
     };
@@ -2769,10 +2767,14 @@ function toggleGroup(id) {
 // helper: compute and format mandays tag for a project row
 function calcMandaysTag(p) {
   if (!p.kickoff_date || !p.initial_report_date) return '<span style="font-size:11px;color:var(--muted)">—</span>';
-  const ko = p.mandays_kickoff ?? 1;
-  const ig = p.mandays_infogath ?? 5;
-  const { days } = workingDaysBetween(p.kickoff_date, p.initial_report_date);
-  const total = ko + ig + days;
+  let total;
+  if (p.mandays_assessment > 0) {
+    // Use planned mandays: kickoff + infogath + assessment (assessment includes IR day)
+    total = (p.mandays_kickoff ?? 1) + (p.mandays_infogath ?? 5) + p.mandays_assessment;
+  } else {
+    // Fallback: count working days between dates
+    total = workingDaysBetween(p.kickoff_date, p.initial_report_date).days;
+  }
   return `<span style="font-size:12px;font-weight:700;color:var(--accent)">${total}</span><span style="font-size:10px;color:var(--muted)"> hari</span>`;
 }
 
@@ -3460,9 +3462,10 @@ function addWorkingDays(dateStr, n) {
   let counted = 1;
   while (counted < n) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) counted++;
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6 && !idHolidaySet.has(d.toLocaleDateString('en-CA'))) counted++;
   }
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString('en-CA');
 }
 
 /** Set cp-initial to readonly (Mode B) or editable (Mode A) */
@@ -4156,7 +4159,7 @@ function workingDaysBetween(startStr, endStr) {
   const cur = new Date(start);
   while (cur <= end) {
     const dow = cur.getDay();
-    const iso = cur.toISOString().slice(0, 10);
+    const iso = cur.toLocaleDateString('en-CA');
     if (dow !== 0 && dow !== 6) { // skip weekend
       if (idHolidaySet.has(iso)) {
         skipped.push(iso);
@@ -4636,7 +4639,8 @@ async function addBoardStatus() {
 }
 
 async function _deleteStatus(id) {
-  if (!confirm('Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.')) return;
+  const ok = await customConfirm('Hapus Status', 'Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.', 'Hapus', 'danger');
+  if (!ok) return;
   try {
     await apiFetch('/api/board-statuses/' + id, 'DELETE');
     _boardStatuses = _boardStatuses.filter(s => s.id !== id);
@@ -4723,7 +4727,7 @@ function openBoardDetail(projectId) {
       <div class="board-detail-item"><div class="board-detail-label">Kickoff</div><div class="board-detail-value">${fmt(p.kickoff_date)}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Initial Report</div><div class="board-detail-value">${fmt(p.initial_report_date)} ${initBadge}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Final Report</div><div class="board-detail-value">${fmt(p.final_report_date)} ${finalBadge}</div></div>
-      <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} vulnerability${p.finding_count!==1?'ies':''}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} ${p.finding_count!==1?'vulnerabilities':'vulnerability'}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Mandays (Assessment)</div><div class="board-detail-value">${p.mandays_assessment || 0} hari</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Mandays (Kickoff)</div><div class="board-detail-value">${p.mandays_kickoff || 0} hari</div></div>
     </div>

@@ -581,6 +581,15 @@ app.delete('/api/clients/:id', (req, res) => {
   });
 });
 
+// GET /api/clients/full — all clients with their projects (LEFT JOIN) for portal accordion
+// ⚠ MUST be defined BEFORE /api/clients/:clientId routes to avoid "full" matching as :clientId
+app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res) => {
+  db.getClientsWithProjects((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
 app.get('/api/clients/:clientId/projects', (req, res) => {
   const clientId = Number(req.params.clientId);
   if (!Number.isInteger(clientId) || clientId < 1) {
@@ -588,24 +597,24 @@ app.get('/api/clients/:clientId/projects', (req, res) => {
   }
   db.getProjectsByClient(clientId, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Engineers only see their own assigned projects (PIC, Assist, or Retest PIC/Assist)
+    // Engineers only see their own assigned projects (any PIC/Assist/Retest role)
     if (req.session?.role === 'engineer') {
       const uid = Number(req.session.userId);
       rows = rows.filter(p =>
         Number(p.assigned_engineer_id) === uid ||
         Number(p.assist_engineer_id) === uid ||
+        Number(p.engineer_3_id) === uid ||
+        Number(p.engineer_4_id) === uid ||
+        Number(p.engineer_5_id) === uid ||
+        Number(p.engineer_6_id) === uid ||
+        Number(p.engineer_7_id) === uid ||
+        Number(p.engineer_8_id) === uid ||
+        Number(p.engineer_9_id) === uid ||
+        Number(p.engineer_10_id) === uid ||
         Number(p.retest_pic_id) === uid ||
         Number(p.retest_assist_id) === uid
       );
     }
-    res.json(rows);
-  });
-});
-
-// GET /api/clients/full — all clients with their projects (LEFT JOIN) for portal accordion
-app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res) => {
-  db.getClientsWithProjects((err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
