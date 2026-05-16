@@ -1045,6 +1045,7 @@
       </div>
     </div>
 
+    <div style="padding:24px 32px 40px">
     <div style="max-width:860px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start">
 
       <!-- LEFT: API Key Card -->
@@ -1063,20 +1064,18 @@
           <label style="font-size:10px">MODEL</label>
           <select id="ai-model-select">
             <optgroup label="🚀 Gemini 3.1 — Frontier">
-              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview — Deep reasoning &amp; agentic</option>
-              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview — High volume, low cost</option>
+              <option value="gemini-3.1-pro">gemini-3.1-pro — Deep reasoning &amp; agentic</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite — High volume, low cost</option>
             </optgroup>
             <optgroup label="⚡ Gemini 3 — Performance">
-              <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview — High intelligence, fast ✓ Default</option>
+              <option value="gemini-3-flash">gemini-3-flash — High intelligence, fast</option>
             </optgroup>
-            <optgroup label="✅ Gemini 2.5 — Stable">
+            <optgroup label="✅ Gemini 2.5 — Stable (Recommended)">
+              <option value="gemini-2.5-flash" selected>gemini-2.5-flash — Fast &amp; reliable ✓ Default</option>
               <option value="gemini-2.5-pro">gemini-2.5-pro — Production Pro</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash — Production Flash</option>
             </optgroup>
-            <optgroup label="📦 Gemini 2.0 / 1.5 — Legacy">
+            <optgroup label="📦 Gemini 2.0 — Legacy">
               <option value="gemini-2.0-flash">gemini-2.0-flash — Flash 2.0</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash — Flash 1.5 (Free tier)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro — Pro 1.5</option>
             </optgroup>
           </select>
         </div>
@@ -1208,6 +1207,7 @@
         <!-- Error -->
         <div id="ai-error" style="display:none;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:16px;color:#fca5a5;font-size:13px;line-height:1.6"></div>
       </div>
+    </div>
     </div>
   </section>
 
@@ -1869,7 +1869,19 @@ function _onCuRoleChange() {
 
 function initAiMandaysSection() {
   const stored = localStorage.getItem('vulnvault_gemini_key');
-  const storedModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  let storedModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.5-flash';
+  // Migrate old preview model names → stable
+  const modelMigrations = {
+    'gemini-3.1-pro-preview': 'gemini-3.1-pro',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+    'gemini-3-flash-preview': 'gemini-3-flash',
+    'gemini-1.5-flash': 'gemini-2.0-flash',
+    'gemini-1.5-pro': 'gemini-2.5-pro'
+  };
+  if (modelMigrations[storedModel]) {
+    storedModel = modelMigrations[storedModel];
+    localStorage.setItem('vulnvault_gemini_model', storedModel);
+  }
   const statusEl = document.getElementById('ai-key-status');
   const inputEl  = document.getElementById('ai-api-key-input');
   const modelEl  = document.getElementById('ai-model-select');
@@ -1886,7 +1898,7 @@ function initAiMandaysSection() {
 
 function saveAiApiKey() {
   const key = document.getElementById('ai-api-key-input')?.value.trim();
-  const model = document.getElementById('ai-model-select')?.value || 'gemini-3-flash-preview';
+  const model = document.getElementById('ai-model-select')?.value || 'gemini-2.5-flash';
   if (key) localStorage.setItem('vulnvault_gemini_key', key);
   localStorage.setItem('vulnvault_gemini_model', model);
   initAiMandaysSection();
@@ -1973,7 +1985,7 @@ let _lastAiEstimate = null;
 
 async function runAiEstimate() {
   const apiKey = localStorage.getItem('vulnvault_gemini_key');
-  const aiModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  const aiModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.5-flash';
   if (!apiKey) {
     document.getElementById('ai-error').style.display = 'block';
     document.getElementById('ai-error').textContent = '⚠️ Simpan Gemini API Key terlebih dahulu.';
@@ -2027,8 +2039,21 @@ async function runAiEstimate() {
 
     document.getElementById('ai-result').style.display = 'block';
   } catch (e) {
-    document.getElementById('ai-error').style.display = 'block';
-    document.getElementById('ai-error').textContent = `❌ ${e.message}`;
+    const errEl = document.getElementById('ai-error');
+    errEl.style.display = 'block';
+    let msg = e.message || 'Unknown error';
+    // Add helpful context based on error type
+    if (msg.includes('Rate limit') || msg.includes('429')) {
+      errEl.innerHTML = `⏳ <strong>Rate Limit</strong><br>${msg}<br><br><em>Tip: Ganti model ke gemini-2.5-flash atau tunggu 1-2 menit.</em>`;
+    } else if (msg.includes('tidak ditemukan') || msg.includes('404')) {
+      errEl.innerHTML = `🔍 <strong>Model Not Found</strong><br>${msg}<br><br><em>Tip: Pilih model di dropdown "Gemini 2.5 — Stable" untuk hasil paling konsisten.</em>`;
+    } else if (msg.includes('API key') || msg.includes('401')) {
+      errEl.innerHTML = `🔑 <strong>API Key Invalid</strong><br>${msg}<br><br><em>Dapatkan key baru di <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#a5b4fc">Google AI Studio</a>.</em>`;
+    } else if (msg.includes('Kuota') || msg.includes('quota')) {
+      errEl.innerHTML = `📊 <strong>Kuota Habis</strong><br>${msg}`;
+    } else {
+      errEl.textContent = `❌ ${msg}`;
+    }
   } finally {
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-estimate-btn').disabled = false;

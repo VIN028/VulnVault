@@ -1052,7 +1052,7 @@ app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), a
   if (!api_key) return res.status(400).json({ error: 'API key is required' });
   if (!project_type) return res.status(400).json({ error: 'Project type is required' });
 
-  const aiModel = model || 'gemini-3-flash-preview';
+  const aiModel = model || 'gemini-2.5-flash';
 
   const typeLabel = {
     web: 'Web Application', api: 'API / REST', mobile: 'Mobile Application',
@@ -1144,34 +1144,52 @@ Return only valid JSON:
 
 
   try {
-    const https = require('https');
-    const body = JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { 
-        temperature: 0.2, 
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(api_key);
+    const aiModelObj = genAI.getGenerativeModel({
+      model: aiModel,
+      generationConfig: {
+        temperature: 0.2,
         maxOutputTokens: 1024,
-        responseMimeType: "application/json" 
+        responseMimeType: "application/json"
       }
     });
 
-    const geminiRes = await new Promise((resolve, reject) => {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${api_key}`;
-      const options = { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } };
-      const reqH = https.request(url, options, r => {
-        let d = ''; r.on('data', c => d += c); r.on('end', () => resolve({ status: r.statusCode, body: d }));
-      });
-      reqH.on('error', reject);
-      reqH.write(body); reqH.end();
-    });
+    // 30s timeout to prevent hanging requests
+    const timeoutMs = 30000;
+    const abortController = new AbortController();
+    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
 
-    if (geminiRes.status !== 200) {
-      const errBody = JSON.parse(geminiRes.body);
-      return res.status(400).json({ error: errBody?.error?.message || 'Gemini API error' });
+    let result;
+    try {
+      result = await aiModelObj.generateContent(
+        { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
+        { signal: abortController.signal }
+      );
+    } catch (genErr) {
+      clearTimeout(timeout);
+      const msg = genErr?.message || '';
+      if (genErr.name === 'AbortError' || msg.includes('abort')) {
+        return res.status(504).json({ error: 'Request timeout (30s). Coba model yang lebih cepat seperti gemini-2.5-flash.' });
+      }
+      if (msg.includes('404') || msg.includes('not found') || msg.includes('is not found')) {
+        return res.status(400).json({ error: `Model "${aiModel}" tidak tersedia. Coba ganti ke model lain di dropdown (recommended: gemini-2.5-flash).` });
+      }
+      if (msg.includes('429') || msg.includes('RATE_LIMIT') || msg.includes('Resource has been exhausted')) {
+        return res.status(429).json({ error: 'Rate limit tercapai. Tunggu 1-2 menit lalu coba lagi, atau ganti ke model lain (misal gemini-2.5-flash).' });
+      }
+      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+        return res.status(401).json({ error: 'API key tidak valid. Periksa kembali key di Google AI Studio.' });
+      }
+      if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+        return res.status(429).json({ error: 'Kuota API habis untuk model ini. Coba model lain atau tunggu hingga kuota direset.' });
+      }
+      throw genErr;
     }
+    clearTimeout(timeout);
 
-    const geminiJson = JSON.parse(geminiRes.body);
-    let text = geminiJson?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    
+    let text = result.response.text().trim();
+
     // Robustly extract JSON if wrapped in markdown or other text
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
@@ -1188,7 +1206,7 @@ Return only valid JSON:
       throw new Error('AI returned an invalid format. Please try again or switch models.');
     }
 
-    const assessmentDays = Math.max(1, Math.round(Number(aiResult.assessment_days)));
+    const assessmentDays = Math.max(1, Math.ceil(Number(aiResult.assessment_days)));
     res.json({
       kickoff_days: 1,
       infogath_days: 5,
@@ -1200,6 +1218,7 @@ Return only valid JSON:
       notes: aiResult.notes || null
     });
   } catch (e) {
+    console.error('[AI Estimator] Error:', e.message);
     res.status(500).json({ error: `AI request failed: ${e.message}` });
   }
 });
