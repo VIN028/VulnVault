@@ -28,7 +28,7 @@
       <div class="apikey-body">
         <div class="apikey-gemini-badge">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0;"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
-          Powered by Gemini 2.0 Flash
+          Powered by Gemini 2.5 Flash
         </div>
         <h2>Enter Your Google AI Studio API Key</h2>
         <p class="apikey-desc">Your API key is stored only in your browser's local storage and is sent directly to Google's API. It is never stored on this server.</p>
@@ -47,21 +47,12 @@
         <div class="form-group" style="margin:0;">
           <label style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;display:block;">Gemini Model</label>
           <select id="apikey-model" style="font-size:13px;">
-            <optgroup label="🚀 Gemini 3.1 — Frontier">
-              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview — Deep reasoning & agentic</option>
-              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview — High volume, low cost</option>
-            </optgroup>
-            <optgroup label="⚡ Gemini 3 — Performance">
-              <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview — High intelligence, fast ✓ Default</option>
-            </optgroup>
             <optgroup label="✅ Gemini 2.5 — Stable">
+              <option value="gemini-2.5-flash" selected>gemini-2.5-flash — Production Flash ✓ Default</option>
               <option value="gemini-2.5-pro">gemini-2.5-pro — Production Pro</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash — Production Flash</option>
             </optgroup>
-            <optgroup label="📦 Gemini 2.0 / 1.5 — Legacy">
+            <optgroup label="📦 Gemini 2.0 — Legacy">
               <option value="gemini-2.0-flash">gemini-2.0-flash — Flash 2.0</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash — Flash 1.5 (Free tier)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro — Pro 1.5</option>
             </optgroup>
           </select>
           <p style="font-size:11px;color:var(--text-muted);margin-top:5px;">Pick the model that matches your Google AI Studio plan.</p>
