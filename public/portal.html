@@ -3,11 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>VulnVault — Management Portal</title>
-  <meta name="description" content="VulnVault management portal for PM, Manager, and Admin roles." />
+  <title>Cisometric Intelligence Platform</title>
+  <meta name="description" content="Cisometric Intelligence Platform — Unified management portal for cybersecurity operations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <style>
     :root {
       --bg: #080b14;
@@ -41,17 +42,29 @@
       z-index: 100;
     }
     .sidebar-logo {
-      display: flex; align-items: center; gap: 10px;
-      padding: 24px 20px 20px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      padding: 22px 16px 18px;
       border-bottom: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
     }
-    .logo-icon {
-      width: 34px; height: 34px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      display: flex; align-items: center; justify-content: center;
+    .sidebar-logo::before {
+      content: ''; position: absolute; top: -40%; left: -20%; width: 140%; height: 140%;
+      background: radial-gradient(ellipse at 50% 80%, rgba(99,102,241,0.08) 0%, transparent 70%);
+      pointer-events: none;
     }
-    .logo-icon svg { width: 18px; height: 18px; }
-    .logo-text { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; }
+    .logo-img {
+      height: 22px; width: auto; object-fit: contain;
+      filter: brightness(1.1);
+      transition: filter 0.3s, transform 0.3s;
+    }
+    .sidebar-logo:hover .logo-img { filter: brightness(1.3) drop-shadow(0 0 8px rgba(99,102,241,0.5)); transform: scale(1.03); }
+    .logo-subtitle {
+      font-size: 10px; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase;
+      background: linear-gradient(90deg, #a5b4fc, #67e8f9);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
     .logo-badge { font-size: 9px; font-weight: 700; color: var(--accent); background: rgba(99,102,241,0.15); border-radius: 4px; padding: 2px 6px; letter-spacing: 0.05em; }
 
     .sidebar-nav { padding: 12px 10px; flex: 1; }
@@ -625,13 +638,8 @@
 <!-- ── Sidebar ── -->
 <nav id="sidebar">
   <div class="sidebar-logo">
-    <div class="logo-icon">
-      <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-    </div>
-    <div>
-      <div class="logo-text">VulnVault</div>
-      <div class="logo-badge">PORTAL</div>
-    </div>
+    <img src="/cisometric-logo.png" alt="Cisometric" class="logo-img" />
+    <div class="logo-subtitle">Intelligence Platform</div>
   </div>
 
   <div class="sidebar-nav">
@@ -655,10 +663,24 @@
         </button>
       </div>
     </div>
-    <button class="nav-item" onclick="navigate('pm-board')" id="nav-pm-board">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
-      Projects
-    </button>
+    <div class="nav-dropdown" id="nav-dropdown-projects">
+      <button class="nav-item" onclick="toggleNavDropdown('projects')" id="nav-pm-board">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+        Projects
+        <svg class="nav-dropdown-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;margin-left:auto;transition:transform 0.2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="nav-sub-items" style="display:none">
+        <button class="nav-sub-item" onclick="navigateBoard('offensive')" id="nav-board-offensive">
+          <span style="color:#ef4444;font-size:8px;margin-right:6px">●</span> Offensive Projects
+        </button>
+        <button class="nav-sub-item" onclick="navigateBoard('itaudit')" id="nav-board-itaudit">
+          <span style="color:#3b82f6;font-size:8px;margin-right:6px">●</span> IT Audit &amp; SE Projects
+        </button>
+        <button class="nav-sub-item" onclick="navigate('archived')" id="nav-archived">
+          <span style="color:#64748b;font-size:8px;margin-right:6px">●</span> Archived Projects
+        </button>
+      </div>
+    </div>
     <button class="nav-item" onclick="navigate('actlog')" id="nav-actlog">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
       Activity Log
@@ -871,18 +893,20 @@
   <!-- Projects Board (Kanban) -->
   <section class="section" id="section-pm-board">
     <div class="topbar">
-      <div>
-        <div class="page-title">Projects</div>
-        <div class="page-sub">Kanban board untuk tracking progress project</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn-refresh" onclick="doRefresh('pm-board')" title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
-        </button>
-        <button class="btn-primary" onclick="openBoardSetup()" style="font-size:12px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
-          Setup Status
-        </button>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div>
+          <div class="page-title">Projects</div>
+          <div class="page-sub">Kanban board untuk tracking progress project</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+          <button class="btn-refresh" onclick="doRefresh('pm-board')" title="Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+          </button>
+          <button class="btn-primary" onclick="openBoardSetup()" style="font-size:11px;padding:6px 12px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px"><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.08a2 2 0 01-1-1.74v-.5a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            Setup Status
+          </button>
+        </div>
       </div>
     </div>
     <div style="padding:24px 32px 40px">
@@ -964,6 +988,46 @@
       </div>
       <div id="projects-accordion"><div class="empty-state">Loading…</div></div>
       <div id="category-accordion" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- Archived Projects -->
+  <section class="section" id="section-archived">
+    <div class="topbar">
+      <div>
+        <div class="page-title">Archived Projects</div>
+        <div class="page-sub">Read-only view of completed and past projects.</div>
+      </div>
+      <button class="btn-refresh" id="refresh-archived" onclick="doRefresh('archived')" title="Refresh">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15"/></svg>
+      </button>
+    </div>
+    <div style="padding: 24px 32px 0">
+      <div class="section-header">
+        <div class="section-heading">All Archived Projects</div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <input id="archived-search" type="search" placeholder="Search client or project…" oninput="filterArchivedProjects()" style="padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:#0f172a;color:var(--text);font-size:13px;font-family:inherit;outline:none;width:260px" />
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Project Name</th>
+              <th>Team</th>
+              <th>Type</th>
+              <th>PIC</th>
+              <th>Completion Date</th>
+              <th>Findings</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="archived-tbody">
+            <tr><td colspan="8"><div class="empty-state">Loading…</div></td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 
@@ -1386,7 +1450,7 @@
   <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto" onclick="event.stopPropagation()">
     <div class="modal-title" id="modal-create-project-title">New Entry</div>
 
-    <!-- ═══ Tab Bar ═══ -->
+    <!-- ═══ Tab Bar (50:50 symmetric) ═══ -->
     <div id="ne-tab-bar" style="display:flex;margin-bottom:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
       <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 0;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
       <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 0;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
@@ -1570,7 +1634,25 @@
           <!-- Kick Off Date -->
           <div class="form-group">
             <label>Kick Off Date *</label>
-            <input id="cp-kickoff" type="date" oninput="onMandaysParamChanged()" />
+            <input id="cp-kickoff" type="date" />
+          </div>
+
+          <!-- Start Date -->
+          <div class="form-group">
+            <label>Start Date *</label>
+            <input id="cp-start-date" type="date" oninput="onMandaysParamChanged()" />
+          </div>
+
+          <!-- Assessment Mandays -->
+          <div class="form-group">
+            <label>Assessment Mandays *</label>
+            <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
+          </div>
+
+          <!-- Initial Report Mandays -->
+          <div class="form-group">
+            <label>Initial Report Mandays</label>
+            <input id="cp-md-initial-report" type="number" value="1" min="0" oninput="onMandaysParamChanged()" />
           </div>
 
           <!-- Initial Report Date (auto) -->
@@ -1581,28 +1663,26 @@
             <div id="cp-initial-auto-note" style="font-size:11px;color:#a78bfa;margin-top:4px">🤖 Auto-calculated from mandays</div>
           </div>
 
-          <!-- Assessment Mandays -->
-          <div class="form-group">
-            <label>Assessment Mandays *</label>
-            <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()" />
+          <!-- Past Project Checkbox -->
+          <div class="form-group" style="grid-column:1/-1; margin-top: 12px; margin-bottom: 8px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight: 600; color: var(--text);">
+              <input type="checkbox" id="cp-is-past-project" onchange="_onPastProjectChange()" style="width:16px; height:16px;" />
+              Input Past Project (Project lama yang sudah selesai di bulan sebelumnya)
+            </label>
           </div>
 
-          <!-- Info Gathering Mandays -->
-          <div class="form-group">
-            <label>Info Gathering Mandays</label>
-            <input id="cp-md-infogath" type="number" value="5" min="0" oninput="onMandaysParamChanged()" />
+          <!-- Actual Completion Date (Hidden by default) -->
+          <div class="form-group" id="cp-actual-end-wrap" style="display:none; grid-column:1/-1; background:rgba(99,102,241,0.08); padding: 12px; border-radius: 8px; border: 1px dashed rgba(99,102,241,0.3);">
+            <label>Actual Completion Date *</label>
+            <input id="cp-actual-end" type="date" />
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Tanggal ini akan masuk ke KPI "Selesai" pada Dashboard sesuai bulan yang dipilih.</div>
           </div>
-
-          <!-- Hidden: kickoff mandays always 1 -->
-          <input id="cp-md-kickoff" type="hidden" value="1" />
         </div>
 
         <!-- Live mandays preview -->
         <div id="cp-mandays-preview" style="display:none;grid-column:1/-1;background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:14px 18px">
           <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px;letter-spacing:.05em">MANDAYS ESTIMATE</div>
           <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
-            <span style="font-size:12px;color:var(--muted)">Kickoff: <b id="cp-md-r-kickoff" style="color:var(--text)">—</b></span>
-            <span style="font-size:12px;color:var(--muted)">Info Gathering: <b id="cp-md-r-infogath" style="color:var(--text)">—</b></span>
             <span style="font-size:12px;color:var(--muted)">Assessment: <b id="cp-md-r-assessment" style="color:var(--text)">—</b></span>
             <span style="font-size:12px;color:var(--muted)">Initial Report: <b id="cp-md-r-ir" style="color:#a78bfa">—</b></span>
             <span style="font-size:14px;font-weight:700;color:var(--accent)">Total: <span id="cp-md-r-total">—</span> hari</span>
@@ -1753,6 +1833,7 @@
 
 <script>
 let currentUser = null;
+Chart.register(ChartDataLabels);
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 (async function init() {
@@ -1814,6 +1895,7 @@ function navigate(section) {
   if (section === 'allocation') loadAllocation();
   if (section === 'ai-mandays') initAiMandaysSection();
   if (section === 'pm-board')   loadBoard();
+  if (section === 'archived')   loadArchived();
 }
 
 function toggleNavDropdown(name) {
@@ -1841,6 +1923,24 @@ function navigateClients(team) {
   const titleEl = document.querySelector('#section-projects .page-title');
   if (titleEl) titleEl.textContent = team === 'offensive' ? 'Clients — Offensive Team' : 'Clients — IT Audit & SE';
   navigate('projects');
+}
+
+let _boardTeamFilter = null; // 'offensive' | 'itaudit' | null
+
+function navigateBoard(team) {
+  _boardTeamFilter = team;
+  document.querySelectorAll('.nav-sub-item').forEach(n => n.classList.remove('active'));
+  const subEl = document.getElementById('nav-board-' + team);
+  if (subEl) subEl.classList.add('active');
+  const dd = document.getElementById('nav-dropdown-projects');
+  if (dd && !dd.classList.contains('open')) {
+    dd.classList.add('open');
+    const sub = dd.querySelector('.nav-sub-items');
+    if (sub) sub.style.display = '';
+  }
+  const titleEl = document.querySelector('#section-pm-board .page-title');
+  if (titleEl) titleEl.textContent = team === 'offensive' ? 'Projects — Offensive Team' : 'Projects — IT Audit & SE';
+  navigate('pm-board');
 }
 
 // ── Create User Role → Team auto-logic ──
@@ -2085,7 +2185,7 @@ function buildMonthOptions(rows) {
   const months = new Set();
   const today = new Date();
   rows.forEach(r => {
-    [r.kickoff_date, r.initial_report_date, r.final_report_date,
+    [r.kickoff_date, r.start_date, r.initial_report_date, r.final_report_date,
      r.retest_start_date, r.retest_end_date].filter(Boolean).forEach(d => {
       const dt = new Date(d);
       if (!isNaN(dt.getTime()))
@@ -2150,11 +2250,12 @@ function _workdaysOverlap(startStr, endStr, year, month) {
  * Excess mandays carry over to subsequent months.
  */
 function _assessmentMandaysInMonth(r, year, month) {
-  if (!r.kickoff_date || !(r.mandays_assessment > 0)) return 0;
+  const dtStart = r.start_date || r.kickoff_date;
+  if (!dtStart || !(r.mandays_assessment > 0)) return 0;
 
   const totalMd = r.mandays_assessment;
-  // Start distributing from the month containing kickoff_date
-  const ko = new Date(r.kickoff_date);
+  // Start distributing from the month containing start_date
+  const ko = new Date(dtStart);
   let curYear = ko.getFullYear();
   let curMonth = ko.getMonth(); // 0-based
   let remaining = totalMd;
@@ -2195,7 +2296,8 @@ function renderCapacityView() {
     const teamRows = rows.filter(r => teamFilter === 'offensive' ? r.team !== 'itaudit' : r.team === 'itaudit');
     
     teamRows.forEach(r => {
-      if (r.kickoff_date && r.mandays_assessment > 0) {
+      const dtStart = r.start_date || r.kickoff_date;
+      if (dtStart && r.mandays_assessment > 0) {
         const md = _assessmentMandaysInMonth(r, year, month);
         if (md > 0) {
           const hasPic = r.assigned_engineer_id && r.engineer_name;
@@ -2412,10 +2514,15 @@ async function loadDashboard() {
     if(subEl) subEl.textContent = `Showing: ${f.label}`;
     
     const allP = rows.filter(r=>r.project_id);
-    const isStartedIn = (r, start, end) => r.project_id && r.kickoff_date && new Date(r.kickoff_date) >= start && new Date(r.kickoff_date) <= end;
+    const isPastProject = (r) => r.is_archived === 1 && r.board_status_id == null;
+    const isStartedIn = (r, start, end) => {
+       if (isPastProject(r)) return false;
+       return r.project_id && r.kickoff_date && new Date(r.kickoff_date) >= start && new Date(r.kickoff_date) <= end;
+    };
     const isDoneIn = (r, start, end) => r.project_id && r.final_report_status === 'completed' && r.final_completed_at && new Date(r.final_completed_at) >= start && new Date(r.final_completed_at) <= end;
     
     const isTotalProject = (r, start, end, refDate) => {
+       if (isPastProject(r)) return false;
        if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
        const isActiveAtRef = r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
        return isActiveAtRef || isDoneIn(r, start, end);
@@ -2483,41 +2590,68 @@ async function loadDashboard() {
 
 function renderDashTrendChart(rows, today) {
   if (typeof Chart === 'undefined') return;
-  const labels=[], data=[];
-  for(let i=11;i>=0;i--){const d=new Date(today.getFullYear(),today.getMonth()-i,1);labels.push(d.toLocaleDateString('id-ID',{month:'short',year:'2-digit'}));data.push(rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===d.getFullYear()&&new Date(r.kickoff_date).getMonth()===d.getMonth()).length);}
-  const ctx=document.getElementById('dash-trend-chart');if(!ctx)return;
-  if(_dashTrendChart)_dashTrendChart.destroy();
-  _dashTrendChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{data,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,0.12)',borderWidth:2,pointRadius:4,pointBackgroundColor:'#6366f1',fill:true,tension:0.35}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},y:{grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}}}});
+  const labels = [], data = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    labels.push(d.toLocaleDateString('id-ID', { month: 'short', year: '2-digit' }));
+    data.push(rows.filter(r => r.project_id && r.kickoff_date && new Date(r.kickoff_date).getFullYear() === d.getFullYear() && new Date(r.kickoff_date).getMonth() === d.getMonth()).length);
+  }
+  const ctx = document.getElementById('dash-trend-chart'); if (!ctx) return;
+  if (_dashTrendChart) _dashTrendChart.destroy();
+  _dashTrendChart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: '#6366f1', backgroundColor: 'rgba(99,102,241,0.12)', borderWidth: 2, pointRadius: 4, pointBackgroundColor: '#6366f1', fill: true, tension: 0.35 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        datalabels: {
+          align: 'top', anchor: 'end', offset: 2, color: '#f0f4ff',
+          font: { size: 10, weight: 'bold' },
+          formatter: (v) => v > 0 ? v : ''
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+        y: { grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { color: '#64748b', font: { size: 10 }, stepSize: 1 }, beginAtZero: true }
+      }
+    }
+  });
 }
 
 function renderDashTeamChart(rows, today) {
   if (typeof Chart === 'undefined') return;
-  const labels=[], dataOffensive=[], dataITAudit=[];
-  const d=new Date(today.getFullYear(),today.getMonth(),1);
-  labels.push(d.toLocaleDateString('id-ID',{month:'long',year:'numeric'}));
-  const monthRows = rows.filter(r=>r.project_id&&r.kickoff_date&&new Date(r.kickoff_date).getFullYear()===d.getFullYear()&&new Date(r.kickoff_date).getMonth()===d.getMonth());
-  dataOffensive.push(monthRows.filter(r=>r.team!=='itaudit').length);
-  dataITAudit.push(monthRows.filter(r=>r.team==='itaudit').length);
-  
-  const ctx=document.getElementById('dash-team-chart');if(!ctx)return;
-  if(_dashTeamChart)_dashTeamChart.destroy();
-  _dashTeamChart=new Chart(ctx,{
-    type:'bar',
-    data:{
+  const labels = [], dataOffensive = [], dataITAudit = [];
+  const d = new Date(today.getFullYear(), today.getMonth(), 1);
+  labels.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }));
+  const monthRows = rows.filter(r => r.project_id && r.kickoff_date && new Date(r.kickoff_date).getFullYear() === d.getFullYear() && new Date(r.kickoff_date).getMonth() === d.getMonth());
+  dataOffensive.push(monthRows.filter(r => r.team !== 'itaudit').length);
+  dataITAudit.push(monthRows.filter(r => r.team === 'itaudit').length);
+
+  const ctx = document.getElementById('dash-team-chart'); if (!ctx) return;
+  if (_dashTeamChart) _dashTeamChart.destroy();
+  _dashTeamChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
       labels,
-      datasets:[
-        {label:'Offensive',data:dataOffensive,backgroundColor:'#ef4444',borderRadius:4},
-        {label:'IT Audit & SE',data:dataITAudit,backgroundColor:'#3b82f6',borderRadius:4}
+      datasets: [
+        { label: 'Offensive', data: dataOffensive, backgroundColor: '#ef4444', borderRadius: 4 },
+        { label: 'IT Audit & SE', data: dataITAudit, backgroundColor: '#3b82f6', borderRadius: 4 }
       ]
     },
-    options:{
-      responsive:true,maintainAspectRatio:false,
-      plugins:{
-        legend:{display:true,position:'bottom',labels:{usePointStyle:true,boxWidth:8,font:{size:10}}}
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, font: { size: 10 } } },
+        datalabels: {
+          anchor: 'end', align: 'top', color: '#f0f4ff',
+          font: { size: 10, weight: 'bold' },
+          formatter: (v) => v > 0 ? v : ''
+        }
       },
-      scales:{
-        x:{stacked:false,grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10}}},
-        y:{stacked:false,grid:{color:'rgba(148,163,184,0.08)'},ticks:{color:'#64748b',font:{size:10},stepSize:1},beginAtZero:true}
+      scales: {
+        x: { stacked: false, grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { color: '#64748b', font: { size: 10 } } },
+        y: { stacked: false, grid: { color: 'rgba(148,163,184,0.08)' }, ticks: { color: '#64748b', font: { size: 10 }, stepSize: 1 }, beginAtZero: true }
       }
     }
   });
@@ -2598,7 +2732,7 @@ function renderDashActiveProjects(rows, refDate) {
   const tbody=document.getElementById('dash-active-tbody');if(!tbody)return;
   const today = new Date(); today.setHours(0,0,0,0);
   const active=rows.filter(r=>{
-     if (!r.project_id || r.board_status_id == null || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
+     if (!r.project_id || r.board_status_id == null || r.is_archived || !r.kickoff_date || new Date(r.kickoff_date) > refDate) return false;
      return r.final_report_status !== 'completed' || (r.final_completed_at && new Date(r.final_completed_at) > refDate);
   });
   if(!active.length){tbody.innerHTML='<tr><td colspan="7"><div class="empty-state">Tidak ada project aktif.</div></td></tr>';return;}
@@ -2607,21 +2741,20 @@ function renderDashActiveProjects(rows, refDate) {
     const isOff=p.initial_report_date&&new Date(p.initial_report_date)<today&&p.initial_report_status!=='completed';
     const isDone=p.initial_report_status==='completed';
     const badge=isDone?'<span class="badge-completed">&#10003; Initial Done</span>':isOff?'<span class="badge-off-track">&#9888; Off Track</span>':'<span class="badge-on-track">&#10003; On Track</span>';
-    const ko = p.mandays_kickoff ?? 1;
-    const ig = p.mandays_infogath ?? 5;
     const as = p.mandays_assessment ?? 0;
-    let igDate = '—', asDate = '—';
-    if (p.kickoff_date) {
-      igDate = fmt(addWorkingDays(p.kickoff_date, ko + 1));
-      asDate = fmt(addWorkingDays(p.kickoff_date, ko + ig + 1));
+    const ir = p.mandays_initial_report ?? 1;
+    let asStartDate = '—', asEndDate = '—';
+    if (p.start_date) {
+      asStartDate = fmt(p.start_date);
+      asEndDate = fmt(addWorkingDays(p.start_date, as));
     }
-    return `<tr><td style="font-weight:600">${esc(p.client_name)}</td><td><span class="badge badge-${p.project_type||'web'}">${tl[p.project_type]||p.project_type||'Web'}</span></td><td style="font-weight:600;color:var(--accent)">${as} <span style="font-size:10px;font-weight:400;color:var(--muted)">hari</span></td><td style="color:var(--muted);font-size:12px">${igDate}</td><td style="color:var(--muted);font-size:12px">${asDate}</td><td style="color:var(--muted);font-size:12px">${fmt(p.initial_report_date)}</td><td>${badge}</td></tr>`;
+    return `<tr><td style="font-weight:600">${esc(p.client_name)}</td><td><span class="badge badge-${p.project_type||'web'}">${tl[p.project_type]||p.project_type||'Web'}</span></td><td style="font-weight:600;color:var(--accent)">${as} <span style="font-size:10px;font-weight:400;color:var(--muted)">hari</span></td><td style="color:var(--muted);font-size:12px">${asStartDate}</td><td style="color:var(--muted);font-size:12px">${asEndDate}</td><td style="color:var(--muted);font-size:12px">${fmt(p.initial_report_date)}</td><td>${badge}</td></tr>`;
   }).join('');
 }
 
 async function renderDashHighlights(rows) {
   const body=document.getElementById('dash-highlights-body');if(!body)return;
-  const allP=rows.filter(r=>r.project_id);
+  const allP=rows.filter(r=>r.project_id && !r.is_archived);
   if(!allP.length){body.innerHTML='<div class="empty-state">Belum ada project.</div>';return;}
   const results=await Promise.all(allP.map(r=>apiFetch('/api/projects/'+r.project_id+'/highlight').catch(()=>null)));
   const withText=results.filter(r=>r&&r.highlight_text);
@@ -2743,11 +2876,10 @@ function toggleGroup(id) {
 
 // helper: compute and format mandays tag for a project row
 function calcMandaysTag(p) {
-  if (!p.kickoff_date || !p.initial_report_date) return '<span style="font-size:11px;color:var(--muted)">—</span>';
-  const ko = p.mandays_kickoff ?? 1;
-  const ig = p.mandays_infogath ?? 5;
-  const { days } = workingDaysBetween(p.kickoff_date, p.initial_report_date);
-  const total = ko + ig + days;
+  if (!p.start_date || !p.initial_report_date) return '<span style="font-size:11px;color:var(--muted)">—</span>';
+  const as = p.mandays_assessment ?? 0;
+  const ir = p.mandays_initial_report ?? 1;
+  const total = as + ir;
   return `<span style="font-size:12px;font-weight:700;color:var(--accent)">${total}</span><span style="font-size:10px;color:var(--muted)"> hari</span>`;
 }
 
@@ -2834,9 +2966,9 @@ async function loadProjects() {
   try {
     let rows = await apiFetch('/api/clients/full');
     _allClientsCache = rows;
-    // Apply team filter from sidebar navigation
+    // Apply team filter from sidebar navigation (filter by client's own team)
     if (_projectsTeamFilter) {
-      rows = rows.filter(r => !r.project_id || r.team === _projectsTeamFilter);
+      rows = rows.filter(r => r.client_team === _projectsTeamFilter);
     }
     renderClientGroups('projects-accordion', rows, true);
     if (_projectViewMode === 'category') renderCategoryGroups(rows);
@@ -2848,9 +2980,9 @@ function filterProjects() {
   const from = document.getElementById('client-date-from')?.value || '';
   const to   = document.getElementById('client-date-to')?.value || '';
   let rows = _allClientsCache;
-  // Apply team filter
+  // Apply team filter (by client's own team)
   if (_projectsTeamFilter) {
-    rows = rows.filter(r => !r.project_id || r.team === _projectsTeamFilter);
+    rows = rows.filter(r => r.client_team === _projectsTeamFilter);
   }
   if (q) rows = rows.filter(r =>
     r.client_name?.toLowerCase().includes(q)||
@@ -2996,6 +3128,16 @@ async function editProjectPortal(proj) {
     document.getElementById('cp-service-custom').value = serviceVal;
     document.getElementById('cp-service-custom').style.display = 'block';
   }
+  
+  // Pre-fill dates
+  document.getElementById('cp-start-date').value = proj.start_date || '';
+  document.getElementById('cp-kickoff').value = proj.kickoff_date || '';
+  document.getElementById('cp-initial').value = proj.initial_report_date || '';
+
+  // Pre-fill mandays
+  document.getElementById('cp-md-assessment').value = proj.mandays_assessment ?? 0;
+  document.getElementById('cp-md-initial-report').value = proj.mandays_initial_report ?? 1;
+
   _onServiceChange();
 
   // Pre-fill Scope Type & Methodology
@@ -3026,14 +3168,8 @@ async function editProjectPortal(proj) {
   document.getElementById('cp-resource-count').value = String(resourceCount);
   _onResourceCountChange();
 
-  // Pre-fill dates
-  document.getElementById('cp-kickoff').value = proj.kickoff_date || '';
-  document.getElementById('cp-initial').value = proj.initial_report_date || '';
 
-  // Pre-fill mandays
-  document.getElementById('cp-md-kickoff').value = proj.mandays_kickoff ?? 1;
-  document.getElementById('cp-md-infogath').value = proj.mandays_infogath ?? 5;
-  document.getElementById('cp-md-assessment').value = proj.mandays_assessment ?? 0;
+
 
   // Handle assessment mode
   if ((proj.mandays_assessment ?? 0) > 0) {
@@ -3104,9 +3240,9 @@ async function editProjectPortal(proj) {
     const engineer_9_id = document.getElementById('cp-engineer-9')?.value || null;
     const engineer_10_id = document.getElementById('cp-engineer-10')?.value || null;
     const kickoff_date = document.getElementById('cp-kickoff').value || null;
+    const start_date = document.getElementById('cp-start-date').value || null;
     const initial_report_date = document.getElementById('cp-initial').value || null;
-    const mandays_kickoff = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
-    const mandays_infogath = parseInt(document.getElementById('cp-md-infogath').value) || 5;
+    const mandays_initial_report = parseInt(document.getElementById('cp-md-initial-report').value) || 1;
     const mandays_assessment = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
     const project_links = getProjectLinksFromForm();
     btn.disabled = true;
@@ -3116,8 +3252,8 @@ async function editProjectPortal(proj) {
         project_type, project_method,
         assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id,
         engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
-        kickoff_date, initial_report_date,
-        mandays_kickoff, mandays_infogath, mandays_assessment,
+        kickoff_date, start_date, initial_report_date,
+        mandays_initial_report, mandays_assessment,
         project_links, team, service
       });
       modal.classList.remove('open');
@@ -3145,10 +3281,11 @@ function _renderClientCards(clients) {
   }
   list.innerHTML = clients.map(c => {
     const isSelected = _neSelectedClientId === String(c.id);
+    const projCount = c._projectCountThisYear || 0;
     return `<div class="ne-client-card" data-cid="${c.id}" onclick="_selectClient('${c.id}')" style="padding:12px 16px;border-radius:10px;border:1.5px solid ${isSelected ? 'var(--accent)' : 'var(--border)'};background:${isSelected ? 'rgba(99,102,241,0.08)' : 'rgba(255,255,255,0.02)'};cursor:pointer;transition:all .15s;display:flex;justify-content:space-between;align-items:center" onmouseover="if(!this.classList.contains('sel'))this.style.borderColor='rgba(99,102,241,0.4)'" onmouseout="if(!this.classList.contains('sel'))this.style.borderColor='var(--border)'">
       <div>
         <div style="font-weight:600;font-size:14px;color:var(--text)">${esc(c.name)}</div>
-        ${c.engagement_reference ? `<div style="font-size:11px;color:var(--muted);margin-top:2px">${esc(c.engagement_reference)}${c.engagement_info ? ' — ' + esc(c.engagement_info) : ''}</div>` : ''}
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${projCount > 0 ? projCount + ' project' + (projCount > 1 ? 's' : '') + ' tahun ini' : 'Belum ada project'}${c.engagement_reference ? ' · ' + esc(c.engagement_reference) : ''}</div>
       </div>
       <div style="font-size:11px;color:var(--muted)">${isSelected ? '<span style="color:var(--accent);font-weight:700">✓ Selected</span>' : ''}</div>
     </div>`;
@@ -3235,6 +3372,36 @@ function _onTeamChange() {
   }
   document.getElementById('cp-service-custom').style.display = 'none';
   _onServiceChange();
+
+  // Re-filter client cards by the new team (with year filtering)
+  (async () => {
+    try {
+      const [allClients, fullData] = await Promise.all([
+        apiFetch('/api/clients'),
+        apiFetch('/api/clients/full')
+      ]);
+      const currentYear = new Date().getFullYear();
+      const clientYearMap = new Map();
+      fullData.forEach(row => {
+        if (!row.project_id) return;
+        const ko = row.kickoff_date;
+        if (ko && new Date(ko).getFullYear() === currentYear) {
+          clientYearMap.set(row.client_id, (clientYearMap.get(row.client_id) || 0) + 1);
+        }
+      });
+      const clients = allClients.filter(c => {
+        if (c.team !== team) return false;
+        const hasProjectsThisYear = clientYearMap.has(c.id);
+        const hasAnyProject = fullData.some(row => row.client_id === c.id && row.project_id);
+        return hasProjectsThisYear || !hasAnyProject;
+      });
+      clients.forEach(c => { c._projectCountThisYear = clientYearMap.get(c.id) || 0; });
+      _neClientsData = clients;
+      _neSelectedClientId = null;
+      _renderClientCards(clients);
+      _updateProjectTabState();
+    } catch {}
+  })();
 }
 
 function _onServiceChange() {
@@ -3261,6 +3428,12 @@ function _onResourceCountChange() {
     const wrap = document.getElementById('cp-pic-' + i + '-wrap');
     if (wrap) wrap.style.display = count >= i ? '' : 'none';
   }
+}
+
+function _onPastProjectChange() {
+  const isChecked = document.getElementById('cp-is-past-project')?.checked;
+  const wrap = document.getElementById('cp-actual-end-wrap');
+  if (wrap) wrap.style.display = isChecked ? 'block' : 'none';
 }
 
 // Check if a client has been selected or new-client name filled
@@ -3368,7 +3541,7 @@ async function openNewEntry() {
 
   // Reset project fields
   document.getElementById('cp-name').value = '';
-  document.getElementById('cp-team').value = 'offensive';
+  document.getElementById('cp-team').value = _projectsTeamFilter || 'offensive';
   document.getElementById('cp-service').value = 'vapt';
   document.getElementById('cp-service-custom').value = '';
   document.getElementById('cp-service-custom').style.display = 'none';
@@ -3377,14 +3550,20 @@ async function openNewEntry() {
   document.getElementById('cp-scope-text').value = '';
   document.getElementById('cp-method').value = 'blackbox';
   document.getElementById('cp-kickoff').value = '';
+  document.getElementById('cp-start-date').value = '';
   document.getElementById('cp-initial').value = '';
   document.getElementById('cp-err').classList.remove('show');
   document.getElementById('cp-links-container').innerHTML = '';
+  
+  if (document.getElementById('cp-is-past-project')) {
+    document.getElementById('cp-is-past-project').checked = false;
+    _onPastProjectChange();
+  }
+  if (document.getElementById('cp-actual-end')) document.getElementById('cp-actual-end').value = '';
 
   // Reset mandays
-  document.getElementById('cp-md-kickoff').value = 1;
-  document.getElementById('cp-md-infogath').value = 5;
   document.getElementById('cp-md-assessment').value = 0;
+  document.getElementById('cp-md-initial-report').value = 1;
   const warnEl = document.getElementById('cp-initial-warn');
   if (warnEl) warnEl.style.display = 'none';
   const prev = document.getElementById('cp-mandays-preview');
@@ -3394,9 +3573,41 @@ async function openNewEntry() {
   _onTeamChange();
   _onResourceCountChange();
 
-  // Load clients as cards
+  // Load clients filtered by current year (clients that have projects with kickoff in this year)
   try {
-    const clients = await apiFetch('/api/clients');
+    const [allClients, fullData] = await Promise.all([
+      apiFetch('/api/clients'),
+      apiFetch('/api/clients/full')
+    ]);
+    const activeTeam = document.getElementById('cp-team')?.value || 'offensive';
+    const currentYear = new Date().getFullYear();
+    
+    // Build a map of client_id -> project count this year
+    const clientYearMap = new Map();
+    fullData.forEach(row => {
+      if (!row.project_id) return;
+      const ko = row.kickoff_date;
+      if (ko) {
+        const koYear = new Date(ko).getFullYear();
+        if (koYear === currentYear) {
+          clientYearMap.set(row.client_id, (clientYearMap.get(row.client_id) || 0) + 1);
+        }
+      }
+    });
+    
+    // Filter: show clients that belong to the active team AND have projects this year
+    // Also include clients that have NO projects at all (new clients created this year)
+    const clients = allClients.filter(c => {
+      if (c.team !== activeTeam) return false;
+      // Show if client has projects this year OR has no projects at all
+      const hasProjectsThisYear = clientYearMap.has(c.id);
+      const hasAnyProject = fullData.some(row => row.client_id === c.id && row.project_id);
+      return hasProjectsThisYear || !hasAnyProject;
+    });
+    
+    // Attach project count to client data for display
+    clients.forEach(c => { c._projectCountThisYear = clientYearMap.get(c.id) || 0; });
+    
     _neClientsData = clients;
     _renderClientCards(clients);
   } catch { _neClientsData = []; _renderClientCards([]); }
@@ -3435,7 +3646,13 @@ function addWorkingDays(dateStr, n) {
   let counted = 1;
   while (counted < n) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) counted++;
+    if (d.getDay() !== 0 && d.getDay() !== 6) {
+      const iso = d.toISOString().slice(0, 10);
+      if (typeof idHolidaySet !== 'undefined' && idHolidaySet.has(iso)) {
+        continue;
+      }
+      counted++;
+    }
   }
   return d.toISOString().slice(0, 10);
 }
@@ -3489,50 +3706,45 @@ function onMandaysParamChanged() {
   updateMandaysPreview();
 }
 
-/** Mode B: compute initial report date = kickoff + (kj+ig+as-1)th working day */
+/** Mode B: compute initial report date = start_date + assessment_mandays + initial_report_mandays */
 function _computeAndSetInitialDate() {
-  const kickoffVal = document.getElementById('cp-kickoff')?.value;
-  if (!kickoffVal) return;
-  const kj = parseInt(document.getElementById('cp-md-kickoff')?.value) || 1;
-  const ig = parseInt(document.getElementById('cp-md-infogath')?.value) || 5;
+  const startDateVal = document.getElementById('cp-start-date')?.value;
+  if (!startDateVal) return;
   const as = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
+  const ir = parseInt(document.getElementById('cp-md-initial-report')?.value) || 1;
   if (as < 1) return;
   const initialEl = document.getElementById('cp-initial');
   if (initialEl) {
-    initialEl.value = addWorkingDays(kickoffVal, kj + ig + as);
+    initialEl.value = addWorkingDays(startDateVal, as + ir);
     initialEl.min = '';
     const warnEl = document.getElementById('cp-initial-warn');
     if (warnEl) warnEl.style.display = 'none';
   }
 }
 
-/** Mode A: set min date on cp-initial = first day AFTER infogath block ends */
+/** Mode A: set min date on cp-initial = first working day after start_date */
 function _updateModeAMinDate() {
-  const kickoffVal = document.getElementById('cp-kickoff')?.value;
+  const startDateVal = document.getElementById('cp-start-date')?.value;
   const initialEl  = document.getElementById('cp-initial');
   const warnEl     = document.getElementById('cp-initial-warn');
-  if (!kickoffVal || !initialEl) return;
-  const kj = parseInt(document.getElementById('cp-md-kickoff')?.value) || 1;
-  const ig = parseInt(document.getElementById('cp-md-infogath')?.value) || 5;
-  // Day (kj+ig) = last day of infogath → Initial Report must be >= day (kj+ig+1)
-  const minDate = addWorkingDays(kickoffVal, kj + ig + 1);
+  if (!startDateVal || !initialEl) return;
+  const minDate = addWorkingDays(startDateVal, 1);
   initialEl.min = minDate;
   if (warnEl) {
     const v = initialEl.value;
     const tooEarly = v && v < minDate;
     warnEl.style.display = tooEarly ? 'block' : 'none';
-    if (tooEarly) warnEl.textContent = `⚠ Tanggal terlalu awal — minimum ${minDate} (setelah ${kj} kickoff + ${ig} infogath)`;
+    if (tooEarly) warnEl.textContent = `⚠ Tanggal terlalu awal — minimum ${minDate} (setelah Start Date)`;
   }
 }
 
 function updateMandaysPreview() {
-  const kickoffDate = document.getElementById('cp-kickoff')?.value;
+  const startDate   = document.getElementById('cp-start-date')?.value;
   const initialDate = document.getElementById('cp-initial')?.value;
-  const kj = parseInt(document.getElementById('cp-md-kickoff')?.value) || 0;
-  const ig = parseInt(document.getElementById('cp-md-infogath')?.value) || 0;
   const as = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
+  const ir = parseInt(document.getElementById('cp-md-initial-report')?.value) || 0;
   const preview = document.getElementById('cp-mandays-preview');
-  if (!preview || !kickoffDate || !initialDate || initialDate < kickoffDate) {
+  if (!preview || !startDate || !initialDate || initialDate < startDate) {
     if (preview) preview.style.display = 'none';
     return;
   }
@@ -3540,17 +3752,17 @@ function updateMandaysPreview() {
   let assessBody, irDays, total, noteText, noteColor;
 
   if (as > 0) {
-    // Mode B: assessment-driven — last day of 'as' block = initial report
-    assessBody = as - 1;  // pure assessment days (excluding the final initial-report day)
-    irDays     = 1;
-    total      = kj + ig + as;
+    // Mode B: assessment-driven
+    assessBody = as;
+    irDays     = ir;
+    total      = as + ir;
     noteText   = `✅ Mode Assessment — tanggal Initial Report otomatis: ${initialDate}`;
     noteColor  = '#a78bfa';
   } else {
-    // Mode A: date-driven — total range inclusive, minus kickoff, infogath, and 1 IR day
-    const { days: totalRange, holidays } = workingDaysBetween(kickoffDate, initialDate);
-    assessBody = Math.max(0, totalRange - kj - ig - 1);
-    irDays     = totalRange >= (kj + ig) ? 1 : 0;
+    // Mode A: date-driven
+    const { days: totalRange, holidays } = workingDaysBetween(startDate, initialDate);
+    assessBody = Math.max(0, totalRange - ir);
+    irDays     = ir;
     total      = totalRange;
     noteText   = holidays.length > 0
       ? `⚠️ ${holidays.length} hari libur nasional dikecualikan`
@@ -3558,8 +3770,6 @@ function updateMandaysPreview() {
     noteColor  = '#94a3b8';
   }
 
-  document.getElementById('cp-md-r-kickoff').textContent    = kj;
-  document.getElementById('cp-md-r-infogath').textContent   = ig;
   document.getElementById('cp-md-r-assessment').textContent = assessBody;
   const irEl = document.getElementById('cp-md-r-ir');
   if (irEl) irEl.textContent = irDays;
@@ -3599,11 +3809,14 @@ async function submitNewEntry() {
   const engineer_10_id = document.getElementById('cp-engineer-10')?.value || null;
 
   const kickoff_date        = document.getElementById('cp-kickoff').value || null;
+  const start_date          = document.getElementById('cp-start-date').value || null;
   const initial_report_date = document.getElementById('cp-initial').value || null;
   const final_report_date   = null;
-  const mandays_kickoff     = parseInt(document.getElementById('cp-md-kickoff').value) || 1;
-  const mandays_infogath    = parseInt(document.getElementById('cp-md-infogath').value) || 5;
+  const mandays_initial_report = parseInt(document.getElementById('cp-md-initial-report').value) || 1;
   const mandays_assessment  = parseInt(document.getElementById('cp-md-assessment')?.value) || 0;
+
+  const is_past_project = document.getElementById('cp-is-past-project')?.checked || false;
+  const actual_end_date = document.getElementById('cp-actual-end')?.value || null;
 
   const errEl = document.getElementById('cp-err');
   errEl.classList.remove('show');
@@ -3620,6 +3833,7 @@ async function submitNewEntry() {
   }
   if (!name) { errEl.textContent = 'Project name is required.'; errEl.classList.add('show'); return; }
   if (!service) { errEl.textContent = 'Service is required.'; errEl.classList.add('show'); return; }
+  if (is_past_project && !actual_end_date) { errEl.textContent = 'Actual Completion Date is required for Past Projects.'; errEl.classList.add('show'); return; }
 
   const btn = document.getElementById('cp-btn');
   btn.disabled = true;
@@ -3632,7 +3846,7 @@ async function submitNewEntry() {
         engagement_reference = (document.getElementById('ne-engagement-ref-custom')?.value || '').trim() || null;
       }
       const engagement_info = (document.getElementById('ne-engagement-info')?.value || '').trim() || null;
-      const clientResult = await apiFetch('/api/clients', 'POST', { name: newClientName, engagement_reference, engagement_info });
+      const clientResult = await apiFetch('/api/clients', 'POST', { name: newClientName, engagement_reference, engagement_info, team });
       clientId = clientResult.id;
       // Also create an engagement record
       if (engagement_reference || engagement_info) {
@@ -3646,9 +3860,9 @@ async function submitNewEntry() {
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
       name, project_type, project_method, assigned_engineer_id, assist_engineer_id,
       engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
-      kickoff_date, initial_report_date, final_report_date, project_links,
-      mandays_kickoff, mandays_infogath, mandays_assessment,
-      team, service
+      kickoff_date, start_date, initial_report_date, final_report_date, project_links,
+      mandays_initial_report, mandays_assessment,
+      team, service, is_past_project, actual_end_date
     });
     document.getElementById('modal-create-project').classList.remove('open');
     showToast('Project created!', 'success');
@@ -3933,6 +4147,8 @@ async function doRefresh(section) {
     if (section==='requests')  await loadRequests();
     if (section==='actlog')    await loadActivityLog(_currentLogType);
     if (section==='pm-board')  await loadBoard();
+    if (section==='archived')  await loadArchived();
+    if (section==='allocation') await loadAllocation();
   } finally {
     if (btn) setTimeout(()=>btn.classList.remove('spinning'), 500);
   }
@@ -4435,12 +4651,16 @@ let _dragProjectId = null;
 
 async function loadBoard() {
   try {
+    const query = _boardTeamFilter ? `?team=${_boardTeamFilter}` : '';
     const [statuses, projects] = await Promise.all([
-      apiFetch('/api/board-statuses'),
+      apiFetch('/api/board-statuses' + query),
       apiFetch('/api/board/projects')
     ]);
     _boardStatuses = statuses;
     _boardProjects = projects;
+    if (_boardTeamFilter) {
+      _boardProjects = _boardProjects.filter(p => p.team === _boardTeamFilter);
+    }
     renderBoard();
   } catch(e) { showToast('Board error: ' + e.message, 'error'); }
 }
@@ -4459,7 +4679,7 @@ function renderBoard() {
     </div>`;
     return;
   }
-  const uncategorized = _boardProjects.filter(p => !p.board_status_id || !_boardStatuses.find(s => s.id === p.board_status_id));
+  const uncategorized = _boardProjects.filter(p => p.board_status_id !== -1 && (!p.board_status_id || !_boardStatuses.find(s => s.id === p.board_status_id)));
   let html = '<div class="board-container">';
   // Uncategorized column (if any)
   if (uncategorized.length || _boardStatuses.length === 0 || true) {
@@ -4505,6 +4725,11 @@ function _renderCard(p) {
   const typeTxt = {web:'#a5b4fc',api:'#67e8f9',mobile:'#fdba74',infra:'#d8b4fe',phishing:'#fb7185'}[p.project_type] || '#a5b4fc';
   const eng = p.engineer_name || '—';
   const kickoff = p.kickoff_date ? new Date(p.kickoff_date).toLocaleDateString('id-ID',{day:'numeric',month:'short'}) : '—';
+  let archiveBtn = '';
+  if (p.board_status_id === -1) {
+    archiveBtn = `<button class="btn-primary" style="margin-top:10px;width:100%;font-size:11px;padding:6px;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#10b981;justify-content:center" onclick="event.stopPropagation(); archiveProjectFromBoard(${p.id})">&#10004; Archive Project</button>`;
+  }
+
   return `<div class="board-card" draggable="true" ondragstart="_boardDragStart(event,${p.id})" ondragend="_boardDragEnd(event)" onclick="openBoardDetail(${p.id})">
     <div class="board-card-client">${escA(p.client_name)}</div>
     <div class="board-card-name">${escA(p.name)}</div>
@@ -4514,6 +4739,7 @@ function _renderCard(p) {
       <span class="board-card-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> ${kickoff}</span>
       ${p.finding_count > 0 ? `<span class="board-card-info" style="color:#f87171">&#128270; ${p.finding_count} findings</span>` : ''}
     </div>
+    ${archiveBtn}
   </div>`;
 }
 
@@ -4543,7 +4769,8 @@ async function _boardDrop(e, statusId) {
 // Board Setup Modal
 async function openBoardSetup() {
   try {
-    _boardStatuses = await apiFetch('/api/board-statuses');
+    const query = _boardTeamFilter ? `?team=${_boardTeamFilter}` : '';
+    _boardStatuses = await apiFetch('/api/board-statuses' + query);
   } catch {}
   _renderSetupList();
   document.getElementById('modal-board-setup').classList.add('open');
@@ -4602,8 +4829,8 @@ async function addBoardStatus() {
   const name = nameEl.value.trim();
   if (!name) return;
   try {
-    const result = await apiFetch('/api/board-statuses', 'POST', { name, color: colorEl.value, sort_order: _boardStatuses.length });
-    _boardStatuses.push({ id: result.id, name, color: colorEl.value, sort_order: _boardStatuses.length });
+    const result = await apiFetch('/api/board-statuses', 'POST', { name, color: colorEl.value, sort_order: _boardStatuses.length, team: _boardTeamFilter });
+    _boardStatuses.push({ id: result.id, name, color: colorEl.value, sort_order: _boardStatuses.length, team: _boardTeamFilter });
     nameEl.value = '';
     _renderSetupList();
     showToast('Status "' + name + '" ditambahkan', 'success');
@@ -4629,7 +4856,7 @@ async function _updateStatusColor(id, color) {
 async function saveBoardOrder() {
   const ids = _boardStatuses.map(s => s.id);
   try {
-    await apiFetch('/api/board-statuses/reorder', 'PUT', { ordered_ids: ids });
+    await apiFetch('/api/board-statuses/reorder', 'PUT', { ordered_ids: ids, team: _boardTeamFilter });
     showToast('Urutan status disimpan!', 'success');
     document.getElementById('modal-board-setup').classList.remove('open');
     loadBoard();
@@ -4700,12 +4927,116 @@ function openBoardDetail(projectId) {
       <div class="board-detail-item"><div class="board-detail-label">Final Report</div><div class="board-detail-value">${fmt(p.final_report_date)} ${finalBadge}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} vulnerability${p.finding_count!==1?'ies':''}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Mandays (Assessment)</div><div class="board-detail-value">${p.mandays_assessment || 0} hari</div></div>
-      <div class="board-detail-item"><div class="board-detail-label">Mandays (Kickoff)</div><div class="board-detail-value">${p.mandays_kickoff || 0} hari</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Mandays (Initial Report)</div><div class="board-detail-value">${p.mandays_initial_report || 1} hari</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Start Date</div><div class="board-detail-value">${fmt(p.start_date)}</div></div>
     </div>
     ${retestHtml}
     ${linksHtml}
+    ${p.board_status_id === -1 ? `
+      <div style="border-top:1px solid var(--border);padding-top:16px;margin-top:16px">
+        <button class="btn-primary" style="width:100%;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#10b981;justify-content:center;display:flex;align-items:center;gap:8px" onclick="archiveProjectFromBoard(${p.id})">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><polyline points="20 6 9 17 4 12"/></svg>
+          Archive Project
+        </button>
+      </div>
+    ` : ''}
   `;
   document.getElementById('modal-board-detail').classList.add('open');
+}
+
+// ── Archived Projects ──────────────────────────────────────────────────────────
+let _archivedProjects = [];
+
+async function loadArchived() {
+  try {
+    _archivedProjects = await apiFetch('/api/projects/archived');
+    renderArchivedProjects();
+  } catch(e) {
+    showToast('Failed to load archived projects: ' + e.message, 'error');
+  }
+}
+
+function renderArchivedProjects() {
+  const tbody = document.getElementById('archived-tbody');
+  const q = (document.getElementById('archived-search')?.value || '').toLowerCase();
+  
+  let list = _archivedProjects;
+  if (q) {
+    list = list.filter(p => 
+      (p.client_name || '').toLowerCase().includes(q) || 
+      (p.name || '').toLowerCase().includes(q)
+    );
+  }
+
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state">No archived projects found.</div></td></tr>';
+    return;
+  }
+
+  const typeLabel = {web:'Web',api:'API',mobile:'Mobile',infra:'Infra',phishing:'Phishing'};
+  const fmt = d => d ? new Date(d).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+
+  tbody.innerHTML = list.map(p => {
+    const teamBadge = p.team === 'itaudit'
+      ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(59,130,246,0.12);color:#60a5fa">IT Audit</span>'
+      : '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(239,68,68,0.12);color:#f87171">Offensive</span>';
+
+    let statusBadge = '—';
+    if (p.final_completed_at && p.final_report_date) {
+      if (new Date(p.final_completed_at) <= new Date(p.final_report_date)) {
+        statusBadge = '<span class="badge-on-track">On Track</span>';
+      } else {
+        statusBadge = '<span class="badge-off-track">Off Track</span>';
+      }
+    } else if (p.final_report_status === 'completed') {
+      statusBadge = '<span class="badge-completed">Completed</span>';
+    }
+
+    return `<tr>
+      <td><div style="font-weight:600;color:var(--text)">${escA(p.client_name)}</div></td>
+      <td><div style="color:var(--accent);font-weight:500">${escA(p.name)}</div></td>
+      <td>${teamBadge}</td>
+      <td>${typeLabel[p.project_type] || p.project_type || '—'}</td>
+      <td>${escA(p.engineer_name || '—')}</td>
+      <td>${fmt(p.final_completed_at || p.archived_at)}</td>
+      <td>${statusBadge}</td>
+      <td><span class="${p.finding_count>0 ? 'finding-count high' : 'finding-count zero'}">${p.finding_count || 0}</span></td>
+      <td>
+        <button class="icon-btn" onclick="restoreProjectFromArchive(${p.id})" title="Restore Project" style="color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:6px;padding:3px 8px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.1)">
+          &#8634; Restore
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filterArchivedProjects() {
+  renderArchivedProjects();
+}
+
+async function archiveProjectFromBoard(id) {
+  const ok = await customConfirm('Archive Project', 'Are you sure you want to archive this project? It will be removed from the active board and moved to Archived Projects.', 'Archive', 'primary');
+  if (!ok) return;
+  try {
+    await apiFetch('/api/projects/' + id + '/archive', 'PATCH');
+    showToast('Project archived successfully', 'success');
+    document.getElementById('modal-board-detail').classList.remove('open');
+    loadBoard();
+  } catch(e) {
+    showToast('Failed to archive project: ' + e.message, 'error');
+  }
+}
+
+async function restoreProjectFromArchive(id) {
+  const ok = await customConfirm('Restore Project', 'Are you sure you want to restore this project? It will be moved back to the active Kanban board (Uncategorized column).', 'Restore', 'primary');
+  if (!ok) return;
+  try {
+    await apiFetch('/api/projects/' + id + '/restore', 'PATCH');
+    showToast('Project restored successfully', 'success');
+    loadArchived();
+  } catch(e) {
+    showToast('Failed to restore project: ' + e.message, 'error');
+  }
 }
 </script>
 </body>

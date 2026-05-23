@@ -112,6 +112,12 @@ function initializeDb() {
     db.run(`ALTER TABLE projects ADD COLUMN engineer_8_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN engineer_9_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN engineer_10_id INTEGER`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN start_date TEXT`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN mandays_initial_report INTEGER DEFAULT 1`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN is_archived INTEGER DEFAULT 0`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN archived_at TEXT`, () => {});
+    db.run(`ALTER TABLE clients ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
   });
 
   db.run(`
@@ -329,7 +335,8 @@ function getDashboardSummary(callback) {
            p.initial_report_status, p.final_report_status,
            p.initial_completed_by, p.final_completed_by,
            p.initial_completed_at, p.final_completed_at,
-           p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.is_archived, p.archived_at,
+           p.start_date, p.mandays_assessment, p.mandays_initial_report,
            p.team, p.service,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
@@ -389,16 +396,17 @@ function getClientsByEngineer(engineerId, callback) {
 // All clients with their projects (LEFT JOIN so empty clients appear too)
 function getClientsWithProjects(callback) {
   getDb().all(`
-    SELECT c.id AS client_id, c.name AS client_name,
+    SELECT c.id AS client_id, c.name AS client_name, c.team AS client_team,
            c.engagement_reference, c.engagement_info,
            p.id AS project_id, p.name AS project_name, p.project_type,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
+           p.is_archived, p.archived_at,
            p.assigned_engineer_id,
            p.assist_engineer_id,
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.link_report_en, p.link_report_id, p.project_links,
-           p.project_method, p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.project_method, p.start_date, p.mandays_assessment, p.mandays_initial_report,
            p.team, p.service,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
@@ -507,6 +515,7 @@ function getAllProjects(callback) {
            p.link_report_en, p.link_report_id,
            c.name AS client_name
     FROM projects p JOIN clients c ON c.id = p.client_id
+    WHERE p.is_archived = 0
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -688,15 +697,15 @@ function countVulnerabilities(callback) {
 
 function getClients(callback) {
   const db = getDb();
-  db.all('SELECT id, name, engagement_reference, engagement_info, created_at FROM clients ORDER BY name COLLATE NOCASE ASC', [], callback);
+  db.all('SELECT id, name, engagement_reference, engagement_info, team, created_at FROM clients ORDER BY name COLLATE NOCASE ASC', [], callback);
 }
 
 function createClient(name, opts, callback) {
   // Handle legacy 2-arg call: createClient(name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
-  const { engagement_reference, engagement_info } = opts || {};
+  const { engagement_reference, engagement_info, team } = opts || {};
   const db = getDb();
-  db.run('INSERT INTO clients (name, engagement_reference, engagement_info) VALUES (?, ?, ?)', [name, engagement_reference || null, engagement_info || null], function (err) {
+  db.run('INSERT INTO clients (name, engagement_reference, engagement_info, team) VALUES (?, ?, ?, ?)', [name, engagement_reference || null, engagement_info || null, team || 'offensive'], function (err) {
     if (err) return callback(err);
     callback(null, { id: this.lastID });
   });
@@ -727,8 +736,9 @@ function getProjectsByClient(clientId, callback) {
             p.kickoff_date,
             p.initial_report_date, p.final_report_date,
             p.initial_report_status, p.final_report_status,
+            p.is_archived, p.archived_at,
             p.link_report_en, p.link_report_id, p.project_links,
-            p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+            p.start_date, p.mandays_assessment, p.mandays_initial_report,
             p.team, p.service,
             p.created_at,
             p.retest_status, p.retest_start_date, p.retest_end_date,
@@ -765,11 +775,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = opts || {};
+  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service, board_status_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null],
+    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at, board_status_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, archived_at || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -868,7 +878,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, callback) {
+function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
@@ -889,13 +899,14 @@ function updateProject(id, { name, project_type, project_method, assigned_engine
        initial_report_date = ?,
        final_report_date = ?,
        project_links = ?,
-       mandays_kickoff = ?,
-       mandays_infogath = ?,
+       start_date = ?,
+       mandays_initial_report = ?,
        mandays_assessment = ?,
        team = ?,
-       service = ?
+       service = ?,
+       is_archived = ?
      WHERE id = ?`,
-    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, mandays_kickoff ?? 1, mandays_infogath ?? 5, mandays_assessment ?? 0, team || 'offensive', service || null, id],
+    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -1069,14 +1080,19 @@ function markNotificationsRead(userId, callback) {
 }
 
 // ─── Board Statuses (Kanban) ──────────────────────────────────────────────────
-function getBoardStatuses(callback) {
-  getDb().all('SELECT * FROM board_statuses ORDER BY sort_order ASC', callback);
+function getBoardStatuses(team, callback) {
+  if (typeof team === 'function') { callback = team; team = null; }
+  const sql = team 
+    ? 'SELECT * FROM board_statuses WHERE team = ? ORDER BY sort_order ASC'
+    : 'SELECT * FROM board_statuses ORDER BY sort_order ASC';
+  const params = team ? [team] : [];
+  getDb().all(sql, params, callback);
 }
 
-function createBoardStatus({ name, color, sort_order }, callback) {
+function createBoardStatus({ name, color, sort_order, team }, callback) {
   getDb().run(
-    'INSERT INTO board_statuses (name, color, sort_order) VALUES (?, ?, ?)',
-    [name, color || '#6366f1', sort_order ?? 0],
+    'INSERT INTO board_statuses (name, color, sort_order, team) VALUES (?, ?, ?, ?)',
+    [name, color || '#6366f1', sort_order ?? 0, team || 'offensive'],
     function(err) { callback(err, err ? null : { id: this.lastID }); }
   );
 }
@@ -1103,13 +1119,22 @@ function deleteBoardStatus(id, callback) {
   });
 }
 
-function reorderBoardStatuses(orderedIds, callback) {
+function reorderBoardStatuses(orderedIds, team, callback) {
+  if (typeof team === 'function') { callback = team; team = null; }
   const db = getDb();
   db.serialize(() => {
     const stmt = db.prepare('UPDATE board_statuses SET sort_order = ? WHERE id = ?');
     orderedIds.forEach((id, idx) => stmt.run([idx, id]));
     stmt.finalize(callback);
   });
+}
+
+function restoreProject(id, callback) {
+  getDb().run(
+    'UPDATE projects SET is_archived = 0, archived_at = NULL WHERE id = ?',
+    [id],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
 }
 
 function updateProjectBoardStatus(projectId, statusId, callback) {
@@ -1128,15 +1153,35 @@ function updateProjectBoardStatusAndCompletion(projectId, statusId, finalReportS
   );
 }
 
+function getArchivedProjects(callback) {
+  getDb().all(`
+    SELECT p.*, c.name AS client_name, u.display_name AS engineer_name
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    LEFT JOIN users u ON u.id = p.assigned_engineer_id
+    WHERE p.is_archived = 1
+    ORDER BY p.archived_at DESC
+  `, callback);
+}
+
+function archiveProject(id, callback) {
+  getDb().run(
+    'UPDATE projects SET is_archived = 1, archived_at = CURRENT_TIMESTAMP, board_status_id = NULL WHERE id = ?',
+    [id],
+    function(err) { callback(err, { changes: this?.changes }); }
+  );
+}
+
 function getProjectsForBoard(callback) {
   getDb().all(`
     SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
+           p.is_archived, p.archived_at,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.assigned_engineer_id, p.assist_engineer_id,
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
-           p.mandays_kickoff, p.mandays_infogath, p.mandays_assessment,
+           p.start_date, p.mandays_assessment, p.mandays_initial_report,
            p.link_report_en, p.link_report_id, p.project_links,
            p.retest_pic_id, p.retest_assist_id,
            p.team, p.service,
@@ -1168,6 +1213,7 @@ function getProjectsForBoard(callback) {
     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
     LEFT JOIN users u12 ON u12.id = p.engineer_10_id
+    WHERE p.is_archived = 0
     ORDER BY c.name, p.name
   `, callback);
 }
@@ -1229,6 +1275,9 @@ module.exports = {
   getProjectExportData,
   getProjectHighlight,
   updateProjectHighlight,
+  getArchivedProjects,
+  archiveProject,
+  restoreProject,
   // Users (multi-role auth)
   getUserByUsername,
   getAllUsers,

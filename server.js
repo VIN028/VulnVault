@@ -39,7 +39,7 @@ app.post('/api/logout', (req, res) => auth.logout(req, res));
 // ── Public Holidays (Google Calendar API with in-memory cache) ─────────────────
 const _holidayCache = new Map(); // year -> { fetchedAt, dates: Set<string> }
 const HOLIDAY_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const GCAL_CALENDAR_ID = 'en.indonesian%23holiday%40group.v.calendar.google.com';
+const GCAL_CALENDAR_ID = 'id.indonesian%23holiday%40group.v.calendar.google.com';
 
 // Hardcoded fallback if API key is not configured
 const ID_HOLIDAYS_FALLBACK = new Set([
@@ -527,17 +527,18 @@ app.post('/api/clients', (req, res) => {
   const name = (req.body?.name || '').trim();
   const engagement_reference = (req.body?.engagement_reference || '').trim() || null;
   const engagement_info = (req.body?.engagement_info || '').trim() || null;
+  const team = (req.body?.team || 'offensive').trim();
   if (!name) return res.status(400).json({ error: 'Client name is required' });
-  db.createClient(name, { engagement_reference, engagement_info }, (err, result) => {
+  db.createClient(name, { engagement_reference, engagement_info, team }, (err, result) => {
     if (err) {
-      if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Client already exists' });
+      if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Client already exists in this team' });
       return res.status(500).json({ error: err.message });
     }
-    db.writeActivityLog({ type:'crud', actorId: req.session.userId, action:'create_client', details:`Created client "${name}"` });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, action:'create_client', details:`Created client "${name}" (${team})` });
     db.getClients((err2, rows) => {
       if (err2) return res.status(500).json({ error: err2.message });
       const created = rows.find(r => r.id === result.id);
-      res.status(201).json(created || { id: result.id, name });
+      res.status(201).json(created || { id: result.id, name, team });
     });
   });
 });
@@ -614,7 +615,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date } = req.body;
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
@@ -625,7 +626,18 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff: mandays_kickoff ?? 1, mandays_infogath: mandays_infogath ?? 5, mandays_assessment: mandays_assessment ?? 0, team, service }, (err, result) => {
+  let final_report_status = 'pending';
+  let final_completed_at = null;
+  let is_archived = 0;
+  let archived_at = null;
+  if (is_past_project && actual_end_date) {
+    final_report_status = 'completed';
+    final_completed_at = actual_end_date;
+    is_archived = 1;
+    archived_at = new Date().toISOString();
+  }
+
+  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, final_report_status, final_completed_at, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -636,6 +648,33 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
       const created = rows.find(r => r.id === result.id);
       res.status(201).json(created || { id: result.id, client_id: clientId, name: trimName });
     });
+  });
+});
+
+app.get('/api/projects/archived', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
+  db.getArchivedProjects((err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.patch('/api/projects/:id/archive', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
+  const id = Number(req.params.id);
+  db.archiveProject(id, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'archive_project', details:`Archived project ID ${id}` });
+    res.json({ message: 'Project archived successfully' });
+  });
+});
+
+app.patch('/api/projects/:id/restore', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
+  const id = Number(req.params.id);
+  db.restoreProject(id, (err, result) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'restore_project', details:`Restored project ID ${id}` });
+    res.json({ message: 'Project restored successfully' });
   });
 });
 
@@ -745,7 +784,7 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, mandays_kickoff, mandays_infogath, mandays_assessment, team, service } = req.body;
+  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
   
@@ -753,11 +792,11 @@ app.put('/api/projects/:id', async (req, res) => {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, mandays_kickoff, mandays_infogath, mandays_assessment, team, service }, (err, result) => {
+  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, mandays_kickoff, mandays_infogath, mandays_assessment, team, service });
+    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service });
   });
 });
 
@@ -967,26 +1006,27 @@ Buatlah satu paragraf highlight yang profesional dalam Bahasa Indonesia. Jika ad
 
 // ── Board Statuses (Kanban) ────────────────────────────────────────────────────
 app.get('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
-  db.getBoardStatuses((err, rows) => {
+  const team = req.query.team;
+  db.getBoardStatuses(team, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
 app.post('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
-  const { name, color, sort_order } = req.body;
+  const { name, color, sort_order, team } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Status name is required.' });
-  db.createBoardStatus({ name: name.trim(), color, sort_order }, (err, result) => {
+  db.createBoardStatus({ name: name.trim(), color, sort_order, team }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}"` });
-    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0 });
+    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}" for team "${team || 'offensive'}"` });
+    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0, team });
   });
 });
 
 app.put('/api/board-statuses/reorder', auth.requireRole(...mgmtRoles), (req, res) => {
-  const { ordered_ids } = req.body;
+  const { ordered_ids, team } = req.body;
   if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: 'ordered_ids array is required.' });
-  db.reorderBoardStatuses(ordered_ids.map(Number), (err) => {
+  db.reorderBoardStatuses(ordered_ids.map(Number), team, (err) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json({ ok: true });
   });
