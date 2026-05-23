@@ -24,7 +24,7 @@ let libraryFilters = {
 // ─── API Key / Model Management ───────────────────────────────────────────────
 const API_KEY_STORAGE = 'vulnvault_gemini_key';
 const MODEL_STORAGE   = 'vulnvault_gemini_model';
-const DEFAULT_MODEL   = 'gemini-3-flash-preview';
+const DEFAULT_MODEL   = 'gemini-2.5-flash';
 
 function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ''; }
 function getModel()  { return localStorage.getItem(MODEL_STORAGE)   || DEFAULT_MODEL; }
@@ -89,7 +89,27 @@ function updateAiStatus(hasKey) {
 }
 
 async function logoutApp() {
-  if (!confirm('Sign out of VulnVault?')) return;
+  // Use custom confirm dialog instead of browser native (can be blocked)
+  const ok = await new Promise(resolve => {
+    const id = 'dlg-logout-' + Date.now();
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+    el.id = id;
+    el.innerHTML = `<div style="background:#13192a;border:1px solid rgba(148,163,184,0.1);border-radius:18px;padding:32px;max-width:380px;width:100%;box-shadow:0 32px 80px rgba(0,0,0,0.6);animation:slideUp .2s ease">
+      <h3 style="font-size:18px;font-weight:700;color:#f0f4ff;margin:0 0 8px">Sign Out</h3>
+      <p style="color:#94a3b8;font-size:13px;margin:0 0 24px">Sign out of VulnVault?</p>
+      <div style="display:flex;gap:10px">
+        <button id="${id}-cancel" style="flex:1;padding:9px 16px;border-radius:9px;background:rgba(255,255,255,0.06);color:#f0f4ff;font-size:13px;font-weight:600;border:none;cursor:pointer">Cancel</button>
+        <button id="${id}-ok" style="flex:1;padding:9px 16px;border-radius:9px;background:rgba(239,68,68,0.9);color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Sign Out</button>
+      </div>
+    </div>`;
+    document.body.appendChild(el);
+    const cleanup = (val) => { el.remove(); resolve(val); };
+    el.querySelector(`#${id}-ok`).onclick = () => cleanup(true);
+    el.querySelector(`#${id}-cancel`).onclick = () => cleanup(false);
+    el.addEventListener('click', e => { if (e.target === el) cleanup(false); });
+  });
+  if (!ok) return;
   try {
     await fetch('/api/logout', { method: 'POST' });
   } catch (_) {}

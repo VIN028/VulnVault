@@ -1109,6 +1109,7 @@
       </div>
     </div>
 
+    <div style="padding:24px 32px 40px">
     <div style="max-width:860px;margin:0 auto;display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start">
 
       <!-- LEFT: API Key Card -->
@@ -1127,20 +1128,18 @@
           <label style="font-size:10px">MODEL</label>
           <select id="ai-model-select">
             <optgroup label="🚀 Gemini 3.1 — Frontier">
-              <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview — Deep reasoning &amp; agentic</option>
-              <option value="gemini-3.1-flash-lite-preview">gemini-3.1-flash-lite-preview — High volume, low cost</option>
+              <option value="gemini-3.1-pro">gemini-3.1-pro — Deep reasoning &amp; agentic</option>
+              <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite — High volume, low cost</option>
             </optgroup>
             <optgroup label="⚡ Gemini 3 — Performance">
-              <option value="gemini-3-flash-preview" selected>gemini-3-flash-preview — High intelligence, fast ✓ Default</option>
+              <option value="gemini-3-flash">gemini-3-flash — High intelligence, fast</option>
             </optgroup>
-            <optgroup label="✅ Gemini 2.5 — Stable">
+            <optgroup label="✅ Gemini 2.5 — Stable (Recommended)">
+              <option value="gemini-2.5-flash" selected>gemini-2.5-flash — Fast &amp; reliable ✓ Default</option>
               <option value="gemini-2.5-pro">gemini-2.5-pro — Production Pro</option>
-              <option value="gemini-2.5-flash">gemini-2.5-flash — Production Flash</option>
             </optgroup>
-            <optgroup label="📦 Gemini 2.0 / 1.5 — Legacy">
+            <optgroup label="📦 Gemini 2.0 — Legacy">
               <option value="gemini-2.0-flash">gemini-2.0-flash — Flash 2.0</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash — Flash 1.5 (Free tier)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro — Pro 1.5</option>
             </optgroup>
           </select>
         </div>
@@ -1272,6 +1271,7 @@
         <!-- Error -->
         <div id="ai-error" style="display:none;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:10px;padding:16px;color:#fca5a5;font-size:13px;line-height:1.6"></div>
       </div>
+    </div>
     </div>
   </section>
 
@@ -1452,8 +1452,8 @@
 
     <!-- ═══ Tab Bar (50:50 symmetric) ═══ -->
     <div id="ne-tab-bar" style="display:flex;margin-bottom:20px;border-radius:10px;overflow:hidden;border:1px solid var(--border)">
-      <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 0;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
-      <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 0;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
+      <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1;padding:12px 16px;border:none;background:rgba(99,102,241,0.1);font-size:13px;font-weight:600;cursor:pointer;color:var(--text);transition:all .15s;border-right:1px solid var(--border)">Client Info</button>
+      <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1;padding:12px 16px;border:none;background:transparent;font-size:13px;font-weight:600;cursor:pointer;color:var(--muted);transition:all .15s;opacity:0.5">Project Details</button>
     </div>
 
     <!-- ═══ TAB 1: Client Selection ═══ -->
@@ -1691,7 +1691,7 @@
         </div>
 
         <!-- Resource Links -->
-        <div class="form-group" style="grid-column:1/-1">
+        <div class="form-group" style="grid-column:1/-1;margin-top:8px">
           <label style="display:flex;align-items:center;justify-content:space-between">Resource Links <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);border-radius:6px;color:#a5b4fc;font-size:11px;padding:3px 10px;cursor:pointer;font-weight:600">+ Add Link</button></label>
           <div id="cp-links-container" style="display:flex;flex-direction:column;gap:8px;margin-top:6px"></div>
         </div>
@@ -1969,7 +1969,19 @@ function _onCuRoleChange() {
 
 function initAiMandaysSection() {
   const stored = localStorage.getItem('vulnvault_gemini_key');
-  const storedModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  let storedModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.5-flash';
+  // Migrate old preview model names → stable
+  const modelMigrations = {
+    'gemini-3.1-pro-preview': 'gemini-3.1-pro',
+    'gemini-3.1-flash-lite-preview': 'gemini-3.1-flash-lite',
+    'gemini-3-flash-preview': 'gemini-3-flash',
+    'gemini-1.5-flash': 'gemini-2.0-flash',
+    'gemini-1.5-pro': 'gemini-2.5-pro'
+  };
+  if (modelMigrations[storedModel]) {
+    storedModel = modelMigrations[storedModel];
+    localStorage.setItem('vulnvault_gemini_model', storedModel);
+  }
   const statusEl = document.getElementById('ai-key-status');
   const inputEl  = document.getElementById('ai-api-key-input');
   const modelEl  = document.getElementById('ai-model-select');
@@ -1986,7 +1998,7 @@ function initAiMandaysSection() {
 
 function saveAiApiKey() {
   const key = document.getElementById('ai-api-key-input')?.value.trim();
-  const model = document.getElementById('ai-model-select')?.value || 'gemini-3-flash-preview';
+  const model = document.getElementById('ai-model-select')?.value || 'gemini-2.5-flash';
   if (key) localStorage.setItem('vulnvault_gemini_key', key);
   localStorage.setItem('vulnvault_gemini_model', model);
   initAiMandaysSection();
@@ -2073,7 +2085,7 @@ let _lastAiEstimate = null;
 
 async function runAiEstimate() {
   const apiKey = localStorage.getItem('vulnvault_gemini_key');
-  const aiModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-3-flash-preview';
+  const aiModel = localStorage.getItem('vulnvault_gemini_model') || 'gemini-2.5-flash';
   if (!apiKey) {
     document.getElementById('ai-error').style.display = 'block';
     document.getElementById('ai-error').textContent = '⚠️ Simpan Gemini API Key terlebih dahulu.';
@@ -2127,8 +2139,21 @@ async function runAiEstimate() {
 
     document.getElementById('ai-result').style.display = 'block';
   } catch (e) {
-    document.getElementById('ai-error').style.display = 'block';
-    document.getElementById('ai-error').textContent = `❌ ${e.message}`;
+    const errEl = document.getElementById('ai-error');
+    errEl.style.display = 'block';
+    let msg = e.message || 'Unknown error';
+    // Add helpful context based on error type
+    if (msg.includes('Rate limit') || msg.includes('429')) {
+      errEl.innerHTML = `⏳ <strong>Rate Limit</strong><br>${msg}<br><br><em>Tip: Ganti model ke gemini-2.5-flash atau tunggu 1-2 menit.</em>`;
+    } else if (msg.includes('tidak ditemukan') || msg.includes('404')) {
+      errEl.innerHTML = `🔍 <strong>Model Not Found</strong><br>${msg}<br><br><em>Tip: Pilih model di dropdown "Gemini 2.5 — Stable" untuk hasil paling konsisten.</em>`;
+    } else if (msg.includes('API key') || msg.includes('401')) {
+      errEl.innerHTML = `🔑 <strong>API Key Invalid</strong><br>${msg}<br><br><em>Dapatkan key baru di <a href="https://aistudio.google.com/apikey" target="_blank" style="color:#a5b4fc">Google AI Studio</a>.</em>`;
+    } else if (msg.includes('Kuota') || msg.includes('quota')) {
+      errEl.innerHTML = `📊 <strong>Kuota Habis</strong><br>${msg}`;
+    } else {
+      errEl.textContent = `❌ ${msg}`;
+    }
   } finally {
     document.getElementById('ai-loading').style.display = 'none';
     document.getElementById('ai-estimate-btn').disabled = false;
@@ -2226,7 +2251,7 @@ function getWorkdaysInMonth(year, month) {
   for (let d = 1; d <= daysInMonth; d++) {
     const dt = new Date(year, month, d);
     if (dt.getDay() === 0 || dt.getDay() === 6) continue;
-    if (idHolidaySet.has(dt.toISOString().slice(0, 10))) { holidays++; continue; }
+    if (idHolidaySet.has(dt.toLocaleDateString('en-CA'))) { holidays++; continue; }
     workdays++;
   }
   return { workdays, holidays };
@@ -2241,7 +2266,7 @@ function _workdaysOverlap(startStr, endStr, year, month) {
   const oS = new Date(Math.max(mS, rS));
   const oE = new Date(Math.min(mE, rE));
   if (oS > oE) return 0;
-  return workingDaysBetween(oS.toISOString().slice(0,10), oE.toISOString().slice(0,10)).days;
+  return workingDaysBetween(oS.toLocaleDateString('en-CA'), oE.toLocaleDateString('en-CA')).days;
 }
 
 /**
@@ -2506,8 +2531,6 @@ async function loadDashboard() {
        applyDashFilter();
        return; // applyDashFilter will call loadDashboard(false)
     }
-    
-    _dashboardRows = rows;
     const f = _dashFilter;
     const today = new Date(); today.setHours(0,0,0,0);
     const subEl = document.getElementById('dash-showing-badge');
@@ -3646,15 +3669,16 @@ function addWorkingDays(dateStr, n) {
   let counted = 1;
   while (counted < n) {
     d.setDate(d.getDate() + 1);
-    if (d.getDay() !== 0 && d.getDay() !== 6) {
-      const iso = d.toISOString().slice(0, 10);
-      if (typeof idHolidaySet !== 'undefined' && idHolidaySet.has(iso)) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) {
+      const dateStr = d.toLocaleDateString('en-CA');
+      if (typeof idHolidaySet !== 'undefined' && idHolidaySet.has(dateStr)) {
         continue;
       }
       counted++;
     }
   }
-  return d.toISOString().slice(0, 10);
+  return d.toLocaleDateString('en-CA');
 }
 
 /** Set cp-initial to readonly (Mode B) or editable (Mode A) */
@@ -4347,7 +4371,7 @@ function workingDaysBetween(startStr, endStr) {
   const cur = new Date(start);
   while (cur <= end) {
     const dow = cur.getDay();
-    const iso = cur.toISOString().slice(0, 10);
+    const iso = cur.toLocaleDateString('en-CA');
     if (dow !== 0 && dow !== 6) { // skip weekend
       if (idHolidaySet.has(iso)) {
         skipped.push(iso);
@@ -4838,7 +4862,8 @@ async function addBoardStatus() {
 }
 
 async function _deleteStatus(id) {
-  if (!confirm('Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.')) return;
+  const ok = await customConfirm('Hapus Status', 'Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.', 'Hapus', 'danger');
+  if (!ok) return;
   try {
     await apiFetch('/api/board-statuses/' + id, 'DELETE');
     _boardStatuses = _boardStatuses.filter(s => s.id !== id);
@@ -4925,7 +4950,7 @@ function openBoardDetail(projectId) {
       <div class="board-detail-item"><div class="board-detail-label">Kickoff</div><div class="board-detail-value">${fmt(p.kickoff_date)}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Initial Report</div><div class="board-detail-value">${fmt(p.initial_report_date)} ${initBadge}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Final Report</div><div class="board-detail-value">${fmt(p.final_report_date)} ${finalBadge}</div></div>
-      <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} vulnerability${p.finding_count!==1?'ies':''}</div></div>
+      <div class="board-detail-item"><div class="board-detail-label">Findings</div><div class="board-detail-value">${p.finding_count} ${p.finding_count!==1?'vulnerabilities':'vulnerability'}</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Mandays (Assessment)</div><div class="board-detail-value">${p.mandays_assessment || 0} hari</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Mandays (Initial Report)</div><div class="board-detail-value">${p.mandays_initial_report || 1} hari</div></div>
       <div class="board-detail-item"><div class="board-detail-label">Start Date</div><div class="board-detail-value">${fmt(p.start_date)}</div></div>
