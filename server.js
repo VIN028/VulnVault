@@ -25,6 +25,7 @@ const GEMINI_MODELS = [
 
 /**
  * Try generating with each model in GEMINI_MODELS until one succeeds.
+ * Skips quickly on 404/not-found. 30s timeout per model.
  * @param {string} apiKey
  * @param {object} modelConfig  – { systemInstruction, generationConfig }
  * @param {Array}  parts        – content parts to send
@@ -33,26 +34,38 @@ const GEMINI_MODELS = [
 async function callGeminiWithFallback(apiKey, modelConfig, parts) {
   const genAI = new GoogleGenerativeAI(apiKey.trim());
   let lastError = null;
+  const PER_MODEL_TIMEOUT = 30000; // 30s max per model
 
   for (const modelName of GEMINI_MODELS) {
+    const t0 = Date.now();
     try {
       const model = genAI.getGenerativeModel({
         model: modelName,
         ...modelConfig,
       });
-      const result = await model.generateContent(parts);
+
+      // Race between generation and timeout
+      const result = await Promise.race([
+        model.generateContent(parts),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout after ${PER_MODEL_TIMEOUT/1000}s`)), PER_MODEL_TIMEOUT)
+        ),
+      ]);
+
       const text = result.response.text();
-      console.log(`[AI] ✅ Success with model: ${modelName}`);
+      console.log(`[AI] ✅ ${modelName} succeeded in ${Date.now() - t0}ms`);
       return { text, model: modelName };
     } catch (err) {
       const msg = err?.message || '';
-      console.warn(`[AI] ❌ ${modelName} failed: ${msg.substring(0, 120)}`);
+      const elapsed = Date.now() - t0;
+      console.warn(`[AI] ❌ ${modelName} failed (${elapsed}ms): ${msg.substring(0, 150)}`);
 
       // Don't retry on auth errors — they affect all models
       if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
         throw err;
       }
       lastError = err;
+      // Continue to next model immediately (no delay needed — errors are fast for 404/quota)
     }
   }
 
