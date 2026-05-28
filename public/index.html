@@ -311,6 +311,17 @@
             </div>
 
             <div class="form-group">
+              <label for="cvss-vector">CVSS Vector <span class="optional">(optional)</span></label>
+              <div class="cvss-input-row">
+                <input type="text" id="cvss-vector" placeholder="e.g. CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H" oninput="handleCvssInput(this.value)" />
+                <div class="cvss-score-badge" id="cvss-score-badge" style="display:none">
+                  <span class="cvss-score-value" id="cvss-score-value">0.0</span>
+                </div>
+              </div>
+              <div class="cvss-hint" id="cvss-hint">Auto-calculates score &amp; severity from the vector</div>
+            </div>
+
+            <div class="form-group">
               <label for="short-desc">Short Description <span class="required">*</span></label>
               <textarea id="short-desc" rows="4" placeholder="Briefly describe the vulnerability — what it is, where it was found, how you discovered it..." required></textarea>
             </div>
@@ -581,6 +592,10 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 HTML
               </button>
+              <button class="btn-drill-pdf" onclick="generateDocxReport()" id="btn-gen-docx" disabled style="background:rgba(99,102,241,0.15);border-color:rgba(99,102,241,0.35);color:#a5b4fc">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+                DOCX
+              </button>
             </div>
           </div>
           
@@ -732,6 +747,16 @@
             <option value="Low">Low</option>
             <option value="Info">Info</option>
           </select>
+        </div>
+        <div style="display:flex;gap:10px">
+          <div style="flex:1">
+            <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">CVSS Score <span style="font-weight:400;color:#64748b">(optional)</span></label>
+            <input id="mf-cvss-score" placeholder="e.g. 8.1" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:#0f172a;color:#f0f4ff;font-size:14px;font-family:inherit;outline:none" />
+          </div>
+          <div style="flex:2">
+            <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">CVSS Vector <span style="font-weight:400;color:#64748b">(optional)</span></label>
+            <input id="mf-cvss-vector" placeholder="e.g. CVSS:3.1/AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N" style="width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(148,163,184,0.1);background:#0f172a;color:#f0f4ff;font-size:14px;font-family:inherit;outline:none" />
+          </div>
         </div>
         <div>
           <label style="display:block;font-size:12px;font-weight:600;color:#94a3b8;margin-bottom:6px">Description</label>

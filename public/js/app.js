@@ -448,6 +448,111 @@ function selectSeverity(sev) {
   document.querySelectorAll('.sev-btn').forEach(b => b.classList.toggle('active', b.dataset.sev === sev));
 }
 
+// ─── CVSS 3.1 Calculator ──────────────────────────────────────────────────────
+let currentCvssVector = '';
+let currentCvssScore = null;
+
+function parseCvssVector(raw) {
+  const cleaned = String(raw).trim().replace(/^CVSS:\d+\.\d+\//i, '');
+  const pairs = {};
+  cleaned.split('/').forEach(part => {
+    const [k, v] = part.split(':');
+    if (k && v) pairs[k.toUpperCase()] = v.toUpperCase();
+  });
+  return pairs;
+}
+
+function calculateCvss31Score(vec) {
+  // CVSS 3.1 metric weights per the official specification
+  const AV = { N: 0.85, A: 0.62, L: 0.55, P: 0.20 };
+  const AC = { L: 0.77, H: 0.44 };
+  const PR_U = { N: 0.85, L: 0.62, H: 0.27 }; // Scope Unchanged
+  const PR_C = { N: 0.85, L: 0.68, H: 0.50 }; // Scope Changed
+  const UI = { N: 0.85, R: 0.62 };
+  const CIA = { H: 0.56, L: 0.22, N: 0 };
+
+  const p = parseCvssVector(vec);
+  if (!p.AV || !p.AC || !p.PR || !p.UI || !p.S || !p.C || !p.I || !p.A) return null;
+
+  const av = AV[p.AV]; const ac = AC[p.AC]; const ui = UI[p.UI];
+  const pr = p.S === 'C' ? PR_C[p.PR] : PR_U[p.PR];
+  const c = CIA[p.C]; const i = CIA[p.I]; const a = CIA[p.A];
+
+  if ([av, ac, pr, ui, c, i, a].some(v => v === undefined)) return null;
+
+  const iss = 1 - ((1 - c) * (1 - i) * (1 - a));
+  if (iss <= 0) return 0;
+
+  let impact;
+  if (p.S === 'U') {
+    impact = 6.42 * iss;
+  } else {
+    impact = 7.52 * (iss - 0.029) - 3.25 * Math.pow(iss - 0.02, 15);
+  }
+  if (impact <= 0) return 0;
+
+  const exploitability = 8.22 * av * ac * pr * ui;
+
+  let baseScore;
+  if (p.S === 'U') {
+    baseScore = Math.min(impact + exploitability, 10);
+  } else {
+    baseScore = Math.min(1.08 * (impact + exploitability), 10);
+  }
+  // Roundup to 1 decimal per CVSS spec
+  return Math.ceil(baseScore * 10) / 10;
+}
+
+function scoreToSeverity(score) {
+  if (score === 0) return 'Info';
+  if (score < 4.0) return 'Low';
+  if (score < 7.0) return 'Medium';
+  if (score < 9.0) return 'High';
+  return 'Critical';
+}
+
+function handleCvssInput(value) {
+  const badge = document.getElementById('cvss-score-badge');
+  const scoreEl = document.getElementById('cvss-score-value');
+  const hint = document.getElementById('cvss-hint');
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    badge.style.display = 'none';
+    badge.className = 'cvss-score-badge';
+    hint.textContent = 'Auto-calculates score & severity from the vector';
+    hint.classList.remove('active');
+    currentCvssVector = '';
+    currentCvssScore = null;
+    return;
+  }
+
+  const score = calculateCvss31Score(trimmed);
+  if (score === null) {
+    badge.style.display = 'none';
+    badge.className = 'cvss-score-badge';
+    hint.textContent = 'Invalid vector — check format';
+    hint.classList.remove('active');
+    currentCvssVector = '';
+    currentCvssScore = null;
+    return;
+  }
+
+  currentCvssVector = trimmed;
+  currentCvssScore = score;
+  const severity = scoreToSeverity(score);
+
+  badge.style.display = 'flex';
+  scoreEl.textContent = score.toFixed(1);
+  badge.className = 'cvss-score-badge sev-' + severity.toLowerCase();
+
+  hint.textContent = `Score: ${score.toFixed(1)} → ${severity}`;
+  hint.classList.add('active');
+
+  // Auto-update severity picker
+  selectSeverity(severity);
+}
+
 function handleDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('dragover');
@@ -562,13 +667,21 @@ async function handleGenerate(e) {
         affected_items: affectedItems, poc_notes: pocNotes,
         screenshot_paths: uploadedScreenshotPaths,
         apiKey, severity: selectedSeverity,
+        cvss_vector: currentCvssVector || undefined,
+        cvss_score: currentCvssScore !== null ? String(currentCvssScore) : undefined,
         model: getModel(),
         client_name, project_name, project_id
       })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Generation failed');
-    currentReport = { ...data, severity: data.severity || selectedSeverity, project_id: data.project_id || project_id };
+    currentReport = {
+      ...data,
+      severity: data.severity || selectedSeverity,
+      project_id: data.project_id || project_id,
+      cvss_vector: currentCvssVector || data.cvss_vector || '',
+      cvss_score: currentCvssScore !== null ? String(currentCvssScore) : (data.cvss_score || ''),
+    };
     displayReport(currentReport);
   } catch (err) {
     showPanel('empty');
@@ -655,6 +768,8 @@ async function saveToLibrary() {
       name:            currentReport.name,
       severity:        currentReport.severity,
       project_id:      currentReport.project_id,
+      cvss_vector:     currentReport.cvss_vector || '',
+      cvss_score:      currentReport.cvss_score || '',
       screenshot_path: allScreenshots.length ? JSON.stringify(allScreenshots) : null,
       bilingual_payload: hasBilingual ? JSON.stringify({ en: currentReport.en, id: currentReport.id }) : null,
     };
@@ -680,6 +795,10 @@ async function saveToLibrary() {
     uploadedScreenshotPaths = [];
     renderThumbs();
     selectSeverity('Medium');
+    // Reset CVSS state
+    currentCvssVector = '';
+    currentCvssScore = null;
+    handleCvssInput('');
     setTimeout(() => showView('library'), 800);
   } catch {
     showToast('Failed to save vulnerability', 'error');
@@ -1083,6 +1202,7 @@ function setCol(col, active) {
   if (col === 'findings') {
     document.getElementById('btn-add-finding').disabled = !active;
     document.getElementById('btn-gen-pdf').disabled     = !active;
+    document.getElementById('btn-gen-docx').disabled    = !active;
   }
 }
 
@@ -1369,6 +1489,7 @@ async function selectProject(project) {
   const isPhishing = project.project_type === 'phishing';
   document.getElementById('btn-add-finding').style.display = isPhishing ? 'none' : '';
   document.getElementById('btn-gen-pdf').style.display = isPhishing ? 'none' : '';
+  document.getElementById('btn-gen-docx').style.display = isPhishing ? 'none' : '';
   if (isPhishing) {
     document.getElementById('findings-list').innerHTML = '<div class="drill-empty">Phishing projects do not have findings.</div>';
   } else {
@@ -1595,6 +1716,39 @@ function generateProjectReport() {
 }
 
 // ── DOCX Report ──
+async function generateDocxReport() {
+  if (!clientsState.selectedProject) { showToast('Select a project first', 'error'); return; }
+  const btn = document.getElementById('btn-gen-docx');
+  const oldHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg> Generating…`;
+  try {
+    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/generate-report-docx`, { method: 'POST' });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+    // Trigger download from blob
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename="?([^"]+)"?/);
+    const filename = filenameMatch ? filenameMatch[1] : 'Initial_Report_EN.docx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('DOCX report downloaded!', 'success');
+  } catch (e) {
+    showToast('DOCX generation failed: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = oldHtml;
+  }
+}
 
 // ── Engineer Change Password ──────────────────────────────────────────────────
 function openEngineerChangePassword() {
@@ -1716,6 +1870,8 @@ function openManualFindingModal() {
   ['mf-name','mf-affected'].forEach(id => document.getElementById(id).value = '');
   ['mf-description','mf-impact','mf-recommendation','mf-poc'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('mf-severity').value = 'Medium';
+  document.getElementById('mf-cvss-score').value = '';
+  document.getElementById('mf-cvss-vector').value = '';
   document.getElementById('mf-err').style.display = 'none';
   document.getElementById('mf-screenshot-input').value = '';
   mfScreenshotPaths = [];
@@ -1733,6 +1889,8 @@ function openEditFinding() {
   // Pre-fill fields
   document.getElementById('mf-name').value = v.name || '';
   document.getElementById('mf-severity').value = v.severity || 'Medium';
+  document.getElementById('mf-cvss-score').value = v.cvss_score || '';
+  document.getElementById('mf-cvss-vector').value = v.cvss_vector || '';
   document.getElementById('mf-description').value = v.description || '';
   document.getElementById('mf-affected').value = v.affected_items || '';
   document.getElementById('mf-impact').value = v.impact || '';
@@ -1830,6 +1988,8 @@ async function submitManualFinding() {
   btn.disabled = true;
   const payload = {
     name, severity, description, affected_items, impact, recommendation, poc,
+    cvss_score: document.getElementById('mf-cvss-score').value.trim() || null,
+    cvss_vector: document.getElementById('mf-cvss-vector').value.trim() || null,
     screenshot_path: mfScreenshotPaths.length ? JSON.stringify(mfScreenshotPaths) : null
   };
 

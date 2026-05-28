@@ -4,6 +4,8 @@ const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
+const { randomUUID } = require('crypto');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./database');
 const auth = require('./auth');
@@ -131,6 +133,13 @@ const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+const generatedReportsDir = path.join(__dirname, 'generated_reports');
+if (!fs.existsSync(generatedReportsDir)) {
+  fs.mkdirSync(generatedReportsDir, { recursive: true });
+}
+
+const reportTemplateEnPath = path.join(__dirname, 'templates', 'initial_report_en.docx');
+const reportGeneratorScript = path.join(__dirname, 'tools', 'report_generator_docx.py');
 
 // Multer config for screenshot uploads
 const storage = multer.diskStorage({
@@ -448,11 +457,11 @@ app.get('/api/vulnerabilities/:id', (req, res) => {
 });
 
 app.post('/api/vulnerabilities', (req, res) => {
-  const { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload } = req.body;
+  const { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, cvss_score, cvss_vector } = req.body;
   if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
   const owner_engineer_id = req.session?.role === 'engineer' ? req.session.userId : null;
   db.saveVulnerability(
-    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, owner_engineer_id },
+    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, owner_engineer_id, cvss_score, cvss_vector },
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       db.getVulnerabilityById(result.id, (err2, row) => {
@@ -465,9 +474,9 @@ app.post('/api/vulnerabilities', (req, res) => {
 
 app.put('/api/vulnerabilities/:id', (req, res) => {
   const id = Number(req.params.id);
-  const { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path } = req.body;
+  const { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, cvss_score, cvss_vector } = req.body;
   if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
-  db.updateVulnerability(id, { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path }, (err, result) => {
+  db.updateVulnerability(id, { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, cvss_score, cvss_vector }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Vulnerability not found' });
     db.getVulnerabilityById(id, (err2, row) => {
@@ -739,6 +748,196 @@ app.put('/api/projects/:projectId/vulnerabilities', (req, res) => {
   });
 });
 
+function parseJsonMaybe(value, fallback = null) {
+  if (!value) return fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
+function parseListText(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.map(v => String(v).trim()).filter(Boolean);
+  return String(value)
+    .split(/\r?\n|;|,/)
+    .map(line => line.replace(/^[-*•\d.]+\s*/, '').trim())
+    .filter(Boolean);
+}
+
+function parseScreenshots(value) {
+  if (!value) return [];
+  const parsed = parseJsonMaybe(value, null);
+  if (Array.isArray(parsed)) return parsed.filter(Boolean);
+  if (parsed) return [parsed];
+  return [value];
+}
+
+function pickLanguagePayload(row, language = 'en') {
+  const payload = parseJsonMaybe(row.bilingual_payload, null);
+  const localized = payload?.[language] || null;
+  return {
+    name: localized?.name || row.name || '',
+    description: localized?.description || row.description || '',
+    affected_items: localized?.affected_items || row.affected_items || '',
+    impact: localized?.impact || row.impact || '',
+    recommendation: localized?.recommendation || row.recommendation || '',
+    poc: localized?.poc || row.poc || '',
+    references: localized?.references || row.references || '',
+    // severity, cvss_score, cvss_vector are NOT taken from bilingual_payload
+    // because the user can edit them directly in VulnVault — row.* is the source of truth.
+  };
+}
+
+function normalizeSeverityForTemplate(severity) {
+  if (!severity) return 'Medium';
+  if (severity === 'Info') return 'Informational';
+  return severity;
+}
+
+function cvssFallback(severity) {
+  const normalized = normalizeSeverityForTemplate(severity);
+  const fallback = {
+    Critical: { score: '9.8', vector: 'AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H' },
+    High: { score: '8.1', vector: 'AV:N/AC:L/PR:L/UI:N/S:U/C:H/I:H/A:N' },
+    Medium: { score: '6.5', vector: 'AV:N/AC:L/PR:N/UI:N/S:U/C:L/I:L/A:N' },
+    Low: { score: '3.7', vector: 'AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N' },
+    Informational: { score: '0.0', vector: 'AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:N' },
+  };
+  return fallback[normalized] || fallback.Medium;
+}
+
+function parseCvssVector(raw) {
+  if (!raw) return '';
+  // Strip prefix like 'CVSS:3.1/' or 'CVSS:3.0/' → keep only the vector part
+  return String(raw).replace(/^CVSS:\d+\.\d+\//i, '').trim();
+}
+
+function firstUrlOrFirstItem(text, fallback) {
+  const value = String(text || '');
+  const urlMatch = value.match(/https?:\/\/[^\s,;]+/i);
+  if (urlMatch) return urlMatch[0];
+  const items = parseListText(value);
+  return items[0] || fallback || '';
+}
+
+function formatReportDate(dateValue) {
+  const date = dateValue ? new Date(dateValue) : new Date();
+  if (Number.isNaN(date.getTime())) return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function projectMethodLabel(method) {
+  const value = String(method || '').toLowerCase();
+  if (value.includes('white')) return 'White-Box Testing';
+  if (value.includes('black')) return 'Black-Box Testing';
+  return 'Grey-Box Testing';
+}
+
+function safeFilename(value) {
+  return String(value || 'report')
+    .replace(/[^a-z0-9._-]+/gi, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 120) || 'report';
+}
+
+function buildInitialReportData(rows, language = 'en') {
+  const first = rows[0];
+  const vulns = rows.filter(row => row.id);
+  const clientName = first.client_name || 'Client';
+  const projectName = first.project_name || 'Application';
+  const reportDate = formatReportDate(first.initial_report_date || first.start_date || first.kickoff_date);
+  const testingPeriod = first.start_date && first.initial_report_date
+    ? `${formatReportDate(first.start_date)} - ${formatReportDate(first.initial_report_date)}`
+    : (first.kickoff_date && first.initial_report_date
+      ? `${formatReportDate(first.kickoff_date)} - ${formatReportDate(first.initial_report_date)}`
+      : reportDate);
+  const scopes = [
+    {
+      scope_name: first.project_type ? String(first.project_type).replace(/\b\w/g, c => c.toUpperCase()) : 'Application',
+      scope_target: projectName,
+      scope_area: 'External',
+    },
+  ];
+
+  return {
+    client_name: clientName,
+    client_nick: clientName.replace(/^PT\s+/i, '').split(/\s+/)[0] || clientName,
+    application_name: projectName,
+    document_title: `Penetration Test Report for ${projectName}`,
+    document_number: `CISO-VAPT-${String(first.project_id).padStart(3, '0')}/${new Date().getFullYear()}.EN`,
+    document_date: reportDate,
+    report_type: 'Initial Report',
+    testing_period: testingPeriod,
+    testing_approach: projectMethodLabel(first.project_method),
+    pentester_name: reqSafeDisplayNamePlaceholder(),
+    pentester_certifications: '-',
+    scopes,
+    findings: vulns.map((row, idx) => {
+      const localized = pickLanguagePayload(row, language);
+      const severity = normalizeSeverityForTemplate(row.severity || 'Medium');
+      const fallback = cvssFallback(severity);
+      const realScore = row.cvss_score ? String(row.cvss_score).trim() : '';
+      const realVector = row.cvss_vector ? parseCvssVector(row.cvss_vector) : '';
+      const affectedItems = parseListText(localized.affected_items);
+      const screenshotPaths = parseScreenshots(row.screenshot_path);
+      return {
+        finding_number: idx + 1,
+        severity,
+        finding_name: localized.name,
+        finding_title: localized.name,
+        target: firstUrlOrFirstItem(localized.affected_items, projectName),
+        status: 'New',
+        cvss_score: realScore || fallback.score,
+        cvss_vector: realVector || fallback.vector,
+        finding_date: formatReportDate(row.created_at),
+        description: localized.description,
+        impact: localized.impact,
+        affected_items: affectedItems.length ? affectedItems : [firstUrlOrFirstItem(localized.affected_items, projectName)],
+        poc_description: localized.poc,
+        poc_images: screenshotPaths.map((imagePath, imageIdx) => ({
+          image_path: path.resolve(__dirname, imagePath.replace(/^\//, '')),
+          figure_caption: `${localized.name} evidence ${imageIdx + 1}`,
+        })),
+        recommendation: localized.recommendation,
+        references: parseListText(localized.references),
+      };
+    }),
+  };
+}
+
+function reqSafeDisplayNamePlaceholder() {
+  return 'Cisometric Security Team';
+}
+
+function findPythonBinary() {
+  const candidates = [
+    process.env.PYTHON_BIN,
+    path.join(__dirname, '.venv', 'bin', 'python3'),
+    '/Users/vincentius/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3',
+    'python3',
+  ].filter(Boolean);
+  return candidates.find(candidate => candidate === 'python3' || fs.existsSync(candidate)) || 'python3';
+}
+
+function runDocxGenerator({ dataPath, outputPath }) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      findPythonBinary(),
+      [reportGeneratorScript, '--template', reportTemplateEnPath, '--data', dataPath, '--out', outputPath],
+      { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 * 10 },
+      (error, stdout, stderr) => {
+        if (error) {
+          error.message = `${error.message}${stderr ? `\n${stderr}` : ''}`;
+          return reject(error);
+        }
+        try {
+          return resolve(JSON.parse(stdout));
+        } catch {
+          return reject(new Error(`Generator returned invalid JSON: ${stdout || stderr}`));
+        }
+      }
+    );
+  });
+}
+
 app.get('/api/projects/:projectId/export', (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
@@ -770,6 +969,68 @@ app.get('/api/projects/:projectId/export', (req, res) => {
       vulnerabilities,
       generated_at: new Date().toISOString(),
     });
+  });
+});
+
+// ─── Generate DOCX Report (EN) from Project Data ────────────────────────────
+app.post('/api/projects/:projectId/generate-report-docx', async (req, res) => {
+  const projectId = Number(req.params.projectId);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+
+  // Verify template exists
+  if (!fs.existsSync(reportTemplateEnPath)) {
+    return res.status(500).json({ error: 'Report template not found on server. Please contact admin.' });
+  }
+
+  db.getProjectExportData(projectId, async (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!rows.length) return res.status(404).json({ error: 'Project not found or has no data' });
+
+    try {
+      const reportData = buildInitialReportData(rows, 'en');
+
+      // Write temp JSON for the Python generator
+      const tempId = `report_${projectId}_${Date.now()}`;
+      const dataPath = path.join(generatedReportsDir, `${tempId}.json`);
+      const outputPath = path.join(generatedReportsDir, `${tempId}.docx`);
+      fs.writeFileSync(dataPath, JSON.stringify(reportData, null, 2));
+
+      // Call Python generator
+      const result = await runDocxGenerator({ dataPath, outputPath });
+
+      // Clean up temp JSON
+      try { fs.unlinkSync(dataPath); } catch {}
+
+      if (!fs.existsSync(outputPath)) {
+        return res.status(500).json({ error: 'Generator did not produce output file' });
+      }
+
+      // Build download filename
+      const clientName = safeFilename(rows[0].client_name || 'Client');
+      const projectName = safeFilename(rows[0].project_name || 'Project');
+      const downloadName = `Initial_Report_EN_${clientName}_${projectName}.docx`;
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+
+      const fileStream = fs.createReadStream(outputPath);
+      fileStream.pipe(res);
+      fileStream.on('end', () => {
+        // Clean up generated DOCX after sending
+        try { fs.unlinkSync(outputPath); } catch {}
+      });
+      fileStream.on('error', (streamErr) => {
+        try { fs.unlinkSync(outputPath); } catch {}
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to stream report file' });
+        }
+      });
+    } catch (genErr) {
+      console.error('[DOCX Generator Error]', genErr.message);
+      return res.status(500).json({ error: `Report generation failed: ${genErr.message}` });
+    }
   });
 });
 

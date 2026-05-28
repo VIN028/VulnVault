@@ -50,6 +50,8 @@ function initializeDb() {
       console.log('Vulnerabilities table ready.');
       db.run(`ALTER TABLE vulnerabilities ADD COLUMN bilingual_payload TEXT`, () => {});
       db.run(`ALTER TABLE vulnerabilities ADD COLUMN owner_engineer_id INTEGER`, () => {});
+      db.run(`ALTER TABLE vulnerabilities ADD COLUMN cvss_score TEXT`, () => {});
+      db.run(`ALTER TABLE vulnerabilities ADD COLUMN cvss_vector TEXT`, () => {});
     }
   });
 
@@ -622,7 +624,7 @@ function listVulnerabilities(options, callback) {
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
   db.all(
     `SELECT v.id, v.name, v.description, v.affected_items, v.impact, v.recommendation, v.poc,
-            v.vuln_references as "references", v.screenshot_path, v.severity, v.created_at, v.updated_at
+            v.vuln_references as "references", v.screenshot_path, v.severity, v.cvss_score, v.cvss_vector, v.bilingual_payload, v.created_at, v.updated_at
      ${fromClause}
      ${whereClause}
      ORDER BY ${orderBy}`,
@@ -639,7 +641,7 @@ function getVulnerabilityById(id, callback) {
   const db = getDb();
   db.get(
     `SELECT id, name, description, affected_items, impact, recommendation, poc,
-            vuln_references as "references", screenshot_path, severity, created_at, updated_at
+            vuln_references as "references", screenshot_path, severity, cvss_score, cvss_vector, bilingual_payload, created_at, updated_at
      FROM vulnerabilities WHERE id = ?`,
     [id], callback
   );
@@ -650,14 +652,14 @@ function saveVulnerability(data, callback) {
   const {
     name, description, affected_items, impact,
     recommendation, poc, screenshot_path, severity,
-    bilingual_payload, owner_engineer_id
+    bilingual_payload, owner_engineer_id, cvss_score, cvss_vector
   } = data;
   const references = data.references || data.vuln_references || '';
   db.run(
     `INSERT INTO vulnerabilities 
-      (name, description, affected_items, impact, recommendation, poc, vuln_references, screenshot_path, severity, bilingual_payload, owner_engineer_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [name, description, affected_items, impact, recommendation, poc, references, screenshot_path || null, severity || 'Medium', bilingual_payload || null, owner_engineer_id || null],
+      (name, description, affected_items, impact, recommendation, poc, vuln_references, screenshot_path, severity, bilingual_payload, owner_engineer_id, cvss_score, cvss_vector)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [name, description, affected_items, impact, recommendation, poc, references, screenshot_path || null, severity || 'Medium', bilingual_payload || null, owner_engineer_id || null, cvss_score || null, cvss_vector || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -667,10 +669,10 @@ function saveVulnerability(data, callback) {
 
 function updateVulnerability(id, data, callback) {
   const db = getDb();
-  const { name, description, affected_items, impact, recommendation, poc, screenshot_path, severity } = data;
+  const { name, description, affected_items, impact, recommendation, poc, screenshot_path, severity, cvss_score, cvss_vector } = data;
   db.run(
-    `UPDATE vulnerabilities SET name=?, description=?, affected_items=?, impact=?, recommendation=?, poc=?, screenshot_path=?, severity=? WHERE id=?`,
-    [name, description || null, affected_items || null, impact || null, recommendation || null, poc || null, screenshot_path || null, severity || 'Medium', id],
+    `UPDATE vulnerabilities SET name=?, description=?, affected_items=?, impact=?, recommendation=?, poc=?, screenshot_path=?, severity=?, cvss_score=?, cvss_vector=? WHERE id=?`,
+    [name, description || null, affected_items || null, impact || null, recommendation || null, poc || null, screenshot_path || null, severity || 'Medium', cvss_score || null, cvss_vector || null, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -836,8 +838,16 @@ function getProjectExportData(projectId, callback) {
       c.name as client_name,
       p.id as project_id,
       p.name as project_name,
+      p.project_type,
+      p.project_method,
+      p.kickoff_date,
+      p.start_date,
+      p.initial_report_date,
+      p.final_report_date,
+      p.service,
+      p.team,
       v.id, v.name, v.description, v.affected_items, v.impact, v.recommendation, v.poc,
-      v.vuln_references as "references", v.screenshot_path, v.severity, v.created_at, v.updated_at
+      v.vuln_references as "references", v.screenshot_path, v.severity, v.cvss_score, v.cvss_vector, v.bilingual_payload, v.created_at, v.updated_at
     FROM projects p
     JOIN clients c ON c.id = p.client_id
     LEFT JOIN project_vulnerabilities pv ON pv.project_id = p.id
@@ -1322,4 +1332,3 @@ module.exports = {
   getAllEngagements,
   createEngagement,
 };
-
