@@ -13,6 +13,53 @@ const auth = require('./auth');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ─── Gemini Model Fallback Chain ──────────────────────────────────────────────
+const GEMINI_MODELS = [
+  'gemini-3.5-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-3-flash-preview',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash-lite',
+];
+
+/**
+ * Try generating with each model in GEMINI_MODELS until one succeeds.
+ * @param {string} apiKey
+ * @param {object} modelConfig  – { systemInstruction, generationConfig }
+ * @param {Array}  parts        – content parts to send
+ * @returns {Promise<{text: string, model: string}>}
+ */
+async function callGeminiWithFallback(apiKey, modelConfig, parts) {
+  const genAI = new GoogleGenerativeAI(apiKey.trim());
+  let lastError = null;
+
+  for (const modelName of GEMINI_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        ...modelConfig,
+      });
+      const result = await model.generateContent(parts);
+      const text = result.response.text();
+      console.log(`[AI] ✅ Success with model: ${modelName}`);
+      return { text, model: modelName };
+    } catch (err) {
+      const msg = err?.message || '';
+      console.warn(`[AI] ❌ ${modelName} failed: ${msg.substring(0, 120)}`);
+
+      // Don't retry on auth errors — they affect all models
+      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+        throw err;
+      }
+      lastError = err;
+    }
+  }
+
+  // All models failed
+  throw lastError || new Error('All AI models failed. Please try again later.');
+}
+
 // Behind reverse proxies (correct client IP, HTTPS awareness)
 app.set('trust proxy', 1);
 
@@ -1243,7 +1290,6 @@ app.post('/api/projects/:id/highlight/generate', auth.requireRole('pm','admin','
   const notesList = Array.isArray(notes) ? notes.filter(n => n.trim()) : [];
   if (!notesList.length) return res.status(400).json({ error: 'Notes cannot be empty' });
 
-  const aiModel = model || 'gemini-2.0-flash';
   const prompt = `Kamu adalah asisten project manager untuk perusahaan cybersecurity. Tugas kamu adalah membuat highlight ringkas (2-4 kalimat) untuk laporan progress project.
 
 Data Project:
@@ -1260,15 +1306,11 @@ ${notesList.map((n, i) => `${i + 1}. ${n}`).join('\n')}
 Buatlah satu paragraf highlight yang profesional dalam Bahasa Indonesia. Jika ada poin kendala atau masalah, tolong sebutkan secara jelas. Jika project berjalan lancar atau selesai lebih awal, highlight hal positif tersebut. Gunakan bahasa formal dan ringkas.`;
 
   try {
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(api_key);
-    const aiModelObj = genAI.getGenerativeModel({ model: aiModel });
-    const result = await aiModelObj.generateContent(prompt);
-    const text = result.response.text();
+    const { text, model: usedModel } = await callGeminiWithFallback(api_key, {}, [{ text: prompt }]);
+    console.log(`[Highlight] Used model: ${usedModel}`);
     res.json({ highlight_text: text.trim() });
   } catch (e) {
     const msg = e?.message || 'AI generation failed';
-    // log but don't expose internal error details
     fs.appendFileSync(path.join(__dirname, 'ai_error.log'), `[${new Date().toISOString()}] highlight: ${msg}\n`);
     res.status(500).json({ error: msg.includes('API key') ? 'Invalid API key' : msg });
   }
@@ -1362,7 +1404,6 @@ app.post('/api/ai/estimate-mandays', auth.requireRole('pm','admin','manager'), a
   if (!api_key) return res.status(400).json({ error: 'API key is required' });
   if (!project_type) return res.status(400).json({ error: 'Project type is required' });
 
-  const aiModel = model || 'gemini-2.5-flash';
 
   const typeLabel = {
     web: 'Web Application', api: 'API / REST', mobile: 'Mobile Application',
@@ -1451,56 +1492,18 @@ Return only valid JSON:
   "notes": "<any scope clarifications or assumptions>"
 }`;
 
-
-
   try {
-    const { GoogleGenerativeAI } = require('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(api_key);
-    const aiModelObj = genAI.getGenerativeModel({
-      model: aiModel,
+    const { text: rawText, model: usedModel } = await callGeminiWithFallback(api_key, {
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 1024,
         responseMimeType: "application/json"
       }
-    });
+    }, [{ text: prompt }]);
 
-    // 30s timeout to prevent hanging requests
-    const timeoutMs = 30000;
-    const abortController = new AbortController();
-    const timeout = setTimeout(() => abortController.abort(), timeoutMs);
+    console.log(`[AI Estimator] Used model: ${usedModel}`);
 
-    let result;
-    try {
-      result = await aiModelObj.generateContent(
-        { contents: [{ role: 'user', parts: [{ text: prompt }] }] },
-        { signal: abortController.signal }
-      );
-    } catch (genErr) {
-      clearTimeout(timeout);
-      const msg = genErr?.message || '';
-      if (genErr.name === 'AbortError' || msg.includes('abort')) {
-        return res.status(504).json({ error: 'Request timeout (30s). Coba model yang lebih cepat seperti gemini-2.5-flash.' });
-      }
-      if (msg.includes('404') || msg.includes('not found') || msg.includes('is not found')) {
-        return res.status(400).json({ error: `Model "${aiModel}" tidak tersedia. Coba ganti ke model lain di dropdown (recommended: gemini-2.5-flash).` });
-      }
-      if (msg.includes('429') || msg.includes('RATE_LIMIT') || msg.includes('Resource has been exhausted')) {
-        return res.status(429).json({ error: 'Rate limit tercapai. Tunggu 1-2 menit lalu coba lagi, atau ganti ke model lain (misal gemini-2.5-flash).' });
-      }
-      if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
-        return res.status(401).json({ error: 'API key tidak valid. Periksa kembali key di Google AI Studio.' });
-      }
-      if (msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
-        return res.status(429).json({ error: 'Kuota API habis untuk model ini. Coba model lain atau tunggu hingga kuota direset.' });
-      }
-      throw genErr;
-    }
-    clearTimeout(timeout);
-
-    let text = result.response.text().trim();
-
-    // Robustly extract JSON if wrapped in markdown or other text
+    let text = rawText.trim();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       text = jsonMatch[0];
@@ -1513,7 +1516,7 @@ Return only valid JSON:
       aiResult = JSON.parse(text);
     } catch (parseErr) {
       console.error('Failed to parse AI response:', text);
-      throw new Error('AI returned an invalid format. Please try again or switch models.');
+      throw new Error('AI returned an invalid format. Please try again.');
     }
 
     const assessmentDays = Math.max(1, Math.ceil(Number(aiResult.assessment_days)));
@@ -1529,10 +1532,13 @@ Return only valid JSON:
     });
   } catch (e) {
     console.error('[AI Estimator] Error:', e.message);
-    res.status(500).json({ error: `AI request failed: ${e.message}` });
+    const msg = e?.message || 'AI request failed';
+    if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
+      return res.status(401).json({ error: 'API key tidak valid. Periksa kembali key di Google AI Studio.' });
+    }
+    res.status(500).json({ error: `AI request failed: ${msg}` });
   }
 });
-
 
 
 // Add single vulnerability to project
@@ -1724,7 +1730,6 @@ app.post('/api/ai/analyze', async (req, res) => {
     return res.status(400).json({ error: 'At least one screenshot is required for analysis.' });
   }
 
-  const geminiModel = model || 'gemini-2.5-pro';
   const lang = language === 'en' ? 'English' : 'Bahasa Indonesia';
 
   const systemInstruction = `You are a senior cybersecurity penetration tester performing visual triage of screenshots from security tools (Burp Suite, browser dev tools, Shodan, etc.).
@@ -1757,16 +1762,6 @@ Respond in ${lang} with valid JSON containing EXACTLY these keys:
 Be thorough and specific. Reference actual values you can see in the screenshot.`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey.trim());
-    const aiModel = genAI.getGenerativeModel({
-      model: geminiModel,
-      systemInstruction,
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 2048,
-      },
-    });
-
     const parts = [{ text: 'Analyze the attached screenshot(s) for security vulnerabilities. Respond ONLY with valid JSON.' }];
 
     for (const sp of screenshotPaths) {
@@ -1780,15 +1775,18 @@ Be thorough and specific. Reference actual values you can see in the screenshot.
       }
     }
 
-    const result = await aiModel.generateContent(parts);
-    let text = result.response.text().trim();
+    const { text: rawText, model: usedModel } = await callGeminiWithFallback(apiKey, {
+      systemInstruction,
+      generationConfig: { temperature: 0.4, maxOutputTokens: 2048 },
+    }, parts);
 
-    console.log('[Ask AI] Raw response:', text.substring(0, 500));
+    console.log(`[Ask AI] Used model: ${usedModel}`);
+    let text = rawText.trim();
 
-    // Strip markdown code fences (```json ... ``` or ``` ... ```)
+    // Strip markdown code fences
     text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
 
-    // Aggressively extract JSON: find first { and last }
+    // Aggressively extract JSON
     const firstBrace = text.indexOf('{');
     const lastBrace  = text.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
@@ -1800,8 +1798,6 @@ Be thorough and specific. Reference actual values you can see in the screenshot.
       parsed = JSON.parse(text);
     } catch (parseErr) {
       console.error('[Ask AI] JSON parse error:', parseErr.message);
-      console.error('[Ask AI] Text was:', text.substring(0, 500));
-      // Return the raw text for debugging so the user knows what the model returned
       return res.status(500).json({
         error: `AI returned unparseable response. Raw: ${text.substring(0, 200)}`
       });
@@ -1822,10 +1818,6 @@ Be thorough and specific. Reference actual values you can see in the screenshot.
     if (error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key not valid')) {
       return res.status(401).json({ error: 'Invalid API key.' });
     }
-    if (error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      return res.status(429).json({ error: 'API quota exceeded. Please try another model or wait.' });
-    }
-    // Return the real error so user knows what happened
     res.status(500).json({ error: error.message || 'Analysis failed.' });
   }
 });
@@ -1847,7 +1839,6 @@ app.post('/api/ai/generate', async (req, res) => {
     return res.status(401).json({ error: 'Google AI Studio API key is required. Please configure it in the app settings.' });
   }
 
-  const geminiModel = model || 'gemini-2.5-pro';
 
   // Build client/project context string if provided
   const clientCtx = client_name && project_name
@@ -1949,17 +1940,6 @@ ${screenshotPaths.length ? `${screenshotPaths.length} POC screenshot(s) are atta
 Return only valid JSON as described.${clientCtx}`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey.trim());
-    const model = genAI.getGenerativeModel({
-      model: geminiModel,
-      systemInstruction,
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.7,
-        maxOutputTokens: 4096,
-      },
-    });
-
     const parts = [{ text: userPrompt }];
 
     // Attach all screenshots (multimodal)
@@ -1974,15 +1954,22 @@ Return only valid JSON as described.${clientCtx}`;
       }
     }
 
-    const result = await model.generateContent(parts);
-    const text = result.response.text();
+    const { text: rawText, model: usedModel } = await callGeminiWithFallback(apiKey, {
+      systemInstruction,
+      generationConfig: {
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+        maxOutputTokens: 4096,
+      },
+    }, parts);
+
+    console.log(`[AI Generate] Used model: ${usedModel}`);
 
     let parsed;
     try {
-      parsed = JSON.parse(text);
+      parsed = JSON.parse(rawText);
     } catch {
-      // Try to extract JSON from response
-      const match = text.match(/\{[\s\S]*\}/);
+      const match = rawText.match(/\{[\s\S]*\}/);
       if (match) parsed = JSON.parse(match[0]);
       else return res.status(500).json({ error: 'AI returned invalid response. Please try again.' });
     }
@@ -1991,18 +1978,14 @@ Return only valid JSON as described.${clientCtx}`;
       ? (screenshotPaths.length === 1 ? screenshotPaths[0] : JSON.stringify(screenshotPaths))
       : null;
 
-    // The AI returns { en: {...}, id: {...} } — pass it through to the frontend
-    // Include metadata fields at the top level so the frontend can access them
-    const en = parsed.en || parsed; // fallback: if model returned flat, treat as English
+    const en = parsed.en || parsed;
     const id = parsed.id || parsed;
 
     res.json({
-      // Top-level metadata used by frontend for save/display
       name:           en.name || name,
       severity:       req.body.severity || en.severity || 'Medium',
       screenshot_path: screenshotPathValue,
       project_id:     project_id || null,
-      // Bilingual language objects
       en: {
         name:           en.name           || name,
         description:    en.description    || '',
@@ -2030,9 +2013,6 @@ Return only valid JSON as described.${clientCtx}`;
     if (error.message?.includes('API_KEY_INVALID') || error.message?.includes('API key not valid')) {
       return res.status(401).json({ error: 'Invalid Google AI Studio API key. Please check your key and try again.' });
     }
-    if (error.message?.includes('quota') || error.message?.includes('RESOURCE_EXHAUSTED')) {
-      return res.status(429).json({ error: 'API quota exceeded. Please wait and try again.' });
-    }
     res.status(500).json({ error: error.message || 'AI generation failed. Please try again.' });
   }
 });
@@ -2051,5 +2031,5 @@ app.listen(PORT, () => {
   console.log(`\n🛡️  VulnVault — Vulnerability Management App`);
   console.log(`✅ Server running at http://localhost:${PORT}`);
   console.log(`📁 Database: vulnerabilities.db`);
-  console.log(`🤖 AI: Google Gemini 2.5 Pro (key provided by user)\n`);
+  console.log(`🤖 AI: Gemini Auto-Fallback (${GEMINI_MODELS.length} models)\n`);
 });

@@ -46,16 +46,10 @@
 
         <div class="form-group" style="margin:0;">
           <label style="font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;display:block;">Gemini Model</label>
-          <select id="apikey-model" style="font-size:13px;">
-            <optgroup label="✅ Gemini 2.5 — Stable">
-              <option value="gemini-2.5-flash" selected>gemini-2.5-flash — Production Flash ✓ Default</option>
-              <option value="gemini-2.5-pro">gemini-2.5-pro — Production Pro</option>
-            </optgroup>
-            <optgroup label="📦 Gemini 2.0 — Legacy">
-              <option value="gemini-2.0-flash">gemini-2.0-flash — Flash 2.0</option>
-            </optgroup>
-          </select>
-          <p style="font-size:11px;color:var(--text-muted);margin-top:5px;">Pick the model that matches your Google AI Studio plan.</p>
+          <div style="padding:10px 14px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-md);font-size:13px;color:var(--text-primary);display:flex;align-items:center;gap:8px;">
+            <span style="color:var(--accent-green);">●</span> Auto — smart fallback across 6 models
+          </div>
+          <p style="font-size:11px;color:var(--text-muted);margin-top:5px;">Automatically tries the best available model. No configuration needed.</p>
         </div>
 
         <button class="apikey-submit" id="apikey-submit" onclick="saveApiKey()" disabled>

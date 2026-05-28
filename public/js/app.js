@@ -23,11 +23,8 @@ let libraryFilters = {
 
 // ─── API Key / Model Management ───────────────────────────────────────────────
 const API_KEY_STORAGE = 'vulnvault_gemini_key';
-const MODEL_STORAGE   = 'vulnvault_gemini_model';
-const DEFAULT_MODEL   = 'gemini-2.5-flash';
 
 function getApiKey() { return localStorage.getItem(API_KEY_STORAGE) || ''; }
-function getModel()  { return localStorage.getItem(MODEL_STORAGE)   || DEFAULT_MODEL; }
 
 function validateApiKeyInput(value) {
   const btn = document.getElementById('apikey-submit');
@@ -46,7 +43,6 @@ function saveApiKey() {
     return;
   }
   localStorage.setItem(API_KEY_STORAGE, key);
-  localStorage.setItem(MODEL_STORAGE, document.getElementById('apikey-model').value);
   hideApiKeyModal();
   updateAiStatus(true);
   showToast('API key saved!', 'success');
@@ -54,9 +50,7 @@ function saveApiKey() {
 }
 
 function openSettings() {
-  const modelEl = document.getElementById('apikey-model');
   document.getElementById('apikey-input').value = getApiKey();
-  if (modelEl) modelEl.value = getModel();
   validateApiKeyInput(getApiKey());
   document.getElementById('apikey-overlay').classList.remove('hidden');
 }
@@ -80,7 +74,7 @@ function updateAiStatus(hasKey) {
   if (hasKey) {
     dot.style.background = 'var(--accent-green)';
     dot.style.boxShadow  = '0 0 8px var(--accent-green)';
-    text.textContent     = getModel().replace('-preview','');
+    text.textContent     = 'Gemini AI (auto)';
   } else {
     dot.style.background = 'var(--critical)';
     dot.style.boxShadow  = '0 0 8px var(--critical)';
@@ -131,8 +125,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   const key     = getApiKey();
-  const modelEl = document.getElementById('apikey-model');
-  if (modelEl) modelEl.value = getModel();
 
   if (!key) {
     document.getElementById('apikey-overlay').classList.remove('hidden');
@@ -669,7 +661,6 @@ async function handleGenerate(e) {
         apiKey, severity: selectedSeverity,
         cvss_vector: currentCvssVector || undefined,
         cvss_score: currentCvssScore !== null ? String(currentCvssScore) : undefined,
-        model: getModel(),
         client_name, project_name, project_id
       })
     });
@@ -1055,7 +1046,7 @@ async function handleAskAI() {
       body: JSON.stringify({
         screenshot_paths: askScreenshotPaths,
         language: document.getElementById('ask-lang').value,
-        apiKey, model: getModel(),
+        apiKey,
       })
     });
     const data = await res.json();
