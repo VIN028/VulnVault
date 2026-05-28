@@ -1296,7 +1296,7 @@ async function applyRoleUI() {
       nameEl.style.display = 'inline-block';
     }
 
-    if (s.role === 'engineer') {
+    if (['engineer', 'consultant'].includes(s.role)) {
       // Hide management-only controls
       document.querySelectorAll('.data-mgmt-only').forEach(el => el.style.display = 'none');
       // Show engineer-only controls
@@ -1984,8 +1984,12 @@ async function submitManualFinding() {
     screenshot_path: mfScreenshotPaths.length ? JSON.stringify(mfScreenshotPaths) : null
   };
 
+  const isEdit = mfEditingId !== null;
+  if (isEdit) {
+    payload.bilingual_payload = null;
+  }
+
   try {
-    const isEdit = mfEditingId !== null;
     const url = isEdit ? `/api/vulnerabilities/${mfEditingId}` : '/api/vulnerabilities';
     const method = isEdit ? 'PUT' : 'POST';
     const res = await fetch(url, {

@@ -113,6 +113,7 @@ const ID_HOLIDAYS_FALLBACK = new Set([
   '2026-03-23','2026-03-24','2026-04-03','2026-05-01','2026-05-14','2026-05-26',
   '2026-05-27','2026-06-17','2026-08-17','2026-09-25','2026-12-25',
 ]);
+const SCHEDULE_POLICY_VERSION = 'id-holiday-working-days-v1';
 
 async function fetchHolidaysFromGoogle(year) {
   const apiKey = process.env.GOOGLE_CALENDAR_API_KEY;
@@ -156,24 +157,88 @@ async function getHolidaysSet(year) {
   return { source: 'fallback', dates: fallback };
 }
 
-async function calculateFinalReportDate(initialReportDate) {
-  if (!initialReportDate) return null;
-  let d = new Date(initialReportDate);
-  if (isNaN(d)) return null;
-  
-  let daysToAdd = 63; // 60 remediation + 2 retest + 1 final report
-  while (daysToAdd > 0) {
+function isValidDateString(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(`${value}T00:00:00`).getTime());
+}
+
+function toLocalDate(value) {
+  return new Date(`${value}T00:00:00`);
+}
+
+function toDateStringLocal(date) {
+  return date.toLocaleDateString('en-CA');
+}
+
+async function addWorkingDays(dateStr, days, { includeStart = true } = {}) {
+  if (!isValidDateString(dateStr)) return null;
+  const total = Number(days);
+  if (!Number.isInteger(total) || total < 1) return null;
+
+  const d = toLocalDate(dateStr);
+  let counted = includeStart ? 0 : -1;
+  const excluded = [];
+
+  while (counted < total) {
+    if (counted >= 0 || !includeStart) {
+      const day = d.getDay();
+      const dateKey = toDateStringLocal(d);
+      const { dates: holidays } = await getHolidaysSet(d.getFullYear());
+      if (day !== 0 && day !== 6 && !holidays.has(dateKey)) {
+        counted++;
+        if (counted >= total) break;
+      } else if (day !== 0 && day !== 6 && holidays.has(dateKey)) {
+        excluded.push(dateKey);
+      }
+    }
     d.setDate(d.getDate() + 1);
-    const day = d.getDay();
-    if (day === 0 || day === 6) continue; // Skip weekends
-    
-    const { dates: holidays } = await getHolidaysSet(d.getFullYear());
-    const dateStr = d.toLocaleDateString('en-CA'); // YYYY-MM-DD local time
-    if (holidays.has(dateStr)) continue;
-    
-    daysToAdd--;
   }
-  return d.toLocaleDateString('en-CA');
+
+  return { date: toDateStringLocal(d), excluded_holidays: [...new Set(excluded)] };
+}
+
+async function calculateSchedule(input) {
+  const startDate = input.start_date;
+  const assessmentDays = Number(input.assessment_days || 0);
+  const initialReportDays = Number(input.initial_report_days || 1);
+  const remediationDays = Number(input.remediation_days ?? 60);
+  const retestDays = Number(input.retest_days ?? 2);
+  const finalReportDays = Number(input.final_report_days ?? 1);
+
+  if (!isValidDateString(startDate)) {
+    throw new Error('start_date must be YYYY-MM-DD');
+  }
+  for (const [name, value] of [
+    ['assessment_days', assessmentDays],
+    ['initial_report_days', initialReportDays],
+    ['remediation_days', remediationDays],
+    ['retest_days', retestDays],
+    ['final_report_days', finalReportDays],
+  ]) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error(`${name} must be a non-negative integer`);
+    }
+  }
+  if (assessmentDays + initialReportDays < 1) {
+    throw new Error('assessment_days + initial_report_days must be at least 1');
+  }
+
+  const initial = await addWorkingDays(startDate, assessmentDays + initialReportDays, { includeStart: true });
+  const finalSpan = remediationDays + retestDays + finalReportDays;
+  const final = finalSpan > 0
+    ? await addWorkingDays(initial.date, finalSpan, { includeStart: false })
+    : { date: initial.date, excluded_holidays: [] };
+
+  return {
+    initial_report_date: initial.date,
+    final_report_date: final.date,
+    excluded_holidays: [...new Set([...initial.excluded_holidays, ...final.excluded_holidays])],
+    schedule_policy_version: SCHEDULE_POLICY_VERSION,
+  };
+}
+
+async function calculateFinalReportDate(initialReportDate) {
+  const result = await addWorkingDays(initialReportDate, 63, { includeStart: false });
+  return result ? result.date : null;
 }
 
 app.get('/api/holidays', async (req, res) => {
@@ -186,6 +251,15 @@ app.get('/api/holidays', async (req, res) => {
 
 // Everything under /api below requires a valid session cookie (except routes above)
 app.use(auth.requireApiAuth);
+
+app.post('/api/schedule/calculate', async (req, res) => {
+  try {
+    const result = await calculateSchedule(req.body || {});
+    res.json(result);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 
 // Ensure uploads directory exists
@@ -236,7 +310,7 @@ app.get('/api/me', (req, res) => {
 });
 
 // ─── User Management (PM + Manager + Admin) ───────────────────────────────────
-const mgmtRoles = ['admin', 'manager', 'pm'];
+const mgmtRoles = auth.MANAGEMENT_ROLES;
 
 app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
   db.getAllUsers((err, rows) => {
@@ -289,7 +363,7 @@ app.delete('/api/users/:id', auth.requireRole(...mgmtRoles), (req, res) => {
   }
   db.deleteUser(targetId, (err) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.writeActivityLog({ type:'user', actorId: req.session.userId, action:'delete_user', details:`Deleted user ID ${targetId}` });
+    db.writeActivityLog({ type:'user', actorId: req.session.userId, engineerId: targetId, action:'deactivate_user', details:`Deactivated user ID ${targetId}` });
     res.json({ ok: true });
   });
 });
@@ -344,7 +418,7 @@ app.get('/api/dashboard/summary', auth.requireRole(...mgmtRoles), (req, res) => 
 // ─── Access Requests ──────────────────────────────────────────────────────────
 app.get('/api/access-requests', (req, res) => {
   const s = req.session;
-  if (s.role === 'engineer') {
+  if (auth.DELIVERY_ROLES.includes(s.role)) {
     db.getAccessRequests({ requesterId: s.userId }, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
@@ -359,7 +433,7 @@ app.get('/api/access-requests', (req, res) => {
   }
 });
 
-app.post('/api/access-requests', auth.requireRole('engineer'), (req, res) => {
+app.post('/api/access-requests', auth.requireRole(...auth.DELIVERY_ROLES), (req, res) => {
   const { target_engineer_id } = req.body;
   if (!target_engineer_id) return res.status(400).json({ error: 'target_engineer_id is required.' });
   db.createAccessRequest(
@@ -386,39 +460,64 @@ app.patch('/api/access-requests/:id', auth.requireRole('admin', 'manager', 'pm')
 // GET /api/project-access-requests — engineer sees own; mgmt sees all pending
 app.get('/api/project-access-requests', (req, res) => {
   const s = req.session;
-  const filter = s.role === 'engineer' ? { engineerId: s.userId } : {};
+  const filter = auth.DELIVERY_ROLES.includes(s.role) ? { engineerId: s.userId } : {};
   db.getProjectAccessRequests(filter, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
 });
 
-// GET /api/projects/all — projects the engineer can REQUEST (only unassigned)
+// GET /api/projects/all — projects the engineer/consultant can REQUEST (only unassigned & matching team)
 app.get('/api/projects/all', (req, res) => {
   db.getAllProjects((err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Engineers can only request projects where they are not PIC/Assist
-    // AND the project has at least one open slot (PIC or Assist is null)
-    if (req.session?.role === 'engineer') {
+    if (auth.DELIVERY_ROLES.includes(req.session?.role)) {
       const uid = Number(req.session.userId);
-      rows = rows.filter(p => 
-        Number(p.assigned_engineer_id) !== uid && 
-        Number(p.assist_engineer_id) !== uid &&
-        (!p.assigned_engineer_id || !p.assist_engineer_id)
-      );
+      const role = req.session.role;
+      rows = rows.filter(p => {
+        const projectTeam = p.team || 'offensive';
+        // Enforce team policy for requestable projects only.
+        const isCorrectTeam = (role === 'consultant') ? projectTeam === 'itaudit' : projectTeam === 'offensive';
+        if (!isCorrectTeam) return false;
+
+        const assignmentSlots = [
+          p.assigned_engineer_id,
+          p.assist_engineer_id,
+          p.engineer_3_id,
+          p.engineer_4_id,
+          p.engineer_5_id,
+          p.engineer_6_id,
+          p.engineer_7_id,
+          p.engineer_8_id,
+          p.engineer_9_id,
+          p.engineer_10_id,
+        ];
+        const alreadyAssigned = assignmentSlots.some(v => Number(v) === uid);
+        const hasOpenSlot = assignmentSlots.some(v => !v);
+        return !alreadyAssigned && hasOpenSlot;
+      });
     }
     res.json(rows);
   });
 });
 
 // POST /api/project-access-requests — engineer submits request
-app.post('/api/project-access-requests', auth.requireRole('engineer'), (req, res) => {
+app.post('/api/project-access-requests', auth.requireRole(...auth.DELIVERY_ROLES), (req, res) => {
   const { project_id, message } = req.body;
   if (!project_id) return res.status(400).json({ error: 'project_id is required.' });
   db.createProjectAccessRequest(
     { engineerId: req.session.userId, projectId: Number(project_id), message },
     (err, id) => {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) {
+        if (err.message === 'Project or engineer not found') return res.status(404).json({ error: err.message });
+        if (err.message === 'Project resource slots are full' || err.message === 'Engineer is already assigned to this project') {
+          return res.status(409).json({ error: err.message });
+        }
+        if (/archived|inactive|delivery users|team mismatch/i.test(err.message || '')) {
+          return res.status(400).json({ error: err.message });
+        }
+        return res.status(500).json({ error: err.message });
+      }
       res.status(201).json({ id, status: 'pending' });
     }
   );
@@ -431,7 +530,30 @@ app.patch('/api/project-access-requests/:id', auth.requireRole('admin', 'manager
     return res.status(400).json({ error: 'status must be approved or rejected.' });
   }
   db.updateProjectAccessRequest({ id: Number(req.params.id), status, reviewedBy: req.session.userId }, (err) => {
-    if (err) return res.status(500).json({ error: err.message });
+    if (err) {
+      if (err.message === 'Project resource slots are full') {
+        return res.status(409).json({ error: err.message });
+      }
+      if (err.message === 'Engineer is already assigned to this project') {
+        return res.status(409).json({ error: err.message });
+      }
+      if (err.message === 'Cannot approve access request for an archived project') {
+        return res.status(400).json({ error: err.message });
+      }
+      if (err.message === 'Engineer is inactive') {
+        return res.status(400).json({ error: err.message });
+      }
+      if (err.message === 'Team mismatch: engineer and project teams do not match') {
+        return res.status(400).json({ error: err.message });
+      }
+      if (err.message === 'Access request is not pending') {
+        return res.status(409).json({ error: err.message });
+      }
+      if (err.message === 'Access request not found' || err.message === 'Project not found' || err.message === 'Engineer not found') {
+        return res.status(404).json({ error: err.message });
+      }
+      return res.status(500).json({ error: err.message });
+    }
     // Log the action + send notification to engineer
     db.getDb().get(
       `SELECT par.engineer_id, par.project_id, p.name AS project_name
@@ -493,19 +615,37 @@ app.get('/api/vulnerabilities', (req, res) => {
   const s = req.session;
   // The library is global for all roles
   const engineerId = null;
-  db.listVulnerabilities(
-    {
-      search:     (search   || '').trim(),
-      severity:   (severity || '').trim(),
-      sort:       (sort     || 'newest').trim(),
-      project_id: project_id ? Number(project_id) : null,
-      owner_engineer_id: engineerId,
-    },
-    (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
-    }
-  );
+  const projectId = project_id ? Number(project_id) : null;
+  if (project_id && (!Number.isInteger(projectId) || projectId < 1)) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+
+  const list = () => {
+    db.listVulnerabilities(
+      {
+        search:     (search   || '').trim(),
+        severity:   (severity || '').trim(),
+        sort:       (sort     || 'newest').trim(),
+        project_id: projectId,
+        owner_engineer_id: engineerId,
+      },
+      (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+      }
+    );
+  };
+
+  if (projectId && auth.DELIVERY_ROLES.includes(s?.role)) {
+    db.checkProjectAccess(s.userId, s.role, projectId, (err, hasAccess) => {
+      if (err) return res.status(500).json({ error: 'Database error' });
+      if (!hasAccess) return res.status(403).json({ error: 'Forbidden: You do not have access to this project.' });
+      list();
+    });
+    return;
+  }
+
+  list();
 });
 
 app.get('/api/vulnerabilities/:id', (req, res) => {
@@ -516,12 +656,43 @@ app.get('/api/vulnerabilities/:id', (req, res) => {
   });
 });
 
+function validateBilingualPayload(payload) {
+  if (payload === undefined || payload === null || payload === '') return null;
+  if (typeof payload === 'string') {
+    try {
+      const parsed = JSON.parse(payload);
+      if (parsed && typeof parsed === 'object') {
+        return payload;
+      }
+      throw new Error('Bilingual payload must resolve to a JSON object');
+    } catch (e) {
+      throw new Error('Invalid JSON format in bilingual payload: ' + e.message);
+    }
+  }
+  if (typeof payload === 'object') {
+    try {
+      return JSON.stringify(payload);
+    } catch (e) {
+      throw new Error('Failed to serialize bilingual payload: ' + e.message);
+    }
+  }
+  throw new Error('Bilingual payload must be a JSON string or object');
+}
+
 app.post('/api/vulnerabilities', (req, res) => {
   const { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, cvss_score, cvss_vector } = req.body;
   if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
-  const owner_engineer_id = req.session?.role === 'engineer' ? req.session.userId : null;
+
+  let validatedBilingualPayload = null;
+  try {
+    validatedBilingualPayload = validateBilingualPayload(bilingual_payload);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const owner_engineer_id = auth.DELIVERY_ROLES.includes(req.session?.role) ? req.session.userId : null;
   db.saveVulnerability(
-    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload, owner_engineer_id, cvss_score, cvss_vector },
+    { name, description, affected_items, impact, recommendation, poc, references, screenshot_path, severity, bilingual_payload: validatedBilingualPayload, owner_engineer_id, cvss_score, cvss_vector },
     (err, result) => {
       if (err) return res.status(500).json({ error: err.message });
       db.getVulnerabilityById(result.id, (err2, row) => {
@@ -534,9 +705,20 @@ app.post('/api/vulnerabilities', (req, res) => {
 
 app.put('/api/vulnerabilities/:id', (req, res) => {
   const id = Number(req.params.id);
-  const { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, cvss_score, cvss_vector } = req.body;
+  const { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, bilingual_payload, cvss_score, cvss_vector } = req.body;
   if (!name) return res.status(400).json({ error: 'Vulnerability name is required' });
-  db.updateVulnerability(id, { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, cvss_score, cvss_vector }, (err, result) => {
+
+  const hasBilingualPayload = Object.prototype.hasOwnProperty.call(req.body, 'bilingual_payload');
+  let validatedBilingualPayload;
+  if (hasBilingualPayload) {
+    try {
+      validatedBilingualPayload = validateBilingualPayload(bilingual_payload);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  }
+
+  db.updateVulnerability(id, { name, severity, description, affected_items, impact, recommendation, poc, screenshot_path, cvss_score, cvss_vector, bilingual_payload: validatedBilingualPayload }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Vulnerability not found' });
     db.getVulnerabilityById(id, (err2, row) => {
@@ -576,12 +758,18 @@ app.delete('/api/vulnerabilities/:id', (req, res) => {
 // ─── Client / Project Grouping Routes ────────────────────────────────────────
 app.get('/api/clients', (req, res) => {
   const s = req.session;
-  if (s?.role === 'engineer') {
-    // Engineers only see clients for projects they're assigned to
-    db.getClientsByEngineer(s.userId, (err, rows) => {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json(rows);
-    });
+  if (auth.DELIVERY_ROLES.includes(s?.role)) {
+    if (s.role === 'consultant') {
+      db.getClientsByConsultant(s.userId, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+      });
+    } else {
+      db.getClientsByEngineer(s.userId, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+      });
+    }
   } else {
     db.getClients((err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
@@ -591,8 +779,8 @@ app.get('/api/clients', (req, res) => {
 });
 
 app.post('/api/clients', (req, res) => {
-  // Engineers cannot create clients
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create clients. Ask your PM to create and assign you.' });
+  // Only management roles can create clients
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to create clients. Ask your PM to create and assign you.' });
   const name = (req.body?.name || '').trim();
   const engagement_reference = (req.body?.engagement_reference || '').trim() || null;
   const engagement_info = (req.body?.engagement_info || '').trim() || null;
@@ -638,7 +826,7 @@ app.post('/api/clients/:clientId/engagements', auth.requireRole('admin','manager
 });
 
 app.delete('/api/clients/:id', (req, res) => {
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete clients.' });
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to delete clients.' });
   const clientId = Number(req.params.id);
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
@@ -667,31 +855,38 @@ app.get('/api/clients/:clientId/projects', (req, res) => {
   }
   db.getProjectsByClient(clientId, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    // Engineers only see their own assigned projects (any PIC/Assist/Retest role)
-    if (req.session?.role === 'engineer') {
+    if (auth.DELIVERY_ROLES.includes(req.session?.role)) {
       const uid = Number(req.session.userId);
-      rows = rows.filter(p =>
-        Number(p.assigned_engineer_id) === uid ||
-        Number(p.assist_engineer_id) === uid ||
-        Number(p.engineer_3_id) === uid ||
-        Number(p.engineer_4_id) === uid ||
-        Number(p.engineer_5_id) === uid ||
-        Number(p.engineer_6_id) === uid ||
-        Number(p.engineer_7_id) === uid ||
-        Number(p.engineer_8_id) === uid ||
-        Number(p.engineer_9_id) === uid ||
-        Number(p.engineer_10_id) === uid ||
-        Number(p.retest_pic_id) === uid ||
-        Number(p.retest_assist_id) === uid
-      );
+      const role = req.session.role;
+      rows = rows.filter(p => {
+        const isAssigned =
+          Number(p.assigned_engineer_id) === uid ||
+          Number(p.assist_engineer_id) === uid ||
+          Number(p.engineer_3_id) === uid ||
+          Number(p.engineer_4_id) === uid ||
+          Number(p.engineer_5_id) === uid ||
+          Number(p.engineer_6_id) === uid ||
+          Number(p.engineer_7_id) === uid ||
+          Number(p.engineer_8_id) === uid ||
+          Number(p.engineer_9_id) === uid ||
+          Number(p.engineer_10_id) === uid ||
+          Number(p.retest_pic_id) === uid ||
+          Number(p.retest_assist_id) === uid;
+
+        if (role === 'consultant') {
+          return isAssigned && p.team === 'itaudit';
+        } else {
+          return isAssigned && p.team === 'offensive';
+        }
+      });
     }
     res.json(rows);
   });
 });
 
 app.post('/api/clients/:clientId/projects', async (req, res) => {
-  // Engineers cannot create projects directly
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
+  // Only management roles can create projects
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
   let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date } = req.body;
   const trimName = (name || '').trim();
@@ -700,24 +895,51 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   }
   if (!trimName) return res.status(400).json({ error: 'Project name is required' });
   
-  if (initial_report_date && !final_report_date) {
+  let schedule_policy_version = null;
+  if (start_date && (Number(mandays_assessment) > 0 || Number(mandays_initial_report) > 0)) {
+    try {
+      const schedule = await calculateSchedule({
+        start_date,
+        assessment_days: Number(mandays_assessment) || 0,
+        initial_report_days: Number(mandays_initial_report) || 1,
+        remediation_days: 60,
+        retest_days: 2,
+        final_report_days: 1,
+      });
+      initial_report_date = schedule.initial_report_date;
+      final_report_date = final_report_date || schedule.final_report_date;
+      schedule_policy_version = schedule.schedule_policy_version;
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  } else if (initial_report_date && !final_report_date) {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
+    schedule_policy_version = SCHEDULE_POLICY_VERSION;
   }
   
+  let initial_report_status = 'pending';
   let final_report_status = 'pending';
+  let initial_completed_at = null;
   let final_completed_at = null;
+  let initial_completed_by = null;
+  let final_completed_by = null;
   let is_archived = 0;
   let archived_at = null;
   if (is_past_project && actual_end_date) {
+    initial_report_status = 'completed';
     final_report_status = 'completed';
+    initial_completed_at = actual_end_date;
     final_completed_at = actual_end_date;
+    initial_completed_by = req.session.displayName || req.session.username;
+    final_completed_by = req.session.displayName || req.session.username;
     is_archived = 1;
     archived_at = new Date().toISOString();
   }
 
-  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, final_report_status, final_completed_at, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
+  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, initial_report_status, final_report_status, initial_completed_at, final_completed_at, initial_completed_by, final_completed_by, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
+      if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
       return res.status(500).json({ error: err.message });
     }
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: result.id, action:'create_project', details:`Created project "${trimName}" in client ID ${clientId}` });
@@ -738,11 +960,20 @@ app.get('/api/projects/archived', auth.requireRole('admin', 'manager', 'pm'), (r
 
 app.patch('/api/projects/:id/archive', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
   const id = Number(req.params.id);
-  db.archiveProject(id, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
-    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'archive_project', details:`Archived project ID ${id}` });
-    res.json({ message: 'Project archived successfully' });
+  db.getProjectById(id, (err, proj) => {
+    if (err || !proj) return res.status(404).json({ error: 'Project not found' });
+
+    const isCompleted = proj.final_report_status === 'completed';
+    if (!isCompleted) {
+      return res.status(400).json({ error: 'Cannot archive active project. Complete final report first.' });
+    }
+
+    db.archiveProject(id, (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+      db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'archive_project', details:`Archived project "${proj.name}"` });
+      res.json({ message: 'Project archived successfully' });
+    });
   });
 });
 
@@ -757,7 +988,7 @@ app.patch('/api/projects/:id/restore', auth.requireRole('admin', 'manager', 'pm'
 });
 
 app.delete('/api/projects/:projectId', (req, res) => {
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot delete projects.' });
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to delete projects.' });
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ error: 'Invalid project id' });
@@ -770,21 +1001,8 @@ app.delete('/api/projects/:projectId', (req, res) => {
   });
 });
 
-app.patch('/api/projects/:projectId/reports', (req, res) => {
-  const projectId = Number(req.params.projectId);
-  const { link_report_en, link_report_id } = req.body;
-  if (!Number.isInteger(projectId) || projectId < 1) {
-    return res.status(400).json({ error: 'Invalid project id' });
-  }
-  db.updateProjectReports(projectId, { link_report_en, link_report_id }, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
-    if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
-    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId, action:'edit_project', details:`Updated report links for project ID ${projectId}` });
-    res.json({ message: 'Report links updated successfully' });
-  });
-});
 
-app.get('/api/projects/:projectId/vulnerabilities', (req, res) => {
+app.get('/api/projects/:projectId/vulnerabilities', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ error: 'Invalid project id' });
@@ -795,7 +1013,7 @@ app.get('/api/projects/:projectId/vulnerabilities', (req, res) => {
   });
 });
 
-app.put('/api/projects/:projectId/vulnerabilities', (req, res) => {
+app.put('/api/projects/:projectId/vulnerabilities', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   const ids = Array.isArray(req.body?.vulnerability_ids) ? req.body.vulnerability_ids : [];
   const normalizedIds = [...new Set(ids.map(v => Number(v)).filter(v => Number.isInteger(v) && v > 0))];
@@ -998,7 +1216,7 @@ function runDocxGenerator({ dataPath, outputPath }) {
   });
 }
 
-app.get('/api/projects/:projectId/export', (req, res) => {
+app.get('/api/projects/:projectId/export', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ error: 'Invalid project id' });
@@ -1033,7 +1251,7 @@ app.get('/api/projects/:projectId/export', (req, res) => {
 });
 
 // ─── Generate DOCX Report (EN) from Project Data ────────────────────────────
-app.post('/api/projects/:projectId/generate-report-docx', async (req, res) => {
+app.post('/api/projects/:projectId/generate-report-docx', auth.requireProjectAccess('projectId'), async (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1) {
     return res.status(400).json({ error: 'Invalid project id' });
@@ -1097,7 +1315,7 @@ app.post('/api/projects/:projectId/generate-report-docx', async (req, res) => {
 // ─── Client / Project — rename + single-vuln management + report ─────────────
 
 app.put('/api/clients/:id', (req, res) => {
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit clients.' });
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to edit clients.' });
   const id   = Number(req.params.id);
   const name = (req.body?.name || '').trim();
   if (!name) return res.status(400).json({ error: 'Name is required' });
@@ -1112,28 +1330,57 @@ app.put('/api/clients/:id', (req, res) => {
 });
 
 app.put('/api/projects/:id', async (req, res) => {
-  if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
+  if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to edit projects.' });
   const id   = Number(req.params.id);
   let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
   
-  if (initial_report_date && !final_report_date) {
+  let schedule_policy_version = null;
+  if (start_date && (Number(mandays_assessment) > 0 || Number(mandays_initial_report) > 0)) {
+    try {
+      const schedule = await calculateSchedule({
+        start_date,
+        assessment_days: Number(mandays_assessment) || 0,
+        initial_report_days: Number(mandays_initial_report) || 1,
+        remediation_days: 60,
+        retest_days: 2,
+        final_report_days: 1,
+      });
+      initial_report_date = schedule.initial_report_date;
+      final_report_date = final_report_date || schedule.final_report_date;
+      schedule_policy_version = schedule.schedule_policy_version;
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+  } else if (initial_report_date && !final_report_date) {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
+    schedule_policy_version = SCHEDULE_POLICY_VERSION;
   }
   
-  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
-    if (err) return res.status(500).json({ error: err.message });
+  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version }, (err, result) => {
+    if (err) {
+      if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
+    }
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service });
+    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version });
   });
 });
 
-app.patch('/api/projects/:id/reports', auth.requireRole('engineer', 'admin', 'manager', 'pm'), (req, res) => {
+app.patch('/api/projects/:id/reports', auth.requireRole('engineer', 'consultant', 'admin', 'manager', 'pm'), auth.requireProjectAccess('id'), (req, res) => {
   const id   = Number(req.params.id);
   const { link_report_en, link_report_id } = req.body;
   
+  const urlRegex = /^https?:\/\//i;
+  if (link_report_en && !urlRegex.test(link_report_en)) {
+    return res.status(400).json({ error: 'English report link must be a valid URL starting with http:// or https://' });
+  }
+  if (link_report_id && !urlRegex.test(link_report_id)) {
+    return res.status(400).json({ error: 'Indonesian report link must be a valid URL starting with http:// or https://' });
+  }
+
   db.updateProjectReports(id, { link_report_en, link_report_id }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
@@ -1152,7 +1399,7 @@ app.patch('/api/projects/:id/reports', auth.requireRole('engineer', 'admin', 'ma
   });
 });
 
-app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'admin', 'manager', 'pm'), (req, res) => {
+app.patch('/api/projects/:id/status', auth.requireRole('engineer', 'consultant', 'admin', 'manager', 'pm'), auth.requireProjectAccess('id'), (req, res) => {
   const id = Number(req.params.id);
   const { initial_report_status, final_report_status } = req.body;
   if (!initial_report_status && !final_report_status) return res.json({ ok: true });
@@ -1228,7 +1475,10 @@ app.post('/api/projects/:id/retest', auth.requireRole('pm', 'admin', 'manager'),
       return res.status(400).json({ error: 'Cannot start Retest until the Initial Report is marked as completed.' });
 
     db.startRetest(id, { retest_pic_id: Number(retest_pic_id), retest_assist_id: retest_assist_id ? Number(retest_assist_id) : null, retest_start_date, retest_end_date }, (err, result) => {
-      if (err) return res.status(500).json({ error: err.message });
+      if (err) {
+        if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
+        return res.status(500).json({ error: err.message });
+      }
       if (!result.changes) return res.status(404).json({ error: 'Project not found' });
 
       db.getProjectById(id, (err2, proj) => {
@@ -1260,7 +1510,7 @@ app.post('/api/projects/:id/retest', auth.requireRole('pm', 'admin', 'manager'),
 });
 
 // Full vulnerability details for a project
-app.get('/api/projects/:projectId/findings', (req, res) => {
+app.get('/api/projects/:projectId/findings', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1)
     return res.status(400).json({ error: 'Invalid project id' });
@@ -1380,17 +1630,21 @@ app.delete('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res)
 app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
   const { board_status_id } = req.body;
-  
-  // board_status_id === -1 is the hardcoded "Closed" status
-  const isClosed = (board_status_id === -1);
-  const final_report_status = isClosed ? 'completed' : 'pending';
-  // Gunakan tanggal lokal format YYYY-MM-DD agar seragam dengan fungsi lain
-  const final_completed_at = isClosed ? new Date().toLocaleDateString('en-CA') : null;
 
-  db.updateProjectBoardStatusAndCompletion(id, board_status_id, final_report_status, final_completed_at, (err2, result) => {
-    if (err2) return res.status(500).json({ error: err2.message });
-    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-    res.json({ ok: true, isClosed, final_completed_at });
+  const isClosed = (board_status_id === -1);
+
+  db.getProjectById(id, (err, proj) => {
+    if (err || !proj) return res.status(404).json({ error: 'Project not found' });
+
+    if (isClosed && proj.final_report_status !== 'completed') {
+      return res.status(400).json({ error: 'Complete final report first' });
+    }
+
+    db.updateProjectBoardStatus(id, board_status_id, (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+      res.json({ ok: true, isClosed, final_completed_at: proj.final_completed_at });
+    });
   });
 });
 
@@ -1555,7 +1809,7 @@ Return only valid JSON:
 
 
 // Add single vulnerability to project
-app.post('/api/projects/:projectId/assign/:vulnId', (req, res) => {
+app.post('/api/projects/:projectId/assign/:vulnId', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   const vulnId    = Number(req.params.vulnId);
   if (!Number.isInteger(projectId) || projectId < 1 || !Number.isInteger(vulnId) || vulnId < 1) {
@@ -1568,7 +1822,7 @@ app.post('/api/projects/:projectId/assign/:vulnId', (req, res) => {
 });
 
 // Remove single vulnerability from project
-app.delete('/api/projects/:projectId/assign/:vulnId', (req, res) => {
+app.delete('/api/projects/:projectId/assign/:vulnId', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   const vulnId    = Number(req.params.vulnId);
   if (!Number.isInteger(projectId) || projectId < 1 || !Number.isInteger(vulnId) || vulnId < 1) {
@@ -1581,7 +1835,7 @@ app.delete('/api/projects/:projectId/assign/:vulnId', (req, res) => {
 });
 
 // HTML Pentest Report (open in new tab → print to PDF)
-app.get('/api/projects/:projectId/report', (req, res) => {
+app.get('/api/projects/:projectId/report', auth.requireProjectAccess('projectId'), (req, res) => {
   const projectId = Number(req.params.projectId);
   if (!Number.isInteger(projectId) || projectId < 1)
     return res.status(400).json({ error: 'Invalid project id' });
