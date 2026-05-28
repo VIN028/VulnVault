@@ -1972,19 +1972,25 @@ Return only valid JSON as described.${clientCtx}`;
       generationConfig: {
         responseMimeType: 'application/json',
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       },
     }, parts);
 
-    console.log(`[AI Generate] Used model: ${usedModel}`);
+    console.log(`[AI Generate] Used model: ${usedModel} (${rawText.length} chars)`);
 
     let parsed;
     try {
       parsed = JSON.parse(rawText);
-    } catch {
+    } catch (parseErr) {
+      // Try to extract JSON from response
       const match = rawText.match(/\{[\s\S]*\}/);
-      if (match) parsed = JSON.parse(match[0]);
-      else return res.status(500).json({ error: 'AI returned invalid response. Please try again.' });
+      if (match) {
+        try { parsed = JSON.parse(match[0]); } catch {}
+      }
+      if (!parsed) {
+        console.error('[AI Generate] JSON parse failed:', parseErr.message, '| Raw:', rawText.substring(0, 300));
+        return res.status(500).json({ error: 'AI response terpotong. Coba lagi (report terlalu panjang).' });
+      }
     }
 
     const screenshotPathValue = screenshotPaths.length
