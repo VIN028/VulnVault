@@ -62,7 +62,8 @@ function getSessionFromReq(req) {
 function setSessionCookie(res, req, payload) {
   const token  = signPayload({ ...payload, exp: Date.now() + MAX_AGE_MS });
   const xfProto = (req.headers['x-forwarded-proto'] || '').toLowerCase();
-  const secure = process.env.FORCE_SECURE_COOKIE === '1' || req.secure || xfProto === 'https';
+  const forceEnv = process.env.FORCE_SECURE_COOKIE;
+  const secure = forceEnv === '0' ? false : (forceEnv === '1' || req.secure || xfProto === 'https');
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true, sameSite: 'lax', secure, maxAge: MAX_AGE_MS, path: '/',
   });
