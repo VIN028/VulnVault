@@ -76,8 +76,8 @@ function updateAiStatus(hasKey) {
     dot.style.boxShadow  = '0 0 8px var(--accent-green)';
     text.textContent     = 'Gemini AI (auto)';
   } else {
-    dot.style.background = 'var(--critical)';
-    dot.style.boxShadow  = '0 0 8px var(--critical)';
+    dot.style.background = 'var(--danger)';
+    dot.style.boxShadow  = '0 0 8px var(--danger)';
     text.textContent     = 'API Key Missing';
   }
 }
@@ -1147,7 +1147,7 @@ const clientsState = {
   pickerAddedIds: new Set(),
 };
 
-const SEV_COLOR = { Critical:'#ef4444', High:'#f97316', Medium:'#eab308', Low:'#22c55e', Info:'#06b6d4' };
+const SEV_COLOR = { Critical:'#7e4dd8', High:'#d43a3a', Medium:'#ee9430', Low:'#6aa84f', Info:'#3f7dd8' };
 
 async function loadClientsView() {
   try {
@@ -2011,4 +2011,3 @@ async function submitManualFinding() {
     errEl.style.display = 'block';
   } finally { btn.disabled = false; }
 }
-
