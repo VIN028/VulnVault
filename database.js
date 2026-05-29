@@ -16,11 +16,435 @@ function getDb() {
         console.error('Error opening database:', err.message);
       } else {
         console.log('Connected to SQLite database.');
+        db.run('PRAGMA foreign_keys = ON');
         initializeDb();
       }
     });
   }
   return db;
+}
+
+function migrateProjectVulnerabilitiesConstraints() {
+  db.get(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'project_vulnerabilities'`,
+    (err, row) => {
+      if (err) {
+        console.error('[Migration] Failed to inspect project_vulnerabilities:', err.message);
+        return;
+      }
+      if (!row?.sql || row.sql.includes('FOREIGN KEY')) return;
+
+      console.log('[Migration] Rebuilding project_vulnerabilities with foreign keys...');
+
+      const rollback = (migrationErr) => {
+        db.run('ROLLBACK', () => {
+          db.run('PRAGMA foreign_keys = ON');
+          console.error('[Migration] Failed to rebuild project_vulnerabilities:', migrationErr.message);
+        });
+      };
+
+      db.run('PRAGMA foreign_keys = OFF', (pragmaErr) => {
+        if (pragmaErr) {
+          console.error('[Migration] Failed to disable foreign keys:', pragmaErr.message);
+          return;
+        }
+
+        db.run('BEGIN IMMEDIATE TRANSACTION', (beginErr) => {
+          if (beginErr) return rollback(beginErr);
+
+          db.run('DROP TABLE IF EXISTS project_vulnerabilities_new', (cleanupErr) => {
+            if (cleanupErr) return rollback(cleanupErr);
+
+            db.run(
+              `CREATE TABLE project_vulnerabilities_new (
+              project_id INTEGER NOT NULL,
+              vulnerability_id INTEGER NOT NULL,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              PRIMARY KEY(project_id, vulnerability_id),
+              FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+              FOREIGN KEY (vulnerability_id) REFERENCES vulnerabilities(id) ON DELETE CASCADE
+            )`,
+              (createErr) => {
+                if (createErr) return rollback(createErr);
+
+                db.run(
+                  `INSERT OR IGNORE INTO project_vulnerabilities_new (project_id, vulnerability_id, created_at)
+                   SELECT pv.project_id, pv.vulnerability_id, COALESCE(pv.created_at, CURRENT_TIMESTAMP)
+                   FROM project_vulnerabilities pv
+                   JOIN projects p ON p.id = pv.project_id
+                   JOIN vulnerabilities v ON v.id = pv.vulnerability_id`,
+                  (insertErr) => {
+                    if (insertErr) return rollback(insertErr);
+
+                    db.run('DROP TABLE project_vulnerabilities', (dropErr) => {
+                      if (dropErr) return rollback(dropErr);
+
+                      db.run('ALTER TABLE project_vulnerabilities_new RENAME TO project_vulnerabilities', (renameErr) => {
+                        if (renameErr) return rollback(renameErr);
+
+                        db.run('COMMIT', (commitErr) => {
+                          db.run('PRAGMA foreign_keys = ON');
+                          if (commitErr) {
+                            console.error('[Migration] Failed to commit project_vulnerabilities rebuild:', commitErr.message);
+                            return;
+                          }
+                          console.log('[Migration] project_vulnerabilities foreign keys enabled.');
+                        });
+                      });
+                    });
+                  }
+                );
+              }
+            );
+          });
+        });
+      });
+    }
+  );
+}
+
+function migrateProjectsConstraints() {
+  db.get(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'projects'`,
+    (err, row) => {
+      if (err) {
+        console.error('[Migration] Failed to inspect projects:', err.message);
+        return;
+      }
+      if (!row?.sql || row.sql.includes('FOREIGN KEY (client_id)')) return;
+
+      console.log('[Migration] Rebuilding projects with client foreign key...');
+
+      const rollback = (migrationErr) => {
+        db.run('ROLLBACK', () => {
+          db.run('PRAGMA foreign_keys = ON');
+          console.error('[Migration] Failed to rebuild projects:', migrationErr.message);
+        });
+      };
+
+      db.run('PRAGMA foreign_keys = OFF', (pragmaErr) => {
+        if (pragmaErr) {
+          console.error('[Migration] Failed to disable foreign keys:', pragmaErr.message);
+          return;
+        }
+
+        db.run('BEGIN IMMEDIATE TRANSACTION', (beginErr) => {
+          if (beginErr) return rollback(beginErr);
+
+          db.run('DROP TABLE IF EXISTS projects_new', (cleanupErr) => {
+            if (cleanupErr) return rollback(cleanupErr);
+
+            db.run(
+              `CREATE TABLE projects_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                client_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                project_type TEXT DEFAULT 'web',
+                assigned_engineer_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                assist_engineer_id INTEGER,
+                kickoff_date TEXT,
+                initial_report_date TEXT,
+                final_report_date TEXT,
+                link_report_en TEXT,
+                link_report_id TEXT,
+                initial_report_status TEXT DEFAULT 'pending',
+                final_report_status TEXT DEFAULT 'pending',
+                initial_completed_by TEXT,
+                final_completed_by TEXT,
+                initial_completed_at TEXT,
+                final_completed_at TEXT,
+                project_links TEXT,
+                mandays_kickoff INTEGER DEFAULT 1,
+                mandays_infogath INTEGER DEFAULT 5,
+                retest_status TEXT DEFAULT 'none',
+                retest_start_date TEXT,
+                retest_end_date TEXT,
+                retest_pic_id INTEGER,
+                retest_assist_id INTEGER,
+                project_method TEXT DEFAULT 'blackbox',
+                mandays_assessment INTEGER DEFAULT 0,
+                highlight_notes TEXT,
+                highlight_text TEXT,
+                board_status_id INTEGER,
+                team TEXT DEFAULT 'offensive',
+                service TEXT,
+                engineer_3_id INTEGER,
+                engineer_4_id INTEGER,
+                engineer_5_id INTEGER,
+                engineer_6_id INTEGER,
+                engineer_7_id INTEGER,
+                engineer_8_id INTEGER,
+                engineer_9_id INTEGER,
+                engineer_10_id INTEGER,
+                start_date TEXT,
+                mandays_initial_report INTEGER DEFAULT 1,
+                is_archived INTEGER DEFAULT 0,
+                archived_at TEXT,
+                schedule_policy_version TEXT,
+                UNIQUE(client_id, name),
+                FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
+              )`,
+              (createErr) => {
+                if (createErr) return rollback(createErr);
+
+                db.run(
+                  `INSERT OR IGNORE INTO projects_new (
+                    id, client_id, name, project_type, assigned_engineer_id, created_at,
+                    assist_engineer_id, kickoff_date, initial_report_date, final_report_date,
+                    link_report_en, link_report_id, initial_report_status, final_report_status,
+                    initial_completed_by, final_completed_by, initial_completed_at, final_completed_at,
+                    project_links, mandays_kickoff, mandays_infogath, retest_status,
+                    retest_start_date, retest_end_date, retest_pic_id, retest_assist_id,
+                    project_method, mandays_assessment, highlight_notes, highlight_text,
+                    board_status_id, team, service, engineer_3_id, engineer_4_id, engineer_5_id,
+                    engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+                    start_date, mandays_initial_report, is_archived, archived_at, schedule_policy_version
+                  )
+                  SELECT
+                    p.id, p.client_id, p.name, COALESCE(p.project_type, 'web'), p.assigned_engineer_id, p.created_at,
+                    p.assist_engineer_id, p.kickoff_date, p.initial_report_date, p.final_report_date,
+                    p.link_report_en, p.link_report_id, COALESCE(p.initial_report_status, 'pending'), COALESCE(p.final_report_status, 'pending'),
+                    p.initial_completed_by, p.final_completed_by, p.initial_completed_at, p.final_completed_at,
+                    p.project_links, COALESCE(p.mandays_kickoff, 1), COALESCE(p.mandays_infogath, 5), COALESCE(p.retest_status, 'none'),
+                    p.retest_start_date, p.retest_end_date, p.retest_pic_id, p.retest_assist_id,
+                    COALESCE(p.project_method, 'blackbox'), COALESCE(p.mandays_assessment, 0), p.highlight_notes, p.highlight_text,
+                    p.board_status_id, COALESCE(p.team, 'offensive'), p.service, p.engineer_3_id, p.engineer_4_id, p.engineer_5_id,
+                    p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
+                    p.start_date, COALESCE(p.mandays_initial_report, 1), COALESCE(p.is_archived, 0), p.archived_at, p.schedule_policy_version
+                  FROM projects p
+                  JOIN clients c ON c.id = p.client_id`,
+                  (insertErr) => {
+                    if (insertErr) return rollback(insertErr);
+
+                    db.run('DROP TABLE projects', (dropErr) => {
+                      if (dropErr) return rollback(dropErr);
+
+                      db.run('ALTER TABLE projects_new RENAME TO projects', (renameErr) => {
+                        if (renameErr) return rollback(renameErr);
+
+                        db.run('COMMIT', (commitErr) => {
+                          db.run('PRAGMA foreign_keys = ON');
+                          if (commitErr) {
+                            console.error('[Migration] Failed to commit projects rebuild:', commitErr.message);
+                            return;
+                          }
+                          console.log('[Migration] projects client foreign key enabled.');
+                        });
+                      });
+                    });
+                  }
+                );
+              }
+            );
+          });
+        });
+      });
+    }
+  );
+}
+
+function migrateNotificationsConstraints() {
+  db.get(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'notifications'`,
+    (err, row) => {
+      if (err) {
+        console.error('[Migration] Failed to inspect notifications:', err.message);
+        return;
+      }
+      if (!row?.sql || row.sql.includes('FOREIGN KEY (user_id)')) return;
+
+      console.log('[Migration] Rebuilding notifications with user foreign key...');
+
+      const rollback = (migrationErr) => {
+        db.run('ROLLBACK', () => {
+          db.run('PRAGMA foreign_keys = ON');
+          console.error('[Migration] Failed to rebuild notifications:', migrationErr.message);
+        });
+      };
+
+      db.run('PRAGMA foreign_keys = OFF', (pragmaErr) => {
+        if (pragmaErr) {
+          console.error('[Migration] Failed to disable foreign keys:', pragmaErr.message);
+          return;
+        }
+
+        db.run('BEGIN IMMEDIATE TRANSACTION', (beginErr) => {
+          if (beginErr) return rollback(beginErr);
+
+          db.run('DROP TABLE IF EXISTS notifications_new', (cleanupErr) => {
+            if (cleanupErr) return rollback(cleanupErr);
+
+            db.run(
+              `CREATE TABLE notifications_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT,
+                is_read INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+              )`,
+              (createErr) => {
+                if (createErr) return rollback(createErr);
+
+                db.run(
+                  `INSERT OR IGNORE INTO notifications_new (id, user_id, type, title, message, is_read, created_at)
+                   SELECT n.id, n.user_id, n.type, n.title, n.message, COALESCE(n.is_read, 0), n.created_at
+                   FROM notifications n
+                   JOIN users u ON u.id = n.user_id`,
+                  (insertErr) => {
+                    if (insertErr) return rollback(insertErr);
+
+                    db.run('DROP TABLE notifications', (dropErr) => {
+                      if (dropErr) return rollback(dropErr);
+
+                      db.run('ALTER TABLE notifications_new RENAME TO notifications', (renameErr) => {
+                        if (renameErr) return rollback(renameErr);
+
+                        db.run('COMMIT', (commitErr) => {
+                          db.run('PRAGMA foreign_keys = ON');
+                          if (commitErr) {
+                            console.error('[Migration] Failed to commit notifications rebuild:', commitErr.message);
+                            return;
+                          }
+                          console.log('[Migration] notifications user foreign key enabled.');
+                        });
+                      });
+                    });
+                  }
+                );
+              }
+            );
+          });
+        });
+      });
+    }
+  );
+}
+
+const PROJECT_ASSIGNMENT_SLOTS = [
+  'assigned_engineer_id',
+  'assist_engineer_id',
+  'engineer_3_id',
+  'engineer_4_id',
+  'engineer_5_id',
+  'engineer_6_id',
+  'engineer_7_id',
+  'engineer_8_id',
+  'engineer_9_id',
+  'engineer_10_id',
+];
+
+function normalizeNullableId(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : NaN;
+}
+
+function validateDeliveryAssignments(team, assignments, callback) {
+  const teamVal = team || 'offensive';
+  const entries = Object.entries(assignments || {})
+    .map(([slot, value]) => [slot, normalizeNullableId(value)])
+    .filter(([, id]) => id !== null);
+
+  const invalid = entries.find(([, id]) => Number.isNaN(id));
+  if (invalid) return callback(new Error(`Invalid assignment user id for ${invalid[0]}`));
+
+  const ids = entries.map(([, id]) => id);
+  const duplicate = ids.find((id, idx) => ids.indexOf(id) !== idx);
+  if (duplicate) return callback(new Error('Duplicate engineer assignment is not allowed'));
+  if (!ids.length) return callback(null);
+
+  const placeholders = ids.map(() => '?').join(',');
+  db.all(
+    `SELECT id, role, team, COALESCE(is_active, 1) AS is_active
+     FROM users
+     WHERE id IN (${placeholders})`,
+    ids,
+    (err, rows) => {
+      if (err) return callback(err);
+      const byId = new Map((rows || []).map(row => [Number(row.id), row]));
+      for (const [slot, id] of entries) {
+        const user = byId.get(Number(id));
+        if (!user || Number(user.is_active) !== 1) {
+          return callback(new Error(`Assigned user for ${slot} does not exist or is inactive`));
+        }
+        if (!['engineer', 'consultant'].includes(user.role)) {
+          return callback(new Error(`Assigned user for ${slot} must be an engineer or consultant`));
+        }
+        if ((user.team || 'offensive') !== teamVal) {
+          return callback(new Error(`Assigned user for ${slot} does not match project team`));
+        }
+      }
+      callback(null);
+    }
+  );
+}
+
+function runProjectDataMigrations() {
+  db.serialize(() => {
+    db.run(
+      `UPDATE projects
+       SET final_report_status = 'completed',
+           initial_report_status = 'completed',
+           final_completed_at = COALESCE(archived_at, datetime('now')),
+           initial_completed_at = COALESCE(archived_at, datetime('now')),
+           final_completed_by = 'System Migration',
+           initial_completed_by = 'System Migration'
+       WHERE is_archived = 1 AND final_report_status = 'pending'`,
+      function(err) {
+        if (err) {
+          console.error('[Migration] Failed to migrate archived projects:', err.message);
+        } else if (this.changes > 0) {
+          console.log(`[Migration] Successfully migrated ${this.changes} archived projects to completed.`);
+        }
+      }
+    );
+
+    db.run(
+      `UPDATE projects
+       SET initial_report_status = 'completed',
+           initial_completed_at = COALESCE(initial_completed_at, final_completed_at, archived_at, datetime('now')),
+           initial_completed_by = COALESCE(initial_completed_by, final_completed_by, 'System Migration')
+       WHERE is_archived = 1
+         AND final_report_status = 'completed'
+         AND initial_report_status != 'completed'`,
+      function(err) {
+        if (err) {
+          console.error('[Migration] Failed to migrate archived initial statuses:', err.message);
+        } else if (this.changes > 0) {
+          console.log(`[Migration] Successfully migrated ${this.changes} archived projects to initial completed.`);
+        }
+      }
+    );
+
+    db.run(
+      `UPDATE projects
+       SET board_status_id = (
+         SELECT bs.id
+         FROM board_statuses bs
+         WHERE bs.team = COALESCE(projects.team, 'offensive')
+         ORDER BY bs.sort_order ASC, bs.id ASC
+         LIMIT 1
+       )
+       WHERE is_archived = 0
+         AND board_status_id IS NULL
+         AND EXISTS (
+           SELECT 1
+           FROM board_statuses bs
+           WHERE bs.team = COALESCE(projects.team, 'offensive')
+         )`,
+      function(err) {
+        if (err) {
+          console.error('[Migration] Failed to assign default board status:', err.message);
+        } else if (this.changes > 0) {
+          console.log(`[Migration] Assigned default board status to ${this.changes} active projects.`);
+        }
+      }
+    );
+  });
 }
 
 function initializeDb() {
@@ -71,57 +495,61 @@ function initializeDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL,
       name TEXT NOT NULL,
-      scope_target TEXT,
       project_type TEXT DEFAULT 'web',
       assigned_engineer_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(client_id, name)
+      UNIQUE(client_id, name),
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE
     )
   `, () => {
-    db.run(`ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'web'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN scope_target TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN assigned_engineer_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN assist_engineer_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN kickoff_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN initial_report_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN final_report_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN link_report_en TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN link_report_id TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN initial_report_status TEXT DEFAULT 'pending'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN final_report_status TEXT DEFAULT 'pending'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN initial_completed_by TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN final_completed_by TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN initial_completed_at TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN final_completed_at TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN project_links TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN mandays_kickoff INTEGER DEFAULT 1`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN mandays_infogath INTEGER DEFAULT 5`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN retest_status TEXT DEFAULT 'none'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN retest_start_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN retest_end_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN retest_pic_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN retest_assist_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN project_method TEXT DEFAULT 'blackbox'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN mandays_assessment INTEGER DEFAULT 0`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN highlight_notes TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN highlight_text TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN board_status_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN service TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_3_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_4_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_5_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_6_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_7_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_8_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_9_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN engineer_10_id INTEGER`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN start_date TEXT`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN mandays_initial_report INTEGER DEFAULT 1`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN is_archived INTEGER DEFAULT 0`, () => {});
-    db.run(`ALTER TABLE projects ADD COLUMN archived_at TEXT`, () => {});
-    db.run(`ALTER TABLE clients ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
-    db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    db.serialize(() => {
+      db.run(`ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'web'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN assigned_engineer_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN assist_engineer_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN kickoff_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN initial_report_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN final_report_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN link_report_en TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN link_report_id TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN initial_report_status TEXT DEFAULT 'pending'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN final_report_status TEXT DEFAULT 'pending'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN initial_completed_by TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN final_completed_by TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN initial_completed_at TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN final_completed_at TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN project_links TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN mandays_kickoff INTEGER DEFAULT 1`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN mandays_infogath INTEGER DEFAULT 5`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN retest_status TEXT DEFAULT 'none'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN retest_start_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN retest_end_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN retest_pic_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN retest_assist_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN project_method TEXT DEFAULT 'blackbox'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN mandays_assessment INTEGER DEFAULT 0`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN highlight_notes TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN highlight_text TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN board_status_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN service TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_3_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_4_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_5_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_6_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_7_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_8_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_9_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN engineer_10_id INTEGER`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN start_date TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN mandays_initial_report INTEGER DEFAULT 1`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN is_archived INTEGER DEFAULT 0`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN archived_at TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN schedule_policy_version TEXT`, () => {});
+      db.run(`ALTER TABLE clients ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+      db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+      migrateProjectsConstraints();
+      runProjectDataMigrations();
+    });
   });
 
   db.run(`
@@ -141,18 +569,29 @@ function initializeDb() {
       name TEXT NOT NULL,
       color TEXT DEFAULT '#6366f1',
       sort_order INTEGER NOT NULL DEFAULT 0,
+      team TEXT DEFAULT 'offensive',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
-  `);
+  `, () => {
+    db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+  });
 
   db.run(`
     CREATE TABLE IF NOT EXISTS project_vulnerabilities (
       project_id INTEGER NOT NULL,
       vulnerability_id INTEGER NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY(project_id, vulnerability_id)
+      PRIMARY KEY(project_id, vulnerability_id),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (vulnerability_id) REFERENCES vulnerabilities(id) ON DELETE CASCADE
     )
-  `);
+  `, (err) => {
+    if (err) {
+      console.error('Error creating project_vulnerabilities table:', err.message);
+      return;
+    }
+    migrateProjectVulnerabilitiesConstraints();
+  });
 
   // Initialize project access requests table
   setTimeout(initProjectAccessRequests, 200);
@@ -170,11 +609,14 @@ function initializeDb() {
       role TEXT NOT NULL CHECK(role IN ('admin','manager','pm','engineer','consultant')),
       password_hash TEXT NOT NULL,
       team TEXT DEFAULT 'offensive',
+      is_active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `, (err) => {
     if (!err) seedDefaultUsers();
     db.run(`ALTER TABLE users ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    db.run(`ALTER TABLE users ADD COLUMN is_active INTEGER DEFAULT 1`, () => {});
+    db.run(`UPDATE users SET is_active = 1 WHERE is_active IS NULL`, () => {});
     // Migration: recreate users table to update CHECK constraint for 'consultant' role
     db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'", (err, row) => {
       if (err || !row) return;
@@ -188,15 +630,31 @@ function initializeDb() {
             role TEXT NOT NULL CHECK(role IN ('admin','manager','pm','engineer','consultant')),
             password_hash TEXT NOT NULL,
             team TEXT DEFAULT 'offensive',
+            is_active INTEGER DEFAULT 1,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           )`);
-          db.run(`INSERT INTO users_new SELECT id, username, display_name, role, password_hash, COALESCE(team,'offensive'), created_at FROM users`);
+          db.run(`INSERT INTO users_new SELECT id, username, display_name, role, password_hash, COALESCE(team,'offensive'), COALESCE(is_active,1), created_at FROM users`);
           db.run(`DROP TABLE users`);
           db.run(`ALTER TABLE users_new RENAME TO users`, () => {
             console.log('[DB] Users table migration complete.');
           });
         });
       }
+    });
+    db.serialize(() => {
+      [...PROJECT_ASSIGNMENT_SLOTS, 'retest_pic_id', 'retest_assist_id'].forEach(slot => {
+        db.run(
+          `UPDATE projects
+           SET ${slot} = NULL
+           WHERE ${slot} IS NOT NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM users u
+               WHERE u.id = projects.${slot}
+                 AND COALESCE(u.is_active, 1) = 1
+             )`,
+          () => {}
+        );
+      });
     });
   });
 
@@ -238,12 +696,12 @@ async function seedDefaultUsers() {
 
 // ─── User management ──────────────────────────────────────────────────────────
 function getUserByUsername(username, callback) {
-  getDb().get('SELECT * FROM users WHERE username = ?', [username], callback);
+  getDb().get('SELECT * FROM users WHERE username = ? AND COALESCE(is_active, 1) = 1', [username], callback);
 }
 
 function getAllUsers(callback) {
   getDb().all(
-    'SELECT id, username, display_name, role, team, created_at FROM users ORDER BY role, username',
+    'SELECT id, username, display_name, role, team, is_active, created_at FROM users WHERE COALESCE(is_active, 1) = 1 ORDER BY role, username',
     callback
   );
 }
@@ -252,7 +710,7 @@ function createUser({ username, display_name, role, password, team }, callback) 
   bcrypt.hash(password, SALT_ROUNDS, (err, hash) => {
     if (err) return callback(err);
     getDb().run(
-      'INSERT INTO users (username, display_name, role, password_hash, team) VALUES (?,?,?,?,?)',
+      'INSERT INTO users (username, display_name, role, password_hash, team, is_active) VALUES (?,?,?,?,?,1)',
       [username, display_name, role, hash, team || 'offensive'],
       function(e) { callback(e, this?.lastID); }
     );
@@ -262,19 +720,35 @@ function createUser({ username, display_name, role, password, team }, callback) 
 function deleteUser(id, callback) {
   const db = getDb();
   db.serialize(() => {
-    // Unassign from projects where they are PIC or Assist
-    db.run('UPDATE projects SET assigned_engineer_id = NULL WHERE assigned_engineer_id = ?', [id]);
-    db.run('UPDATE projects SET assist_engineer_id = NULL WHERE assist_engineer_id = ?', [id]);
+    // Unassign from every delivery/retest slot before deleting the user.
+    const assignmentSlots = [
+      'assigned_engineer_id',
+      'assist_engineer_id',
+      'engineer_3_id',
+      'engineer_4_id',
+      'engineer_5_id',
+      'engineer_6_id',
+      'engineer_7_id',
+      'engineer_8_id',
+      'engineer_9_id',
+      'engineer_10_id',
+      'retest_pic_id',
+      'retest_assist_id',
+    ];
+    assignmentSlots.forEach(slot => {
+      db.run(`UPDATE projects SET ${slot} = NULL WHERE ${slot} = ?`, [id]);
+    });
     // Clean up access requests
     db.run('DELETE FROM access_requests WHERE requester_id = ? OR target_engineer_id = ?', [id, id]);
     db.run('DELETE FROM project_access_requests WHERE engineer_id = ?', [id]);
-    // Finally delete the user
-    db.run('DELETE FROM users WHERE id = ?', [id], callback);
+    db.run('DELETE FROM notifications WHERE user_id = ?', [id]);
+    // Preserve the user row for audit-log joins; only deactivate the account.
+    db.run('UPDATE users SET is_active = 0 WHERE id = ?', [id], callback);
   });
 }
 
 function getUserById(id, callback) {
-  getDb().get('SELECT id, username, display_name, role, password_hash FROM users WHERE id = ?', [id], callback);
+  getDb().get('SELECT id, username, display_name, role, team, password_hash, COALESCE(is_active, 1) AS is_active FROM users WHERE id = ?', [id], callback);
 }
 
 function changePassword(id, newPasswordHash, callback) {
@@ -285,7 +759,7 @@ function changePassword(id, newPasswordHash, callback) {
 
 function getAllEngineers(callback) {
   getDb().all(
-    'SELECT id, username, display_name, team, role FROM users WHERE role IN ("engineer","consultant") ORDER BY display_name',
+    'SELECT id, username, display_name, team, role FROM users WHERE role IN ("engineer","consultant") AND COALESCE(is_active, 1) = 1 ORDER BY display_name',
     callback
   );
 }
@@ -332,7 +806,7 @@ function updateAccessRequest({ id, status, reviewedBy }, callback) {
 function getDashboardSummary(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name,
-           p.id AS project_id, p.name AS project_name, p.scope_target, p.board_status_id,
+           p.id AS project_id, p.name AS project_name, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
@@ -397,12 +871,35 @@ function getClientsByEngineer(engineerId, callback) {
   `, [engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId, engineerId], callback);
 }
 
+// Consultants see clients that belong to the 'itaudit' team OR where they have an assigned project
+function getClientsByConsultant(consultantId, callback) {
+  getDb().all(`
+    SELECT DISTINCT c.id, c.name, c.engagement_reference, c.engagement_info, c.team, c.created_at
+    FROM clients c
+    LEFT JOIN projects p ON p.client_id = c.id
+    WHERE c.team = 'itaudit'
+       OR p.assigned_engineer_id = ?
+       OR p.assist_engineer_id = ?
+       OR p.engineer_3_id = ?
+       OR p.engineer_4_id = ?
+       OR p.engineer_5_id = ?
+       OR p.engineer_6_id = ?
+       OR p.engineer_7_id = ?
+       OR p.engineer_8_id = ?
+       OR p.engineer_9_id = ?
+       OR p.engineer_10_id = ?
+       OR p.retest_pic_id = ?
+       OR p.retest_assist_id = ?
+    ORDER BY c.name
+  `, [consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId, consultantId], callback);
+}
+
 // All clients with their projects (LEFT JOIN so empty clients appear too)
 function getClientsWithProjects(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name, c.team AS client_team,
            c.engagement_reference, c.engagement_info,
-           p.id AS project_id, p.name AS project_name, p.scope_target, p.project_type,
+           p.id AS project_id, p.name AS project_name, p.project_type,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
@@ -514,7 +1011,9 @@ function initProjectAccessRequests() {
 
 function getAllProjects(callback) {
   getDb().all(`
-    SELECT p.id, p.name, p.scope_target, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
+    SELECT p.id, p.name, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
+           p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id,
+           p.engineer_8_id, p.engineer_9_id, p.engineer_10_id, p.team,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.link_report_en, p.link_report_id,
            c.name AS client_name
@@ -550,39 +1049,140 @@ function getProjectAccessRequests(filter, callback) {
 }
 
 function createProjectAccessRequest({ engineerId, projectId, message }, callback) {
-  // Upsert: if request already exists and was rejected/approved, reset to pending
-  getDb().run(
-    `INSERT INTO project_access_requests (engineer_id, project_id, message, status)
-     VALUES (?,?,?,'pending')
-     ON CONFLICT(engineer_id, project_id) DO UPDATE SET
-       status='pending', message=excluded.message, created_at=CURRENT_TIMESTAMP, reviewed_at=NULL, reviewed_by=NULL
-     WHERE status != 'pending'`,
-    [engineerId, projectId, message || null],
-    function(e) { callback(e, this?.lastID); }
+  const db = getDb();
+  db.get(
+    `SELECT p.*, u.team AS engineer_team, u.role AS engineer_role, COALESCE(u.is_active, 1) AS engineer_is_active
+     FROM projects p
+     JOIN users u ON u.id = ?
+     WHERE p.id = ?`,
+    [engineerId, projectId],
+    (lookupErr, row) => {
+      if (lookupErr) return callback(lookupErr);
+      if (!row) return callback(new Error('Project or engineer not found'));
+      if (row.is_archived === 1) return callback(new Error('Cannot request access to an archived project'));
+      if (Number(row.engineer_is_active) !== 1) return callback(new Error('Engineer is inactive'));
+      if (!['engineer', 'consultant'].includes(row.engineer_role)) return callback(new Error('Only delivery users can request project access'));
+      if ((row.engineer_team || 'offensive') !== (row.team || 'offensive')) {
+        return callback(new Error('Team mismatch: engineer and project teams do not match'));
+      }
+
+      const alreadyAssigned = PROJECT_ASSIGNMENT_SLOTS.some(slot => Number(row[slot]) === Number(engineerId));
+      if (alreadyAssigned) return callback(new Error('Engineer is already assigned to this project'));
+
+      const hasOpenSlot = PROJECT_ASSIGNMENT_SLOTS.some(slot => row[slot] === null || row[slot] === undefined || row[slot] === '');
+      if (!hasOpenSlot) return callback(new Error('Project resource slots are full'));
+
+      // Upsert: if request already exists and was rejected/approved, reset to pending.
+      db.run(
+        `INSERT INTO project_access_requests (engineer_id, project_id, message, status)
+         VALUES (?,?,?,'pending')
+         ON CONFLICT(engineer_id, project_id) DO UPDATE SET
+           status='pending', message=excluded.message, created_at=CURRENT_TIMESTAMP, reviewed_at=NULL, reviewed_by=NULL
+         WHERE status != 'pending'`,
+        [engineerId, projectId, message || null],
+        function(e) {
+          if (e) return callback(e);
+          db.get('SELECT id FROM project_access_requests WHERE engineer_id=? AND project_id=?', [engineerId, projectId], (errQuery, requestRow) => {
+            if (errQuery) return callback(errQuery);
+            callback(null, requestRow ? requestRow.id : this.lastID);
+          });
+        }
+      );
+    }
   );
 }
 
 function updateProjectAccessRequest({ id, status, reviewedBy }, callback) {
   const db = getDb();
-  db.run(
-    `UPDATE project_access_requests SET status=?, reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP WHERE id=?`,
-    [status, reviewedBy, id],
-    (err) => {
-      if (err || status !== 'approved') return callback(err);
-      // On approval, assign engineer to the project
-      db.get('SELECT project_id, engineer_id FROM project_access_requests WHERE id=?', [id], (e, row) => {
-        if (e || !row) return callback(e);
-        db.get('SELECT assigned_engineer_id, assist_engineer_id FROM projects WHERE id=?', [row.project_id], (err2, proj) => {
-          if (err2 || !proj) return callback(err2);
-          if (!proj.assigned_engineer_id) {
-            db.run('UPDATE projects SET assigned_engineer_id=? WHERE id=?', [row.engineer_id, row.project_id], callback);
-          } else {
-            db.run('UPDATE projects SET assist_engineer_id=? WHERE id=?', [row.engineer_id, row.project_id], callback);
+
+  if (status !== 'approved') {
+    db.run(
+      `UPDATE project_access_requests
+       SET status=?, reviewed_by=?, reviewed_at=CURRENT_TIMESTAMP
+       WHERE id=? AND status='pending'`,
+      [status, reviewedBy, id],
+      function(err) {
+        if (err) return callback(err);
+        if (!this.changes) return callback(new Error('Access request is not pending'));
+        callback(null);
+      }
+    );
+    return;
+  }
+
+  const SLOTS = [
+    'assigned_engineer_id',
+    'assist_engineer_id',
+    'engineer_3_id',
+    'engineer_4_id',
+    'engineer_5_id',
+    'engineer_6_id',
+    'engineer_7_id',
+    'engineer_8_id',
+    'engineer_9_id',
+    'engineer_10_id'
+  ];
+
+  const rollback = (err) => {
+    db.run('ROLLBACK', () => callback(err));
+  };
+
+  db.serialize(() => {
+    db.run('BEGIN IMMEDIATE TRANSACTION', (beginErr) => {
+      if (beginErr) return callback(beginErr);
+
+      db.get(
+        `SELECT par.project_id, par.engineer_id, par.status AS request_status,
+                p.*, u.team AS engineer_team, COALESCE(u.is_active, 1) AS engineer_is_active
+         FROM project_access_requests par
+         JOIN projects p ON p.id = par.project_id
+         JOIN users u ON u.id = par.engineer_id
+         WHERE par.id = ?`,
+        [id],
+        (err, row) => {
+          if (err) return rollback(err);
+          if (!row) return rollback(new Error('Access request not found'));
+          if (row.request_status !== 'pending') return rollback(new Error('Access request is not pending'));
+          if (row.is_archived === 1) return rollback(new Error('Cannot approve access request for an archived project'));
+          if (Number(row.engineer_is_active) !== 1) return rollback(new Error('Engineer is inactive'));
+          if ((row.engineer_team || 'offensive') !== (row.team || 'offensive')) {
+            return rollback(new Error('Team mismatch: engineer and project teams do not match'));
           }
-        });
-      });
-    }
-  );
+
+          const engineerId = row.engineer_id;
+          const alreadyAssigned = SLOTS.some(slot => Number(row[slot]) === Number(engineerId));
+          if (alreadyAssigned) return rollback(new Error('Engineer is already assigned to this project'));
+
+          const emptySlot = SLOTS.find(slot => row[slot] === null || row[slot] === undefined || row[slot] === '');
+          if (!emptySlot) return rollback(new Error('Project resource slots are full'));
+
+          db.run(
+            `UPDATE projects SET ${emptySlot} = ? WHERE id = ?`,
+            [engineerId, row.project_id],
+            (projectErr) => {
+              if (projectErr) return rollback(projectErr);
+
+              db.run(
+                `UPDATE project_access_requests
+                 SET status = 'approved', reviewed_by = ?, reviewed_at = CURRENT_TIMESTAMP
+                 WHERE id = ? AND status = 'pending'`,
+                [reviewedBy, id],
+                function(requestErr) {
+                  if (requestErr) return rollback(requestErr);
+                  if (!this.changes) return rollback(new Error('Access request is not pending'));
+
+                  db.run('COMMIT', (commitErr) => {
+                    if (commitErr) return rollback(commitErr);
+                    callback(null);
+                  });
+                }
+              );
+            }
+          );
+        }
+      );
+    });
+  });
 }
 
 function listVulnerabilities(options, callback) {
@@ -635,6 +1235,7 @@ function listVulnerabilities(options, callback) {
   );
 }
 
+// Engineers/users can retrieve all findings
 function getAllVulnerabilities(callback) {
   listVulnerabilities({}, callback);
 }
@@ -671,10 +1272,42 @@ function saveVulnerability(data, callback) {
 
 function updateVulnerability(id, data, callback) {
   const db = getDb();
-  const { name, description, affected_items, impact, recommendation, poc, screenshot_path, severity, cvss_score, cvss_vector } = data;
+  const { name, description, affected_items, impact, recommendation, poc, screenshot_path, severity, bilingual_payload, cvss_score, cvss_vector } = data;
+  const updates = [
+    'name=?',
+    'description=?',
+    'affected_items=?',
+    'impact=?',
+    'recommendation=?',
+    'poc=?',
+    'screenshot_path=?',
+    'severity=?',
+    'cvss_score=?',
+    'cvss_vector=?',
+  ];
+  const params = [
+    name,
+    description || null,
+    affected_items || null,
+    impact || null,
+    recommendation || null,
+    poc || null,
+    screenshot_path || null,
+    severity || 'Medium',
+    cvss_score || null,
+    cvss_vector || null,
+  ];
+
+  // Undefined means "preserve existing"; null/empty string means "clear".
+  if (bilingual_payload !== undefined) {
+    updates.push('bilingual_payload=?');
+    params.push(bilingual_payload || null);
+  }
+  params.push(id);
+
   db.run(
-    `UPDATE vulnerabilities SET name=?, description=?, affected_items=?, impact=?, recommendation=?, poc=?, screenshot_path=?, severity=?, cvss_score=?, cvss_vector=? WHERE id=?`,
-    [name, description || null, affected_items || null, impact || null, recommendation || null, poc || null, screenshot_path || null, severity || 'Medium', cvss_score || null, cvss_vector || null, id],
+    `UPDATE vulnerabilities SET ${updates.join(', ')} WHERE id=?`,
+    params,
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -734,7 +1367,7 @@ function deleteClient(clientId, callback) {
 function getProjectsByClient(clientId, callback) {
   const db = getDb();
   db.all(
-    `SELECT p.id, p.client_id, p.name, p.scope_target, p.project_type, p.project_method,
+    `SELECT p.id, p.client_id, p.name, p.project_type, p.project_method,
             p.assigned_engineer_id, p.assist_engineer_id,
             p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
             p.kickoff_date,
@@ -775,20 +1408,75 @@ function getProjectsByClient(clientId, callback) {
   );
 }
 
+// Returns the first board status ID for a given team, or null if none exist
+function getDefaultBoardStatus(team, callback) {
+  getDb().get(
+    'SELECT id FROM board_statuses WHERE team = ? ORDER BY sort_order ASC LIMIT 1',
+    [team || 'offensive'],
+    (err, row) => callback(err, row ? row.id : null)
+  );
+}
+
 function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, scope_target, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at } = opts || {};
-  db.run(
-    `INSERT INTO projects (client_id, name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at, board_status_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [clientId, name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, archived_at || null],
-    function (err) {
-      if (err) return callback(err);
-      callback(null, { id: this.lastID });
+  const {
+    project_type, project_method, assigned_engineer_id, assist_engineer_id,
+    engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+    kickoff_date, initial_report_date, final_report_date, project_links, start_date,
+    mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at,
+    initial_report_status, final_report_status, initial_completed_at, final_completed_at,
+    initial_completed_by, final_completed_by, board_status_id, schedule_policy_version
+  } = opts || {};
+
+  const teamVal = team || 'offensive';
+  const isArchivedVal = is_archived || 0;
+
+  const runInsert = (statusId) => {
+    db.run(
+      `INSERT INTO projects (
+        client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id,
+        engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+        kickoff_date, initial_report_date, final_report_date, project_links, start_date,
+        mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at,
+        initial_report_status, final_report_status, initial_completed_at, final_completed_at,
+        initial_completed_by, final_completed_by, board_status_id, schedule_policy_version
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null,
+        engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null,
+        kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null,
+        mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, isArchivedVal, archived_at || null,
+        initial_report_status || 'pending', final_report_status || 'pending',
+        initial_completed_at || null, final_completed_at || null,
+        initial_completed_by || null, final_completed_by || null,
+        statusId, schedule_policy_version || null
+      ],
+      function (err) {
+        if (err) return callback(err);
+        callback(null, { id: this.lastID });
+      }
+    );
+  };
+
+  validateDeliveryAssignments(teamVal, {
+    assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id,
+    engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+  }, (validationErr) => {
+    if (validationErr) return callback(validationErr);
+
+    if (board_status_id !== undefined) {
+      runInsert(board_status_id);
+    } else if (isArchivedVal === 1) {
+      runInsert(null);
+    } else {
+      getDefaultBoardStatus(teamVal, (err, statusId) => {
+        if (err) return callback(err);
+        runInsert(statusId);
+      });
     }
-  );
+  });
 }
 
 function deleteProject(projectId, callback) {
@@ -840,7 +1528,6 @@ function getProjectExportData(projectId, callback) {
       c.name as client_name,
       p.id as project_id,
       p.name as project_name,
-      p.scope_target,
       p.project_type,
       p.project_method,
       p.kickoff_date,
@@ -891,41 +1578,49 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived }, callback) {
+function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, schedule_policy_version }, callback) {
   const db = getDb();
-  db.run(
-    `UPDATE projects SET
-       name = ?,
-       scope_target = ?,
-       project_type = ?,
-       project_method = ?,
-       assigned_engineer_id = ?,
-       assist_engineer_id = ?,
-       engineer_3_id = ?,
-       engineer_4_id = ?,
-       engineer_5_id = ?,
-       engineer_6_id = ?,
-       engineer_7_id = ?,
-       engineer_8_id = ?,
-       engineer_9_id = ?,
-       engineer_10_id = ?,
-       kickoff_date = ?,
-       initial_report_date = ?,
-       final_report_date = ?,
-       project_links = ?,
-       start_date = ?,
-       mandays_initial_report = ?,
-       mandays_assessment = ?,
-       team = ?,
-       service = ?,
-       is_archived = ?
-     WHERE id = ?`,
-    [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, id],
-    function(err) {
-      if (err) return callback(err);
-      callback(null, { changes: this.changes });
-    }
-  );
+  const teamVal = team || 'offensive';
+  validateDeliveryAssignments(teamVal, {
+    assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id,
+    engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+  }, (validationErr) => {
+    if (validationErr) return callback(validationErr);
+
+    db.run(
+      `UPDATE projects SET
+         name = ?,
+         project_type = ?,
+         project_method = ?,
+         assigned_engineer_id = ?,
+         assist_engineer_id = ?,
+         engineer_3_id = ?,
+         engineer_4_id = ?,
+         engineer_5_id = ?,
+         engineer_6_id = ?,
+         engineer_7_id = ?,
+         engineer_8_id = ?,
+         engineer_9_id = ?,
+         engineer_10_id = ?,
+         kickoff_date = ?,
+         initial_report_date = ?,
+         final_report_date = ?,
+         project_links = ?,
+         start_date = ?,
+         mandays_initial_report = ?,
+         mandays_assessment = ?,
+         team = ?,
+         service = ?,
+         is_archived = ?,
+         schedule_policy_version = ?
+       WHERE id = ?`,
+      [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, is_archived || 0, schedule_policy_version || null, id],
+      function(err) {
+        if (err) return callback(err);
+        callback(null, { changes: this.changes });
+      }
+    );
+  });
 }
 
 function updateProjectReports(id, { link_report_en, link_report_id }, callback) {
@@ -988,18 +1683,28 @@ function updateProjectHighlight(projectId, { highlight_notes, highlight_text }, 
 }
 
 function startRetest(id, { retest_pic_id, retest_assist_id, retest_start_date, retest_end_date }, callback) {
-  getDb().run(
-    `UPDATE projects SET
-       retest_status = 'started',
-       retest_pic_id = ?,
-       retest_assist_id = ?,
-       retest_start_date = ?,
-       retest_end_date = ?,
-       final_report_date = ?
-     WHERE id = ?`,
-    [retest_pic_id || null, retest_assist_id || null, retest_start_date || null, retest_end_date || null, retest_end_date || null, id],
-    function (err) { callback(err, { changes: this?.changes }); }
-  );
+  const db = getDb();
+  db.get('SELECT team FROM projects WHERE id = ?', [id], (err, project) => {
+    if (err) return callback(err);
+    if (!project) return callback(null, { changes: 0 });
+
+    validateDeliveryAssignments(project.team || 'offensive', { retest_pic_id, retest_assist_id }, (validationErr) => {
+      if (validationErr) return callback(validationErr);
+
+      db.run(
+        `UPDATE projects SET
+           retest_status = 'started',
+           retest_pic_id = ?,
+           retest_assist_id = ?,
+           retest_start_date = ?,
+           retest_end_date = ?,
+           final_report_date = ?
+         WHERE id = ?`,
+        [retest_pic_id || null, retest_assist_id || null, retest_start_date || null, retest_end_date || null, retest_end_date || null, id],
+        function (updateErr) { callback(updateErr, { changes: this?.changes }); }
+      );
+    });
+  });
 }
 
 function addVulnerabilityToProject(projectId, vulnId, callback) {
@@ -1030,7 +1735,7 @@ function getProjectFullVulnerabilities(projectId, callback) {
   const db = getDb();
   db.all(
     `SELECT v.id, v.name, v.description, v.affected_items, v.impact, v.recommendation, v.poc,
-            v.vuln_references as "references", v.screenshot_path, v.severity, v.created_at, v.updated_at
+            v.vuln_references as "references", v.screenshot_path, v.severity, v.bilingual_payload, v.created_at, v.updated_at
      FROM project_vulnerabilities pv
      JOIN vulnerabilities v ON v.id = pv.vulnerability_id
      WHERE pv.project_id = ?
@@ -1054,9 +1759,16 @@ function initNotifications() {
       title TEXT NOT NULL,
       message TEXT,
       is_read INTEGER DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
-  `);
+  `, (err) => {
+    if (err) {
+      console.error('Error creating notifications table:', err.message);
+      return;
+    }
+    migrateNotificationsConstraints();
+  });
 }
 
 function createNotification({ userId, type, title, message }, callback) {
@@ -1070,7 +1782,7 @@ function createNotification({ userId, type, title, message }, callback) {
 /** Notify all management users (admin, manager, pm) */
 function notifyManagement({ type, title, message }, callback) {
   const db = getDb();
-  db.all("SELECT id FROM users WHERE role IN ('admin','manager','pm')", [], (err, rows) => {
+  db.all("SELECT id FROM users WHERE role IN ('admin','manager','pm') AND COALESCE(is_active, 1) = 1", [], (err, rows) => {
     if (err || !rows?.length) return (callback || (() => {}))();
     const stmt = db.prepare('INSERT INTO notifications (user_id, type, title, message) VALUES (?,?,?,?)');
     for (const r of rows) stmt.run([r.id, type, title, message || null]);
@@ -1144,11 +1856,22 @@ function reorderBoardStatuses(orderedIds, team, callback) {
 }
 
 function restoreProject(id, callback) {
-  getDb().run(
-    'UPDATE projects SET is_archived = 0, archived_at = NULL WHERE id = ?',
-    [id],
-    function(err) { callback(err, { changes: this?.changes }); }
-  );
+  const db = getDb();
+  db.get('SELECT team FROM projects WHERE id = ?', [id], (err, proj) => {
+    if (err) return callback(err);
+    if (!proj) return callback(new Error('Project not found'));
+    getDefaultBoardStatus(proj.team, (err2, statusId) => {
+      if (err2) return callback(err2);
+      db.run(
+        'UPDATE projects SET is_archived = 0, archived_at = NULL, board_status_id = ? WHERE id = ?',
+        [statusId, id],
+        function(err3) {
+          if (err3) return callback(err3);
+          callback(null, { changes: this.changes });
+        }
+      );
+    });
+  });
 }
 
 function updateProjectBoardStatus(projectId, statusId, callback) {
@@ -1188,7 +1911,7 @@ function archiveProject(id, callback) {
 
 function getProjectsForBoard(callback) {
   getDb().all(`
-    SELECT p.id, p.name, p.scope_target, p.project_type, p.project_method, p.board_status_id,
+    SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
@@ -1255,6 +1978,37 @@ function createEngagement(clientId, { engagement_reference, engagement_info }, c
   );
 }
 
+// Checks if a user is explicitly assigned to a project in any of the engineer/retest roles
+function isUserAssignedToProject(userId, projectId, callback) {
+  getDb().get(
+    `SELECT 1 FROM projects
+     WHERE id = ? AND (
+       assigned_engineer_id = ? OR
+       assist_engineer_id = ? OR
+       engineer_3_id = ? OR
+       engineer_4_id = ? OR
+       engineer_5_id = ? OR
+       engineer_6_id = ? OR
+       engineer_7_id = ? OR
+       engineer_8_id = ? OR
+       engineer_9_id = ? OR
+       engineer_10_id = ? OR
+       retest_pic_id = ? OR
+       retest_assist_id = ?
+     )`,
+    [projectId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId, userId],
+    (err, row) => {
+      if (err) return callback(err);
+      callback(null, !!row);
+    }
+  );
+}
+
+// Delivery users can access a project only when explicitly assigned to it.
+function checkProjectAccess(userId, role, projectId, callback) {
+  isUserAssignedToProject(userId, projectId, callback);
+}
+
 module.exports = {
   getDb,
   // Vulnerabilities
@@ -1292,6 +2046,9 @@ module.exports = {
   getArchivedProjects,
   archiveProject,
   restoreProject,
+  getDefaultBoardStatus,
+  isUserAssignedToProject,
+  checkProjectAccess,
   // Users (multi-role auth)
   getUserByUsername,
   getAllUsers,
@@ -1305,6 +2062,7 @@ module.exports = {
   // Dashboard
   getDashboardSummary,
   getClientsByEngineer,
+  getClientsByConsultant,
   getAllProjects,
   getProjectAccessRequests,
   createProjectAccessRequest,

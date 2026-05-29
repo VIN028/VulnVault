@@ -6,7 +6,7 @@ const COOKIE_NAME = 'vv_session';
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 const MANAGEMENT_ROLES = ['admin', 'manager', 'pm'];
-const ENGINEER_ROLES   = ['engineer'];
+const DELIVERY_ROLES   = ['engineer', 'consultant'];
 
 function getSecret() {
   const s = process.env.SESSION_SECRET;
@@ -77,8 +77,13 @@ function requireApiAuth(req, res, next) {
   if (PUBLIC_API_ROUTES.has(req.path)) return next();
   const session = getSessionFromReq(req);
   if (!session) return res.status(401).json({ error: 'Unauthorized', authenticated: false });
-  req.session = session; // attach session to request
-  next();
+  db.getUserById(session.userId, (err, user) => {
+    if (err || !user || Number(user.is_active) !== 1) {
+      return res.status(401).json({ error: 'Unauthorized', authenticated: false });
+    }
+    req.session = session; // attach session to request
+    next();
+  });
 }
 
 /** Role-based middleware factory. requireRole('admin') or requireRole('pm','manager') */
@@ -88,6 +93,40 @@ function requireRole(...roles) {
     if (!session) return res.status(401).json({ error: 'Unauthorized' });
     if (!roles.includes(session.role)) return res.status(403).json({ error: 'Forbidden' });
     next();
+  };
+}
+
+/** Project-level authorization middleware */
+function requireProjectAccess(paramName = 'projectId') {
+  return (req, res, next) => {
+    const session = req.session || getSessionFromReq(req);
+    if (!session) return res.status(401).json({ error: 'Unauthorized' });
+
+    const role = session.role;
+    const userId = session.userId;
+    const projectId = Number(req.params[paramName]);
+
+    if (!Number.isInteger(projectId) || projectId < 1) {
+      return res.status(400).json({ error: 'Invalid project ID' });
+    }
+
+    // Management roles are allowed access to all projects
+    if (MANAGEMENT_ROLES.includes(role)) {
+      return next();
+    }
+
+    // Delivery roles (engineers, consultants) are checked against direct assignment or team policy
+    if (DELIVERY_ROLES.includes(role)) {
+      db.checkProjectAccess(userId, role, projectId, (err, hasAccess) => {
+        if (err) return res.status(500).json({ error: 'Database error' });
+        if (!hasAccess) {
+          return res.status(403).json({ error: 'Forbidden: You do not have access to this project.' });
+        }
+        return next();
+      });
+    } else {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
   };
 }
 
@@ -108,12 +147,12 @@ function requirePageAuth(req, res, next) {
     return res.redirect(302, '/login.html');
   }
 
-  const isEngineer = session.role === 'engineer';
+  const isDelivery = DELIVERY_ROLES.includes(session.role);
 
-  // Engineers landing on portal → main app
-  if (!isEngineer && p === '/') return res.redirect(302, '/portal.html');
-  // Management roles landing on main app → portal
-  if (isEngineer && p === '/portal.html') return res.redirect(302, '/');
+  // Management roles landing on main app (/) → portal
+  if (!isDelivery && p === '/') return res.redirect(302, '/portal.html');
+  // Delivery roles landing on portal (/portal.html) → main app (/)
+  if (isDelivery && p === '/portal.html') return res.redirect(302, '/');
 
   // Always allow portal itself once logged in as management
   return next();
@@ -154,12 +193,17 @@ function logout(req, res) {
 function sessionStatus(req, res) {
   const session = getSessionFromReq(req);
   if (!session) return res.json({ authenticated: false });
-  res.json({
-    authenticated: true,
-    userId:      session.userId,
-    username:    session.username,
-    displayName: session.displayName,
-    role:        session.role,
+  db.getUserById(session.userId, (err, user) => {
+    if (err || !user || Number(user.is_active) !== 1) {
+      return res.json({ authenticated: false });
+    }
+    res.json({
+      authenticated: true,
+      userId:      session.userId,
+      username:    session.username,
+      displayName: session.displayName,
+      role:        session.role,
+    });
   });
 }
 
@@ -167,10 +211,11 @@ module.exports = {
   requireApiAuth,
   requirePageAuth,
   requireRole,
+  requireProjectAccess,
   login,
   logout,
   sessionStatus,
   getSessionFromReq,
   MANAGEMENT_ROLES,
-  ENGINEER_ROLES,
+  DELIVERY_ROLES,
 };
