@@ -1504,6 +1504,11 @@
           <input id="cp-name" placeholder="e.g. Web App Pentest Q2 2025" />
         </div>
 
+        <div class="form-group" style="grid-column:1/-1">
+          <label>Scope Target <span style="color:var(--muted);font-weight:500">(optional)</span></label>
+          <input id="cp-scope-target" placeholder="e.g. https://app.example.com, 10.10.10.10, com.example.app" />
+        </div>
+
         <!-- Team -->
         <div class="form-group">
           <label>Team *</label>
@@ -3101,6 +3106,7 @@ async function editProjectPortal(proj) {
 
   // Pre-fill project name
   document.getElementById('cp-name').value = proj.project_name || '';
+  document.getElementById('cp-scope-target').value = proj.scope_target || '';
 
   // Pre-fill Team & Service
   const teamEl = document.getElementById('cp-team');
@@ -3219,6 +3225,7 @@ async function editProjectPortal(proj) {
     if (service === '__other__') service = (document.getElementById('cp-service-custom')?.value || '').trim();
 
     const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (document.getElementById('cp-scope-text')?.value.trim() || 'IT Audit');
+    const scope_target = document.getElementById('cp-scope-target')?.value.trim() || null;
     const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
     const assigned_engineer_id = document.getElementById('cp-engineer')?.value || null;
     const assist_engineer_id = document.getElementById('cp-assist')?.value || null;
@@ -3240,6 +3247,7 @@ async function editProjectPortal(proj) {
     try {
       await apiFetch(`/api/projects/${proj.project_id}`, 'PUT', {
         name: document.getElementById('cp-name').value.trim(),
+        scope_target,
         project_type, project_method,
         assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id,
         engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
@@ -3532,6 +3540,7 @@ async function openNewEntry() {
 
   // Reset project fields
   document.getElementById('cp-name').value = '';
+  document.getElementById('cp-scope-target').value = '';
   document.getElementById('cp-team').value = _projectsTeamFilter || 'offensive';
   document.getElementById('cp-service').value = 'vapt';
   document.getElementById('cp-service-custom').value = '';
@@ -3787,6 +3796,7 @@ async function submitNewEntry() {
   }
 
   const project_type = isOffensive ? (document.getElementById('cp-type')?.value || 'web') : (document.getElementById('cp-scope-text')?.value.trim() || 'IT Audit');
+  const scope_target = document.getElementById('cp-scope-target')?.value.trim() || null;
   const project_method = (isOffensive && service === 'vapt') ? (document.getElementById('cp-method')?.value || 'blackbox') : null;
 
   const assigned_engineer_id = document.getElementById('cp-engineer').value || null;
@@ -3851,6 +3861,7 @@ async function submitNewEntry() {
     const project_links = getProjectLinksFromForm();
     await apiFetch(`/api/clients/${clientId}/projects`, 'POST', {
       name, project_type, project_method, assigned_engineer_id, assist_engineer_id,
+      scope_target,
       engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
       kickoff_date, start_date, initial_report_date, final_report_date, project_links,
       mandays_initial_report, mandays_assessment,

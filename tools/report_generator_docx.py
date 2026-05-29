@@ -5,6 +5,7 @@ import json
 import re
 from collections import Counter, defaultdict
 from copy import deepcopy
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -386,10 +387,26 @@ def replace_paragraph_with_image_sentinel(element, path: str) -> None:
         replaced = True
 
 
+def format_document_date_full(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return datetime.now().strftime("%A, %d %B %Y")
+    if re.match(r"^[A-Za-z]+,\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}$", raw):
+        return raw
+    for fmt in ("%Y-%m-%d", "%d %B %Y", "%d %b %Y", "%B %d, %Y", "%b %d, %Y"):
+        try:
+            return datetime.strptime(raw, fmt).strftime("%A, %d %B %Y")
+        except ValueError:
+            continue
+    return raw
+
+
 def build_context(data: dict[str, Any]) -> dict[str, Any]:
     findings = data.get("findings", [])
     counts = Counter(f.get("severity", "") for f in findings)
     context = {normalize_key(key): value for key, value in data.items() if not isinstance(value, (list, dict))}
+    if not context.get("DOCUMENT_DATE_FULL"):
+        context["DOCUMENT_DATE_FULL"] = format_document_date_full(context.get("DOCUMENT_DATE"))
     context.update(
         {
             "TARGET_TOTAL": len(data.get("scopes", [])),

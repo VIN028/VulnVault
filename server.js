@@ -693,8 +693,9 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Engineers cannot create projects directly
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date } = req.body;
+  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date } = req.body;
   const trimName = (name || '').trim();
+  const trimScopeTarget = (scope_target || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
     return res.status(400).json({ error: 'Invalid client id' });
   }
@@ -715,7 +716,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     archived_at = new Date().toISOString();
   }
 
-  db.createProject(clientId, trimName, { project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, final_report_status, final_completed_at, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
+  db.createProject(clientId, trimName, { scope_target: trimScopeTarget, project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, final_report_status, final_completed_at, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       return res.status(500).json({ error: err.message });
@@ -878,10 +879,31 @@ function firstUrlOrFirstItem(text, fallback) {
   return items[0] || fallback || '';
 }
 
+function firstTargetFromFindings(rows) {
+  for (const row of rows || []) {
+    if (!row?.id) continue;
+    const localized = pickLanguagePayload(row, 'en');
+    const candidate = firstUrlOrFirstItem(localized.affected_items, '');
+    if (candidate) return candidate;
+  }
+  return '';
+}
+
 function formatReportDate(dateValue) {
   const date = dateValue ? new Date(dateValue) : new Date();
   if (Number.isNaN(date.getTime())) return new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+function formatReportDateFull(dateValue) {
+  const date = dateValue ? new Date(dateValue) : new Date();
+  const safeDate = Number.isNaN(date.getTime()) ? new Date() : date;
+  return safeDate.toLocaleDateString('en-GB', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
 }
 
 function projectMethodLabel(method) {
@@ -903,16 +925,18 @@ function buildInitialReportData(rows, language = 'en') {
   const vulns = rows.filter(row => row.id);
   const clientName = first.client_name || 'Client';
   const projectName = first.project_name || 'Application';
-  const reportDate = formatReportDate(first.initial_report_date || first.start_date || first.kickoff_date);
+  const reportDateSource = first.initial_report_date || first.start_date || first.kickoff_date;
+  const reportDate = formatReportDate(reportDateSource);
   const testingPeriod = first.start_date && first.initial_report_date
     ? `${formatReportDate(first.start_date)} - ${formatReportDate(first.initial_report_date)}`
     : (first.kickoff_date && first.initial_report_date
       ? `${formatReportDate(first.kickoff_date)} - ${formatReportDate(first.initial_report_date)}`
       : reportDate);
+  const scopeTarget = String(first.scope_target || '').trim() || firstTargetFromFindings(rows);
   const scopes = [
     {
       scope_name: first.project_type ? String(first.project_type).replace(/\b\w/g, c => c.toUpperCase()) : 'Application',
-      scope_target: projectName,
+      scope_target: scopeTarget,
       scope_area: 'External',
     },
   ];
@@ -924,6 +948,7 @@ function buildInitialReportData(rows, language = 'en') {
     document_title: `Penetration Test Report for ${projectName}`,
     document_number: `CISO-VAPT-${String(first.project_id).padStart(3, '0')}/${new Date().getFullYear()}.EN`,
     document_date: reportDate,
+    document_date_full: formatReportDateFull(reportDateSource),
     report_type: 'Initial Report',
     testing_period: testingPeriod,
     testing_approach: projectMethodLabel(first.project_method),
@@ -1025,7 +1050,7 @@ app.get('/api/projects/:projectId/export', (req, res) => {
 
     res.json({
       client: { id: first.client_id, name: first.client_name },
-      project: { id: first.project_id, name: first.project_name },
+      project: { id: first.project_id, name: first.project_name, scope_target: first.scope_target || '' },
       vulnerabilities,
       generated_at: new Date().toISOString(),
     });
@@ -1114,19 +1139,20 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   if (req.session?.role === 'engineer') return res.status(403).json({ error: 'Engineers cannot edit projects.' });
   const id   = Number(req.params.id);
-  let { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service } = req.body;
+  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service } = req.body;
   const trimName = (name || '').trim();
+  const trimScopeTarget = (scope_target || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
   
   if (initial_report_date && !final_report_date) {
     final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
   }
   
-  db.updateProject(id, { name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
+  db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!result.changes) return res.status(404).json({ error: 'Project not found' });
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service });
+    res.json({ id, name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service });
   });
 });
 

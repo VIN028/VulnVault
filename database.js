@@ -71,6 +71,7 @@ function initializeDb() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       client_id INTEGER NOT NULL,
       name TEXT NOT NULL,
+      scope_target TEXT,
       project_type TEXT DEFAULT 'web',
       assigned_engineer_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -78,6 +79,7 @@ function initializeDb() {
     )
   `, () => {
     db.run(`ALTER TABLE projects ADD COLUMN project_type TEXT DEFAULT 'web'`, () => {});
+    db.run(`ALTER TABLE projects ADD COLUMN scope_target TEXT`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN assigned_engineer_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN assist_engineer_id INTEGER`, () => {});
     db.run(`ALTER TABLE projects ADD COLUMN kickoff_date TEXT`, () => {});
@@ -330,7 +332,7 @@ function updateAccessRequest({ id, status, reviewedBy }, callback) {
 function getDashboardSummary(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name,
-           p.id AS project_id, p.name AS project_name, p.board_status_id,
+           p.id AS project_id, p.name AS project_name, p.scope_target, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
@@ -400,7 +402,7 @@ function getClientsWithProjects(callback) {
   getDb().all(`
     SELECT c.id AS client_id, c.name AS client_name, c.team AS client_team,
            c.engagement_reference, c.engagement_info,
-           p.id AS project_id, p.name AS project_name, p.project_type,
+           p.id AS project_id, p.name AS project_name, p.scope_target, p.project_type,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
@@ -512,7 +514,7 @@ function initProjectAccessRequests() {
 
 function getAllProjects(callback) {
   getDb().all(`
-    SELECT p.id, p.name, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
+    SELECT p.id, p.name, p.scope_target, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.link_report_en, p.link_report_id,
            c.name AS client_name
@@ -732,7 +734,7 @@ function deleteClient(clientId, callback) {
 function getProjectsByClient(clientId, callback) {
   const db = getDb();
   db.all(
-    `SELECT p.id, p.client_id, p.name, p.project_type, p.project_method,
+    `SELECT p.id, p.client_id, p.name, p.scope_target, p.project_type, p.project_method,
             p.assigned_engineer_id, p.assist_engineer_id,
             p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
             p.kickoff_date,
@@ -777,11 +779,11 @@ function createProject(clientId, name, opts, callback) {
   // Handle legacy 2-arg call: createProject(clientId, name, callback)
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  const { project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at } = opts || {};
+  const { project_type, scope_target, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at } = opts || {};
   db.run(
-    `INSERT INTO projects (client_id, name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at, board_status_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
-    [clientId, name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, archived_at || null],
+    `INSERT INTO projects (client_id, name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at, board_status_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)`,
+    [clientId, name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, archived_at || null],
     function (err) {
       if (err) return callback(err);
       callback(null, { id: this.lastID });
@@ -838,6 +840,7 @@ function getProjectExportData(projectId, callback) {
       c.name as client_name,
       p.id as project_id,
       p.name as project_name,
+      p.scope_target,
       p.project_type,
       p.project_method,
       p.kickoff_date,
@@ -888,11 +891,12 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived }, callback) {
+function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived }, callback) {
   const db = getDb();
   db.run(
     `UPDATE projects SET
        name = ?,
+       scope_target = ?,
        project_type = ?,
        project_method = ?,
        assigned_engineer_id = ?,
@@ -916,7 +920,7 @@ function updateProject(id, { name, project_type, project_method, assigned_engine
        service = ?,
        is_archived = ?
      WHERE id = ?`,
-    [name, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, id],
+    [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, team || 'offensive', service || null, is_archived || 0, id],
     function(err) {
       if (err) return callback(err);
       callback(null, { changes: this.changes });
@@ -1184,7 +1188,7 @@ function archiveProject(id, callback) {
 
 function getProjectsForBoard(callback) {
   getDb().all(`
-    SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
+    SELECT p.id, p.name, p.scope_target, p.project_type, p.project_method, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
