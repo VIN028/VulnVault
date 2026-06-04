@@ -59,6 +59,13 @@
         </svg>
         Archived Projects
       </button>
+
+      <button class="nav-item" onclick="navigate('diagnostics')" id="nav-diagnostics">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+        System Health
+      </button>
     </div>
 
     <div class="sidebar-footer">
@@ -265,6 +272,19 @@
             </tr>
           </tbody>
         </table>
+    </section>
+
+    <!-- ── System Health / Diagnostics Section ── -->
+    <section class="section" id="section-diagnostics">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">System Health &amp; Diagnostics</h1>
+          <div class="page-sub">Real-time data integrity scans and security boundary checks</div>
+        </div>
+      </div>
+
+      <div id="diagnostics-root">
+        <!-- populated dynamically by admin.js -->
       </div>
     </section>
   </main>

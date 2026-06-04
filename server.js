@@ -10,6 +10,12 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const db = require('./database');
 const auth = require('./auth');
 
+const teamPolicy = require('./services/teamPolicy');
+const projectService = require('./services/projectService');
+const boardService = require('./services/boardService');
+const clientService = require('./services/clientService');
+const diagnosticsService = require('./services/diagnosticsService');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -73,6 +79,8 @@ async function callGeminiWithFallback(apiKey, modelConfig, parts) {
   throw lastError || new Error('All AI models failed. Please try again later.');
 }
 
+const helmet = require('helmet');
+
 // Behind reverse proxies (correct client IP, HTTPS awareness)
 app.set('trust proxy', 1);
 
@@ -80,7 +88,25 @@ app.set('trust proxy', 1);
 db.getDb();
 
 // Middleware
-app.use(cors({ origin: true, credentials: true }));
+app.use(helmet({
+  contentSecurityPolicy: false
+}));
+
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
+      return cb(null, true);
+    }
+    return cb(new Error('CORS origin not allowed'));
+  },
+  credentials: true
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -249,8 +275,33 @@ app.get('/api/holidays', async (req, res) => {
   return res.json({ year, source, dates: [...dates] });
 });
 
+function validateCsrf(req, res, next) {
+  const stateChangingMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  if (stateChangingMethods.includes(req.method)) {
+    const tokenInHeader = req.headers['x-csrf-token'];
+    const session = req.session;
+    if (!session || !session.csrfToken || tokenInHeader !== session.csrfToken) {
+      return res.status(403).json({ error: 'Forbidden: CSRF token mismatch' });
+    }
+  }
+  next();
+}
+
 // Everything under /api below requires a valid session cookie (except routes above)
 app.use(auth.requireApiAuth);
+app.use(validateCsrf);
+
+app.get('/api/csrf-token', (req, res) => {
+  const session = req.session;
+  if (!session) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  if (!session.csrfToken) {
+    session.csrfToken = randomUUID();
+    auth.setSessionCookie(res, req, session);
+  }
+  res.json({ token: session.csrfToken });
+});
 
 app.post('/api/schedule/calculate', async (req, res) => {
   try {
@@ -314,24 +365,15 @@ const mgmtRoles = auth.MANAGEMENT_ROLES;
 
 function parseTeamQuery(req) {
   const team = req.query.team;
-  if (!team) return null;
-  if (team !== 'offensive' && team !== 'itaudit') {
+  const result = teamPolicy.parseTeam(team);
+  if (result && result.error) {
     return { error: 'Invalid team query. Must be offensive or itaudit.' };
   }
-  return team;
+  return result;
 }
 
 function parseTeamValue(value, { required = false } = {}) {
-  if (!value) {
-    if (required) return { error: 'Team is required. Must be offensive or itaudit.' };
-    return null;
-  }
-
-  if (value !== 'offensive' && value !== 'itaudit') {
-    return { error: 'Invalid team. Must be offensive or itaudit.' };
-  }
-
-  return value;
+  return teamPolicy.parseTeam(value, { required });
 }
 
 app.get('/api/portal-capabilities', auth.requireRole(...mgmtRoles), (req, res) => {

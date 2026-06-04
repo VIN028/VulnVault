@@ -52,12 +52,51 @@ serverProcess.stderr.on('data', (data) => {
 });
 
 // Helper for fetch-like HTTP requests
-function request(options, body = null) {
+async function request(options, body = null) {
+  const method = options.method || 'GET';
+  const headers = { ...options.headers };
+
+  // Fetch CSRF token for state-changing methods if we have a cookie
+  const isStateChanging = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase());
+  if (isStateChanging && headers['cookie'] && options.path !== '/api/login' && options.path !== '/api/logout') {
+    try {
+      const csrfRes = await new Promise((resolve, reject) => {
+        const req = http.request({
+          hostname: 'localhost',
+          port: 3333,
+          path: '/api/csrf-token',
+          method: 'GET',
+          headers: { 'cookie': headers['cookie'] }
+        }, (res) => {
+          let data = '';
+          res.on('data', (chunk) => { data += chunk; });
+          res.on('end', () => {
+            try { resolve(JSON.parse(data)); } catch (e) { resolve({}); }
+          });
+        });
+        req.on('error', reject);
+        req.end();
+      });
+      if (csrfRes && csrfRes.token) {
+        headers['X-CSRF-Token'] = csrfRes.token;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch CSRF token for test request:', e.message);
+    }
+  }
+
   return new Promise((resolve, reject) => {
+    const postData = body ? (typeof body === 'string' ? body : JSON.stringify(body)) : null;
+    if (postData) {
+      headers['Content-Type'] = 'application/json';
+      headers['Content-Length'] = Buffer.byteLength(postData);
+    }
+
     const req = http.request({
       hostname: 'localhost',
       port: 3333,
-      ...options
+      ...options,
+      headers: headers
     }, (res) => {
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
@@ -78,8 +117,8 @@ function request(options, body = null) {
 
     req.on('error', (err) => reject(err));
 
-    if (body) {
-      req.write(typeof body === 'string' ? body : JSON.stringify(body));
+    if (postData) {
+      req.write(postData);
     }
     req.end();
   });

@@ -192,6 +192,7 @@ function login(req, res) {
       username:    user.username,
       displayName: user.display_name,
       role:        user.role,
+      csrfToken:   crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex')
     });
     res.json({ ok: true, role: user.role, displayName: user.display_name });
   });
@@ -228,6 +229,7 @@ module.exports = {
   logout,
   sessionStatus,
   getSessionFromReq,
+  setSessionCookie,
   MANAGEMENT_ROLES,
   DELIVERY_ROLES,
 };

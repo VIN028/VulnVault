@@ -35,6 +35,7 @@
   window.loadArchived = loadArchived;
   window.restoreProjectFromArchive = restoreProjectFromArchive;
   window.runSystemDiagnostics = runSystemDiagnostics;
+  window.loadDiagnostics = loadDiagnostics;
 
   // ── Init ───────────────────────────────────────────────────────────────────────
   PortalShared.initSessionGuard(function (s) {
@@ -77,6 +78,7 @@
     if (section === 'requests') loadRequests();
     if (section === 'actlog') loadActivityLog('all');
     if (section === 'archived') loadArchived();
+    if (section === 'diagnostics') loadDiagnostics();
   }
 
   // ── Users Section ──────────────────────────────────────────────────────────────
@@ -529,6 +531,161 @@
       banner.style.display = 'block';
       details.innerHTML = `Failed to retrieve diagnostic data: ${esc(e.message)}`;
     }
+  }
+
+  async function loadDiagnostics() {
+    const container = document.getElementById('diagnostics-root');
+    if (!container) return;
+    container.innerHTML = '<div class="empty-state">Loading diagnostics...</div>';
+
+    try {
+      const [data, caps] = await Promise.all([
+        apiFetch('/api/admin/diagnostics'),
+        apiFetch('/api/portal-capabilities').catch(() => ({ legacyEnabled: false }))
+      ]);
+      renderDiagnostics(data, caps.legacyEnabled);
+    } catch (e) {
+      container.innerHTML = `<div class="empty-state">Error: ${esc(e.message)}</div>`;
+    }
+  }
+
+  function renderDiagnostics(data, legacyEnabled) {
+    const container = document.getElementById('diagnostics-root');
+    if (!container) return;
+
+    const clientMismatches = data.clientMismatches || [];
+    const boardMismatches = data.boardMismatches || [];
+    const userMismatches = data.userMismatches || [];
+
+    const totalMismatches = clientMismatches.length + boardMismatches.length + userMismatches.length;
+
+    let statusText = 'Healthy';
+    let statusBg = '#10b981'; // Green
+    let statusClass = 'badge-approved';
+
+    if (totalMismatches > 0) {
+      statusText = 'Critical';
+      statusBg = '#ef4444'; // Red
+      statusClass = 'badge-rejected';
+    } else if (legacyEnabled) {
+      statusText = 'Warning';
+      statusBg = '#f59e0b'; // Orange
+      statusClass = 'badge-pending';
+    }
+
+    const anomalies = [];
+
+    clientMismatches.forEach(m => {
+      anomalies.push({
+        projectId: m.id,
+        projectName: m.name,
+        expectedTeam: m.client_team || 'offensive',
+        actualTeam: m.project_team || 'offensive',
+        type: 'Client Mismatch',
+        relatedEntity: `Client: ${m.client_name}`
+      });
+    });
+
+    boardMismatches.forEach(m => {
+      anomalies.push({
+        projectId: m.id,
+        projectName: m.name,
+        expectedTeam: m.project_team || 'offensive',
+        actualTeam: m.status_team || 'offensive',
+        type: 'Board Status Mismatch',
+        relatedEntity: `Status: ${m.status_name}`
+      });
+    });
+
+    userMismatches.forEach(m => {
+      anomalies.push({
+        projectId: m.id,
+        projectName: m.name,
+        expectedTeam: m.project_team || 'offensive',
+        actualTeam: m.user_team || 'offensive',
+        type: 'User Assignment Mismatch',
+        relatedEntity: `User: ${m.display_name} (ID: ${m.user_id})`
+      });
+    });
+
+    let anomalyTableHtml = '';
+    if (anomalies.length > 0) {
+      anomalyTableHtml = `
+        <div style="margin-top: 30px;">
+          <h3 style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 12px;">Detected Scoping Anomalies</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Project ID</th>
+                  <th>Project Name</th>
+                  <th>Expected Team</th>
+                  <th>Actual Team</th>
+                  <th>Related Entity / Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${anomalies.map(a => `
+                  <tr>
+                    <td style="font-family: monospace; font-size: 13px; color: var(--accent);">${a.projectId}</td>
+                    <td style="font-weight: 600; color: var(--text);">${esc(a.projectName)}</td>
+                    <td>
+                      <span class="badge" style="background: rgba(255,255,255,0.05); color: ${a.expectedTeam === 'offensive' ? '#ef4444' : '#3b82f6'};">
+                        ${esc(a.expectedTeam)}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="badge" style="background: rgba(255,255,255,0.05); color: ${a.actualTeam === 'offensive' ? '#ef4444' : '#3b82f6'};">
+                        ${esc(a.actualTeam)}
+                      </span>
+                    </td>
+                    <td style="font-size: 12px; line-height: 1.4;">
+                      <span style="color: var(--muted); font-size: 11px; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 2px;">${esc(a.type)}</span>
+                      <span>${esc(a.relatedEntity)}</span>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } else {
+      anomalyTableHtml = `
+        <div class="empty-state" style="margin-top: 30px; border: 1px dashed var(--border);">
+          No data boundary integrity issues detected. All scoped entities are aligned.
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:30px;">
+        <div>
+          <div style="font-weight:600; font-size:15px; color:var(--text);">Overall System Status</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Last scanned: ${new Date().toLocaleTimeString('id-ID')}</div>
+        </div>
+        <span class="badge ${statusClass}" style="padding:6px 12px; font-size:12px; font-weight:700; text-transform:uppercase; border-radius:6px; background:${statusBg}; color:#fff;">
+          ${statusText}
+        </span>
+      </div>
+
+      <div class="metrics-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:20px; margin-bottom:30px;">
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Client/Project Mismatch</div>
+          <div style="font-size:32px; font-weight:700; color:${clientMismatches.length > 0 ? '#ef4444' : 'var(--text)'};">${clientMismatches.length}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Board Status Mismatch</div>
+          <div style="font-size:32px; font-weight:700; color:${boardMismatches.length > 0 ? '#ef4444' : 'var(--text)'};">${boardMismatches.length}</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:8px;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600;">Assignment Team Mismatch</div>
+          <div style="font-size:32px; font-weight:700; color:${userMismatches.length > 0 ? '#ef4444' : 'var(--text)'};">${userMismatches.length}</div>
+        </div>
+      </div>
+
+      ${anomalyTableHtml}
+    `;
   }
 
 })();

@@ -25,11 +25,32 @@
     }
   }
 
+  let csrfToken = null;
+
+  async function getCsrfToken() {
+    if (csrfToken) return csrfToken;
+    const r = await fetch('/api/csrf-token');
+    const j = await r.json().catch(function () { return {}; });
+    csrfToken = j.token;
+    return csrfToken;
+  }
+
   // ── API Fetch ──────────────────────────────────────────────────────────────────
   async function apiFetch(url, method, body) {
     method = method || 'GET';
     body = body || null;
-    const opts = { method: method, headers: { 'Content-Type': 'application/json' } };
+    const headers = { 'Content-Type': 'application/json' };
+    if (method !== 'GET') {
+      try {
+        const token = await getCsrfToken();
+        if (token) {
+          headers['X-CSRF-Token'] = token;
+        }
+      } catch (e) {
+        console.warn('Failed to fetch CSRF token:', e);
+      }
+    }
+    const opts = { method: method, headers: headers };
     if (body) opts.body = JSON.stringify(body);
     const r = await fetch(url, opts);
     const j = await r.json().catch(function () { return {}; });
@@ -301,6 +322,7 @@
   // ── Logout ─────────────────────────────────────────────────────────────────────
   async function logout() {
     try { await apiFetch('/api/logout', 'POST'); } catch { /* ignore */ }
+    csrfToken = null;
     window.location.replace('/login.html');
   }
 
