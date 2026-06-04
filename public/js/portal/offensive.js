@@ -25,6 +25,7 @@
   let _archivedProjects = [];
   let _clientNameMap = {};
   let _lastAiEstimate = null;
+  let _staticEventsBound = false;
 
   // Expose filter functions globally
   window.updateDashFilterUI = updateDashFilterUI;
@@ -50,6 +51,7 @@
   window.updateCpMethodOptions = updateCpMethodOptions;
   window.openBoardSetup = openBoardSetup;
   window.addBoardStatus = addBoardStatus;
+  window.deleteBoardStatus = deleteBoardStatus;
   window.saveBoardOrder = saveBoardOrder;
   window.shiftAllocationMonth = shiftAllocationMonth;
   window.saveAiApiKey = saveAiApiKey;
@@ -68,11 +70,40 @@
   window.archiveProjectFromBoard = archiveProjectFromBoard;
   window.restoreProjectFromArchive = restoreProjectFromArchive;
 
+  function runUiAction(action, failureMessage) {
+    Promise.resolve()
+      .then(action)
+      .catch(function (e) {
+        showToast(failureMessage + ': ' + e.message, 'error');
+      });
+  }
+
+  function bindStaticEventListeners() {
+    if (_staticEventsBound) return;
+    _staticEventsBound = true;
+
+    document.getElementById('btn-new-project')?.addEventListener('click', function () {
+      runUiAction(function () { return openCreateProject(false); }, 'Failed to open new project form');
+    });
+    document.getElementById('btn-board-setup')?.addEventListener('click', function () {
+      runUiAction(openBoardSetup, 'Failed to open board setup');
+    });
+    document.getElementById('btn-add-status')?.addEventListener('click', function () {
+      runUiAction(addBoardStatus, 'Failed to add flow');
+    });
+    document.getElementById('btn-save-board-order')?.addEventListener('click', function () {
+      runUiAction(saveBoardOrder, 'Failed to save board sequence');
+    });
+  }
+
+  // Bind high-priority static buttons as soon as the deferred script executes.
+  bindStaticEventListeners();
+
   // ── Init ───────────────────────────────────────────────────────────────────────
   PortalShared.initSessionGuard(function (s) {
     currentUser = s;
     document.getElementById('user-name').textContent = s.displayName || s.username;
-    
+
     // Set avatar initials
     const initials = getInitials(s.displayName || s.username);
     document.getElementById('user-avatar-initials').textContent = initials;
@@ -80,6 +111,8 @@
     PortalShared.loadHolidays();
     initNotifications();
     loadPendingCount();
+
+    bindStaticEventListeners();
 
     const savedTab = localStorage.getItem('vulnvault_offensive_active_tab') || 'dashboard';
     navigate(savedTab);
@@ -90,6 +123,12 @@
     var parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  async function ensureEngineersLoaded() {
+    _allEngineers = await PortalShared.ensureDataLoaded('engineers_offensive', async () => {
+      return apiFetch('/api/users/engineers?team=offensive');
+    });
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────────
@@ -343,6 +382,7 @@
       findingsCount.push(monthRows.reduce((sum, p) => sum + (p.finding_count || 0), 0));
     }
 
+    if (typeof Chart === 'undefined') return;
     const ctx = document.getElementById('dash-trend-chart');
     if (!ctx) return;
     if (_dashTrendChart) _dashTrendChart.destroy();
@@ -794,6 +834,17 @@
 
     document.getElementById('modal-create-project-title').textContent = isEdit ? 'Edit Offensive Project' : 'New Offensive Entry';
     document.getElementById('cp-err').style.display = 'none';
+    document.getElementById('modal-create-project').classList.add('open');
+
+    const submitBtn = document.getElementById('cp-btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      await ensureEngineersLoaded();
+      if (submitBtn) submitBtn.disabled = false;
+    } catch (e) {
+      showToast('Failed to load assessor list: ' + e.message, 'error');
+    }
 
     // Populate engineers dropdowns
     const dropdownIds = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4', 'cp-engineer-5', 'cp-engineer-6', 'cp-engineer-7', 'cp-engineer-8', 'cp-engineer-9', 'cp-engineer-10'];
@@ -974,6 +1025,10 @@
   // ── Links inputs ───────────────────────────────────────────────────────────────
   function addProjectLink(title = '', url = '') {
     ProjectFormShared.addProjectLink('cp-links-container', title, url);
+  }
+
+  function removeProjectLink(id) {
+    document.getElementById(id)?.remove();
   }
 
   function collectProjectLinks() {
@@ -1174,9 +1229,17 @@
 
   // ── Kanban board setup modal ───────────────────────────────────────────────────
   async function openBoardSetup() {
+    const btn = document.getElementById('btn-board-setup');
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = 'Loading...';
+    }
+
     const listEl = document.getElementById('setup-status-list');
-    if (!listEl) return;
-    listEl.innerHTML = '<div style="padding:10px; text-align:center;">Loading...</div>';
+    if (listEl) {
+      listEl.innerHTML = '<div style="padding:10px; text-align:center;">Loading...</div>';
+    }
 
     try {
       _boardStatuses = await apiFetch('/api/board-statuses?team=offensive');
@@ -1184,6 +1247,11 @@
       document.getElementById('modal-board-setup').classList.add('open');
     } catch (e) {
       showToast('Failed to load board status list: ' + e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
     }
   }
 
@@ -1210,11 +1278,22 @@
     const nameInput = document.getElementById('setup-new-name');
     const colorInput = document.getElementById('setup-new-color');
     const name = nameInput.value.trim();
-    const color = colorInput.value;
+    const color = colorInput ? colorInput.value : '';
 
     if (!name) {
       showToast('Status title cannot be empty', 'error');
       return;
+    }
+    if (!color) {
+      showToast('Default color is required', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-add-status');
+    const oldText = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
     }
 
     try {
@@ -1228,10 +1307,15 @@
       loadBoard();
     } catch (e) {
       showToast('Failed to add board status: ' + e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
     }
   }
 
-  window.deleteBoardStatus = async function(id) {
+  async function deleteBoardStatus(id) {
     const ok = await customConfirm('Delete Column', 'Are you sure you want to delete this status column? Projects in this status will become Uncategorized.', 'Delete Column', 'danger');
     if (!ok) return;
 
@@ -1243,7 +1327,7 @@
     } catch (e) {
       showToast('Failed to delete status column: ' + e.message, 'error');
     }
-  };
+  }
 
   async function saveBoardOrder() {
     try {
@@ -1323,6 +1407,7 @@
     listEl.innerHTML = '<div class="empty-state">Loading allocation details...</div>';
 
     try {
+      await ensureEngineersLoaded();
       const summary = await apiFetch('/api/dashboard/summary?team=offensive');
       buildAllocationMonths(summary);
       renderCapacityView(summary);

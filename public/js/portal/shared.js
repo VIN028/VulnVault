@@ -334,6 +334,19 @@
     window.location.replace('/login.html');
   }
 
+  const _sharedCache = {};
+  async function ensureDataLoaded(key, loaderFn) {
+    if (_sharedCache[key]) {
+      return _sharedCache[key];
+    }
+    const promise = loaderFn().catch(err => {
+      delete _sharedCache[key];
+      throw err;
+    });
+    _sharedCache[key] = promise;
+    return promise;
+  }
+
   // ── Expose Globally ────────────────────────────────────────────────────────────
   window.PortalShared = {
     initSessionGuard: initSessionGuard,
@@ -357,5 +370,12 @@
     initNotifications: initNotifications,
     loadPendingCount: loadPendingCount,
     logout: logout,
+    ensureDataLoaded: ensureDataLoaded,
   };
+
+  // Backward-compatible globals for inline handlers that remain in static HTML.
+  window.closeModal = closeModal;
+  window.toggleNotifDropdown = toggleNotifDropdown;
+  window.markAllRead = markAllRead;
+  window.logout = logout;
 })();

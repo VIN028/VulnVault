@@ -24,6 +24,7 @@
   let _boardStatuses = [];
   let _archivedProjects = [];
   let _clientNameMap = {};
+  let _staticEventsBound = false;
 
   // Expose filter functions globally
   window.updateDashFilterUI = updateDashFilterUI;
@@ -48,6 +49,7 @@
   window.removeProjectLink = removeProjectLink;
   window.openBoardSetup = openBoardSetup;
   window.addBoardStatus = addBoardStatus;
+  window.deleteBoardStatus = deleteBoardStatus;
   window.saveBoardOrder = saveBoardOrder;
   window.shiftAllocationMonth = shiftAllocationMonth;
   window.filterArchivedProjects = filterArchivedProjects;
@@ -56,6 +58,35 @@
   window.toggleGroup = toggleGroup;
   window.archiveProjectFromBoard = archiveProjectFromBoard;
   window.restoreProjectFromArchive = restoreProjectFromArchive;
+
+  function runUiAction(action, failureMessage) {
+    Promise.resolve()
+      .then(action)
+      .catch(function (e) {
+        showToast(failureMessage + ': ' + e.message, 'error');
+      });
+  }
+
+  function bindStaticEventListeners() {
+    if (_staticEventsBound) return;
+    _staticEventsBound = true;
+
+    document.getElementById('btn-new-project')?.addEventListener('click', function () {
+      runUiAction(function () { return openCreateProject(false); }, 'Failed to open new engagement form');
+    });
+    document.getElementById('btn-board-setup')?.addEventListener('click', function () {
+      runUiAction(openBoardSetup, 'Failed to open board setup');
+    });
+    document.getElementById('btn-add-status')?.addEventListener('click', function () {
+      runUiAction(addBoardStatus, 'Failed to add flow');
+    });
+    document.getElementById('btn-save-board-order')?.addEventListener('click', function () {
+      runUiAction(saveBoardOrder, 'Failed to save board sequence');
+    });
+  }
+
+  // Bind high-priority static buttons as soon as the deferred script executes.
+  bindStaticEventListeners();
 
   // ── Init ───────────────────────────────────────────────────────────────────────
   PortalShared.initSessionGuard(function (s) {
@@ -70,6 +101,8 @@
     initNotifications();
     loadPendingCount();
 
+    bindStaticEventListeners();
+
     const savedTab = localStorage.getItem('vulnvault_itaudit_active_tab') || 'dashboard';
     navigate(savedTab);
   });
@@ -79,6 +112,12 @@
     var parts = name.trim().split(/\s+/);
     if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  async function ensureEngineersLoaded() {
+    _allEngineers = await PortalShared.ensureDataLoaded('engineers_itaudit', async () => {
+      return apiFetch('/api/users/engineers?team=itaudit');
+    });
   }
 
   // ── Navigation ─────────────────────────────────────────────────────────────────
@@ -307,6 +346,7 @@
       projectsCount.push(monthRows.length);
     }
 
+    if (typeof Chart === 'undefined') return;
     const ctx = document.getElementById('dash-trend-chart');
     if (!ctx) return;
     if (_dashTrendChart) _dashTrendChart.destroy();
@@ -707,6 +747,17 @@
 
     document.getElementById('modal-create-project-title').textContent = isEdit ? 'Edit IT Audit Engagement' : 'New IT Audit Entry';
     document.getElementById('cp-err').style.display = 'none';
+    document.getElementById('modal-create-project').classList.add('open');
+
+    const submitBtn = document.getElementById('cp-btn');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      await ensureEngineersLoaded();
+      if (submitBtn) submitBtn.disabled = false;
+    } catch (e) {
+      showToast('Failed to load consultant list: ' + e.message, 'error');
+    }
 
     // Populate engineers dropdowns
     const dropdownIds = ['cp-engineer', 'cp-assist', 'cp-engineer-3', 'cp-engineer-4', 'cp-engineer-5', 'cp-engineer-6', 'cp-engineer-7', 'cp-engineer-8', 'cp-engineer-9', 'cp-engineer-10'];
@@ -1147,9 +1198,17 @@
 
   // ── Kanban board setup modal ───────────────────────────────────────────────────
   async function openBoardSetup() {
+    const btn = document.getElementById('btn-board-setup');
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = 'Loading...';
+    }
+
     const listEl = document.getElementById('setup-status-list');
-    if (!listEl) return;
-    listEl.innerHTML = '<div style="padding:10px; text-align:center;">Loading...</div>';
+    if (listEl) {
+      listEl.innerHTML = '<div style="padding:10px; text-align:center;">Loading...</div>';
+    }
 
     try {
       _boardStatuses = await apiFetch('/api/board-statuses?team=itaudit');
@@ -1157,38 +1216,19 @@
       document.getElementById('modal-board-setup').classList.add('open');
     } catch (e) {
       showToast('Failed to load board status list: ' + e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
     }
   }
 
   function renderSetupList() {
     const listEl = document.getElementById('setup-status-list');
     if (!listEl) return;
-    listEl.innerHTML = '';
-
-    if (!_boardStatuses.length) {
-      listEl.innerHTML = '<div style="padding:12px; text-align:center; color:var(--muted); font-size:12px;">No custom status columns. Add one below.</div>';
-      return;
-    }
-
-    _boardStatuses.forEach((s, idx) => {
-      const tile = document.createElement('div');
-      tile.className = 'status-setup-tile';
-      tile.draggable = true;
-      tile.ondragstart = (e) => e.dataTransfer.setData('text/plain', idx);
-      tile.ondragover = (e) => e.preventDefault();
-      tile.ondrop = (e) => reorderStatus(e, idx);
-      tile.style = `display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; cursor:grab; margin-bottom:6px;`;
-      tile.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px; font-size:12px; font-weight:700;">
-          <span style="color:var(--muted);">⋮⋮</span>
-          <span style="display:block; width:10px; height:10px; border-radius:50%; background:${s.color};"></span>
-          <span>${esc(s.name)}</span>
-        </div>
-        <button class="icon-btn" onclick="deleteBoardStatus(${s.id})" style="color:var(--red); padding:4px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      `;
-      listEl.appendChild(tile);
+    BoardShared.renderSetupList(listEl, _boardStatuses, () => {
+      renderSetupList();
     });
   }
 
@@ -1206,11 +1246,22 @@
     const nameInput = document.getElementById('setup-new-name');
     const colorInput = document.getElementById('setup-new-color');
     const name = nameInput.value.trim();
-    const color = colorInput.value;
+    const color = colorInput ? colorInput.value : '';
 
     if (!name) {
       showToast('Status title cannot be empty', 'error');
       return;
+    }
+    if (!color) {
+      showToast('Default color is required', 'error');
+      return;
+    }
+
+    const btn = document.getElementById('btn-add-status');
+    const oldText = btn ? btn.textContent : '';
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Adding...';
     }
 
     try {
@@ -1223,10 +1274,15 @@
       loadBoard();
     } catch (e) {
       showToast('Failed to add board status: ' + e.message, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText;
+      }
     }
   }
 
-  window.deleteBoardStatus = async function(id) {
+  async function deleteBoardStatus(id) {
     const ok = await customConfirm('Delete Column', 'Are you sure you want to delete this status column? Projects in this status will become Uncategorized.', 'Delete Column', 'danger');
     if (!ok) return;
 
@@ -1238,7 +1294,7 @@
     } catch (e) {
       showToast('Failed to delete status column: ' + e.message, 'error');
     }
-  };
+  }
 
   async function saveBoardOrder() {
     try {
@@ -1336,6 +1392,7 @@
     listEl.innerHTML = '<div class="empty-state">Loading allocation details...</div>';
 
     try {
+      await ensureEngineersLoaded();
       const summary = await apiFetch('/api/dashboard/summary?team=itaudit');
       _lastAllocationSummary = summary;
       buildAllocationMonths(summary);

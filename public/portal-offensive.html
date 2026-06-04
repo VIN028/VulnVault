@@ -296,7 +296,7 @@
           <h1 class="page-title">Clients &amp; VAPT Projects</h1>
           <div class="page-sub">Client assessment histories, links, and operational records</div>
         </div>
-        <button class="btn-primary" onclick="openCreateProject()">
+        <button class="btn-primary" id="btn-new-project" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
@@ -329,7 +329,7 @@
           <h1 class="page-title">VAPT Delivery Board</h1>
           <div class="page-sub">Visual Kanban workflow tracking project statuses and reporting phases</div>
         </div>
-        <button class="btn-ghost" onclick="openBoardSetup()" style="max-width:140px; display:inline-flex; align-items:center; gap:6px;">
+        <button class="btn-ghost" id="btn-board-setup" type="button" style="max-width:140px; display:inline-flex; align-items:center; gap:6px;">
           <span>⚙️</span> Setup Flow
         </button>
       </div>
@@ -831,12 +831,12 @@
       <div style="display:flex; gap:8px; margin-bottom:20px;">
         <input id="setup-new-name" placeholder="New status title..." style="flex:1;">
         <input type="color" id="setup-new-color" value="#6366f1" style="width:36px; height:36px; padding:2px; border-radius:8px; cursor:pointer;">
-        <button class="btn-primary" onclick="addBoardStatus()" style="font-size:12px;">Add</button>
+        <button class="btn-primary" id="btn-add-status" type="button" style="font-size:12px;">Add</button>
       </div>
 
       <div class="modal-actions">
         <button class="btn-ghost" onclick="document.getElementById('modal-board-setup').classList.remove('open')">Close</button>
-        <button class="btn-primary" onclick="saveBoardOrder()">Save Sequence</button>
+        <button class="btn-primary" id="btn-save-board-order" type="button">Save Sequence</button>
       </div>
     </div>
   </div>
@@ -853,12 +853,12 @@
   </div>
 
   <!-- Global scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
-  <script src="/js/portal/shared.js"></script>
-  <script src="/js/portal/projectFormShared.js"></script>
-  <script src="/js/portal/boardShared.js"></script>
-  <script src="/js/portal/allocationShared.js"></script>
-  <script src="/js/portal/offensive.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" async></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0" async></script>
+  <script src="/js/portal/shared.js" defer></script>
+  <script src="/js/portal/projectFormShared.js" defer></script>
+  <script src="/js/portal/boardShared.js" defer></script>
+  <script src="/js/portal/allocationShared.js" defer></script>
+  <script src="/js/portal/offensive.js" defer></script>
 </body>
 </html>
