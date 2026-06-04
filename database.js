@@ -547,6 +547,7 @@ function initializeDb() {
       db.run(`ALTER TABLE projects ADD COLUMN is_archived INTEGER DEFAULT 0`, () => {});
       db.run(`ALTER TABLE projects ADD COLUMN archived_at TEXT`, () => {});
       db.run(`ALTER TABLE projects ADD COLUMN schedule_policy_version TEXT`, () => {});
+      db.run(`ALTER TABLE projects ADD COLUMN audit_metadata TEXT`, () => {});
       db.run(`ALTER TABLE clients ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
       db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
       migrateProjectsConstraints();
@@ -759,11 +760,16 @@ function changePassword(id, newPasswordHash, callback) {
   });
 }
 
-function getAllEngineers(callback) {
-  getDb().all(
-    'SELECT id, username, display_name, team, role FROM users WHERE role IN ("engineer","consultant") AND COALESCE(is_active, 1) = 1 ORDER BY display_name',
-    callback
-  );
+function getAllEngineers(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  let sql = 'SELECT id, username, display_name, team, role FROM users WHERE role IN ("engineer","consultant") AND COALESCE(is_active, 1) = 1';
+  const params = [];
+  if (opts.team) {
+    sql += ' AND team = ?';
+    params.push(opts.team);
+  }
+  sql += ' ORDER BY display_name';
+  getDb().all(sql, params, callback);
 }
 
 // ─── Access requests ──────────────────────────────────────────────────────────
@@ -805,8 +811,9 @@ function updateAccessRequest({ id, status, reviewedBy }, callback) {
 }
 
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function getDashboardSummary(callback) {
-  getDb().all(`
+function getDashboardSummary(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  let sql = `
     SELECT c.id AS client_id, c.name AS client_name,
            p.id AS project_id, p.name AS project_name, p.scope_target, p.board_status_id,
            p.project_type, p.assigned_engineer_id, p.assist_engineer_id,
@@ -817,7 +824,7 @@ function getDashboardSummary(callback) {
            p.initial_completed_at, p.final_completed_at,
            p.is_archived, p.archived_at,
            p.start_date, p.mandays_assessment, p.mandays_initial_report,
-           p.team, p.service,
+           p.team, p.service, p.audit_metadata,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -846,9 +853,14 @@ function getDashboardSummary(callback) {
     LEFT JOIN users u9 ON u9.id = p.engineer_7_id
     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
-    LEFT JOIN users u12 ON u12.id = p.engineer_10_id
-    ORDER BY c.name, p.name
-  `, callback);
+    LEFT JOIN users u12 ON u12.id = p.engineer_10_id`;
+  const params = [];
+  if (opts.team) {
+    sql += `\n    WHERE p.team = ?`;
+    params.push(opts.team);
+  }
+  sql += `\n    ORDER BY c.name, p.name`;
+  getDb().all(sql, params, callback);
 }
 
 // Engineers only see clients where they have an assigned project
@@ -897,8 +909,9 @@ function getClientsByConsultant(consultantId, callback) {
 }
 
 // All clients with their projects (LEFT JOIN so empty clients appear too)
-function getClientsWithProjects(callback) {
-  getDb().all(`
+function getClientsWithProjects(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  let sql = `
     SELECT c.id AS client_id, c.name AS client_name, c.team AS client_team,
            c.engagement_reference, c.engagement_info,
            p.id AS project_id, p.name AS project_name, p.scope_target, p.project_type,
@@ -910,7 +923,7 @@ function getClientsWithProjects(callback) {
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
            p.link_report_en, p.link_report_id, p.project_links,
            p.project_method, p.start_date, p.mandays_assessment, p.mandays_initial_report,
-           p.team, p.service,
+           p.team, p.service, p.audit_metadata,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -939,9 +952,18 @@ function getClientsWithProjects(callback) {
     LEFT JOIN users u9 ON u9.id = p.engineer_7_id
     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
-    LEFT JOIN users u12 ON u12.id = p.engineer_10_id
-    ORDER BY c.name, p.name
-  `, callback);
+    LEFT JOIN users u12 ON u12.id = p.engineer_10_id`;
+  const params = [];
+  if (opts.team) {
+    if (opts.team === 'offensive') {
+      sql += `\n    WHERE (c.team = ? OR c.team IS NULL)`;
+    } else {
+      sql += `\n    WHERE c.team = ?`;
+    }
+    params.push(opts.team);
+  }
+  sql += `\n    ORDER BY c.name, p.name`;
+  getDb().all(sql, params, callback);
 }
 
 
@@ -1037,16 +1059,21 @@ function getProjectAccessRequests(filter, callback) {
       ORDER BY par.created_at DESC
     `, [filter.engineerId], callback);
   } else {
-    db.all(`
+    let sql = `
       SELECT par.*, p.name AS project_name, c.name AS client_name,
              u.display_name AS engineer_name
       FROM project_access_requests par
       JOIN projects p ON p.id = par.project_id
       JOIN clients c ON c.id = p.client_id
       JOIN users u ON u.id = par.engineer_id
-      WHERE par.status = 'pending'
-      ORDER BY par.created_at DESC
-    `, callback);
+      WHERE par.status = 'pending'`;
+    const params = [];
+    if (filter.team) {
+      sql += ' AND p.team = ?';
+      params.push(filter.team);
+    }
+    sql += `\n      ORDER BY par.created_at DESC`;
+    db.all(sql, params, callback);
   }
 }
 
@@ -1334,9 +1361,21 @@ function countVulnerabilities(callback) {
   db.get('SELECT COUNT(*) as count FROM vulnerabilities', [], callback);
 }
 
-function getClients(callback) {
+function getClients(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
   const db = getDb();
-  db.all('SELECT id, name, engagement_reference, engagement_info, team, created_at FROM clients ORDER BY name COLLATE NOCASE ASC', [], callback);
+  let sql = 'SELECT id, name, engagement_reference, engagement_info, team, created_at FROM clients';
+  const params = [];
+  if (opts.team) {
+    if (opts.team === 'offensive') {
+      sql += ' WHERE (team = ? OR team IS NULL)';
+    } else {
+      sql += ' WHERE team = ?';
+    }
+    params.push(opts.team);
+  }
+  sql += ' ORDER BY name COLLATE NOCASE ASC';
+  db.all(sql, params, callback);
 }
 
 function createClient(name, opts, callback) {
@@ -1429,7 +1468,8 @@ function createProject(clientId, name, opts, callback) {
     kickoff_date, initial_report_date, final_report_date, project_links, start_date,
     mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at,
     initial_report_status, final_report_status, initial_completed_at, final_completed_at,
-    initial_completed_by, final_completed_by, board_status_id, schedule_policy_version
+    initial_completed_by, final_completed_by, board_status_id, schedule_policy_version,
+    audit_metadata
   } = opts || {};
 
   const teamVal = team || 'offensive';
@@ -1443,8 +1483,9 @@ function createProject(clientId, name, opts, callback) {
         kickoff_date, initial_report_date, final_report_date, project_links, start_date,
         mandays_initial_report, mandays_assessment, team, service, is_archived, archived_at,
         initial_report_status, final_report_status, initial_completed_at, final_completed_at,
-        initial_completed_by, final_completed_by, board_status_id, schedule_policy_version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        initial_completed_by, final_completed_by, board_status_id, schedule_policy_version,
+        audit_metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         clientId, name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null,
         engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null,
@@ -1453,7 +1494,8 @@ function createProject(clientId, name, opts, callback) {
         initial_report_status || 'pending', final_report_status || 'pending',
         initial_completed_at || null, final_completed_at || null,
         initial_completed_by || null, final_completed_by || null,
-        statusId, schedule_policy_version || null
+        statusId, schedule_policy_version || null,
+        audit_metadata || null
       ],
       function (err) {
         if (err) return callback(err);
@@ -1581,7 +1623,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, schedule_policy_version }, callback) {
+function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, schedule_policy_version, audit_metadata }, callback) {
   const db = getDb();
   const teamVal = team || 'offensive';
   validateDeliveryAssignments(teamVal, {
@@ -1616,9 +1658,10 @@ function updateProject(id, { name, scope_target, project_type, project_method, a
          team = ?,
          service = ?,
          is_archived = ?,
-         schedule_policy_version = ?
+         schedule_policy_version = ?,
+         audit_metadata = ?
        WHERE id = ?`,
-      [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, is_archived || 0, schedule_policy_version || null, id],
+      [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, is_archived || 0, schedule_policy_version || null, audit_metadata || null, id],
       function(err) {
         if (err) return callback(err);
         callback(null, { changes: this.changes });
@@ -1894,15 +1937,21 @@ function updateProjectBoardStatusAndCompletion(projectId, statusId, finalReportS
   );
 }
 
-function getArchivedProjects(callback) {
-  getDb().all(`
+function getArchivedProjects(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  let sql = `
     SELECT p.*, c.name AS client_name, u.display_name AS engineer_name
     FROM projects p
     JOIN clients c ON c.id = p.client_id
     LEFT JOIN users u ON u.id = p.assigned_engineer_id
-    WHERE p.is_archived = 1
-    ORDER BY p.archived_at DESC
-  `, callback);
+    WHERE p.is_archived = 1`;
+  const params = [];
+  if (opts.team) {
+    sql += ' AND p.team = ?';
+    params.push(opts.team);
+  }
+  sql += `\n    ORDER BY p.archived_at DESC`;
+  getDb().all(sql, params, callback);
 }
 
 function archiveProject(id, callback) {
@@ -1913,8 +1962,9 @@ function archiveProject(id, callback) {
   );
 }
 
-function getProjectsForBoard(callback) {
-  getDb().all(`
+function getProjectsForBoard(opts, callback) {
+  if (typeof opts === 'function') { callback = opts; opts = {}; }
+  let sql = `
     SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
@@ -1925,7 +1975,7 @@ function getProjectsForBoard(callback) {
            p.start_date, p.mandays_assessment, p.mandays_initial_report,
            p.link_report_en, p.link_report_id, p.project_links,
            p.retest_pic_id, p.retest_assist_id,
-           p.team, p.service,
+           p.team, p.service, p.audit_metadata,
            c.id AS client_id, c.name AS client_name,
            u.display_name AS engineer_name,
            u2.display_name AS assist_engineer_name,
@@ -1954,9 +2004,14 @@ function getProjectsForBoard(callback) {
     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
     LEFT JOIN users u12 ON u12.id = p.engineer_10_id
-    WHERE p.is_archived = 0
-    ORDER BY c.name, p.name
-  `, callback);
+    WHERE p.is_archived = 0`;
+  const params = [];
+  if (opts.team) {
+    sql += ' AND p.team = ?';
+    params.push(opts.team);
+  }
+  sql += `\n    ORDER BY c.name, p.name`;
+  getDb().all(sql, params, callback);
 }
 
 // ─── Engagements ──────────────────────────────────────────────────────────────

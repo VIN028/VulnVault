@@ -151,8 +151,9 @@ function requirePageAuth(req, res, next) {
 
   // Management roles landing on main app (/) → portal
   if (!isDelivery && p === '/') return res.redirect(302, '/portal.html');
-  // Delivery roles landing on portal (/portal.html) → main app (/)
-  if (isDelivery && p === '/portal.html') return res.redirect(302, '/');
+  // Delivery roles landing on any portal page → main app (/)
+  const PORTAL_PAGES = new Set(['/portal.html', '/portal-offensive.html', '/portal-itaudit.html', '/portal-admin.html', '/portal-legacy.html']);
+  if (isDelivery && PORTAL_PAGES.has(p)) return res.redirect(302, '/');
 
   // Always allow portal itself once logged in as management
   return next();

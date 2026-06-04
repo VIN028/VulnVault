@@ -9,3 +9,5 @@ __pycache__/
 generated_reports/
 # Optional: large local templates (not required for Render)
 templateReport/
+node-portable/
+

@@ -312,6 +312,15 @@ app.get('/api/me', (req, res) => {
 // ─── User Management (PM + Manager + Admin) ───────────────────────────────────
 const mgmtRoles = auth.MANAGEMENT_ROLES;
 
+function parseTeamQuery(req) {
+  const team = req.query.team;
+  if (!team) return null;
+  if (team !== 'offensive' && team !== 'itaudit') {
+    return { error: 'Invalid team query. Must be offensive or itaudit.' };
+  }
+  return team;
+}
+
 app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
   db.getAllUsers((err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -320,7 +329,10 @@ app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
 });
 
 app.get('/api/users/engineers', auth.requireRole(...mgmtRoles), (req, res) => {
-  db.getAllEngineers((err, rows) => {
+  const teamResult = parseTeamQuery(req);
+  if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+  const team = typeof teamResult === 'string' ? teamResult : null;
+  db.getAllEngineers({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -409,7 +421,10 @@ app.patch('/api/users/:id/password', (req, res) => {
 
 // ─── Dashboard (PM + Manager + Admin) ─────────────────────────────────────────
 app.get('/api/dashboard/summary', auth.requireRole(...mgmtRoles), (req, res) => {
-  db.getDashboardSummary((err, rows) => {
+  const teamResult = parseTeamQuery(req);
+  if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+  const team = typeof teamResult === 'string' ? teamResult : null;
+  db.getDashboardSummary({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -460,11 +475,22 @@ app.patch('/api/access-requests/:id', auth.requireRole('admin', 'manager', 'pm')
 // GET /api/project-access-requests — engineer sees own; mgmt sees all pending
 app.get('/api/project-access-requests', (req, res) => {
   const s = req.session;
-  const filter = auth.DELIVERY_ROLES.includes(s.role) ? { engineerId: s.userId } : {};
-  db.getProjectAccessRequests(filter, (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
+  if (auth.DELIVERY_ROLES.includes(s.role)) {
+    const filter = { engineerId: s.userId };
+    db.getProjectAccessRequests(filter, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  } else {
+    const teamResult = parseTeamQuery(req);
+    if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+    const team = typeof teamResult === 'string' ? teamResult : null;
+    const filter = team ? { team } : {};
+    db.getProjectAccessRequests(filter, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows);
+    });
+  }
 });
 
 // GET /api/projects/all — projects the engineer/consultant can REQUEST (only unassigned & matching team)
@@ -771,7 +797,10 @@ app.get('/api/clients', (req, res) => {
       });
     }
   } else {
-    db.getClients((err, rows) => {
+    const teamResult = parseTeamQuery(req);
+    if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+    const team = typeof teamResult === 'string' ? teamResult : null;
+    db.getClients({ team }, (err, rows) => {
       if (err) return res.status(500).json({ error: err.message });
       res.json(rows);
     });
@@ -842,7 +871,10 @@ app.delete('/api/clients/:id', (req, res) => {
 // GET /api/clients/full — all clients with their projects (LEFT JOIN) for portal accordion
 // ⚠ MUST be defined BEFORE /api/clients/:clientId routes to avoid "full" matching as :clientId
 app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res) => {
-  db.getClientsWithProjects((err, rows) => {
+  const teamResult = parseTeamQuery(req);
+  if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+  const team = typeof teamResult === 'string' ? teamResult : null;
+  db.getClientsWithProjects({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -888,7 +920,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   // Only management roles can create projects
   if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
-  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date } = req.body;
+  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date, audit_metadata } = req.body;
   const trimScopeTarget = (scope_target || '').trim();
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
@@ -937,7 +969,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     archived_at = new Date().toISOString();
   }
 
-  db.createProject(clientId, trimName, { scope_target: trimScopeTarget, project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, initial_report_status, final_report_status, initial_completed_at, final_completed_at, initial_completed_by, final_completed_by, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version }, (err, result) => {
+  db.createProject(clientId, trimName, { scope_target: trimScopeTarget, project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, initial_report_status, final_report_status, initial_completed_at, final_completed_at, initial_completed_by, final_completed_by, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
@@ -953,7 +985,10 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
 });
 
 app.get('/api/projects/archived', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
-  db.getArchivedProjects((err, rows) => {
+  const teamResult = parseTeamQuery(req);
+  if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+  const team = typeof teamResult === 'string' ? teamResult : null;
+  db.getArchivedProjects({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });
@@ -1357,7 +1392,7 @@ app.put('/api/clients/:id', (req, res) => {
 app.put('/api/projects/:id', async (req, res) => {
   if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to edit projects.' });
   const id   = Number(req.params.id);
-  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service } = req.body;
+  let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, audit_metadata } = req.body;
   const trimScopeTarget = (scope_target || '').trim();
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
@@ -1384,7 +1419,7 @@ app.put('/api/projects/:id', async (req, res) => {
     schedule_policy_version = SCHEDULE_POLICY_VERSION;
   }
   
-  db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version }, (err, result) => {
+  db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
     if (err) {
       if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
       return res.status(500).json({ error: err.message });
@@ -1675,7 +1710,10 @@ app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req
 });
 
 app.get('/api/board/projects', auth.requireRole(...mgmtRoles), (req, res) => {
-  db.getProjectsForBoard((err, rows) => {
+  const teamResult = parseTeamQuery(req);
+  if (teamResult && teamResult.error) return res.status(400).json({ error: teamResult.error });
+  const team = typeof teamResult === 'string' ? teamResult : null;
+  db.getProjectsForBoard({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
   });

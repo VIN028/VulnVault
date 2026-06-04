@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Cisometric Intelligence Platform — Offensive Security Portal">
+  <title>Offensive Security Portal — Cisometric</title>
+  <link rel="icon" href="/favicon.ico">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/portal.css">
+</head>
+<body>
+
+  <!-- ── Sidebar ── -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">
+      <img src="/cisometric-logo.png" alt="Cisometric" class="logo-img">
+      <div class="logo-subtitle">Offensive Security</div>
+      <span class="logo-badge">PORTAL</span>
+    </div>
+
+    <div class="sidebar-nav">
+      <div class="nav-section">Overview</div>
+      
+      <button class="nav-item active" onclick="navigate('dashboard')" id="nav-dashboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        Dashboard
+      </button>
+
+      <button class="nav-item" onclick="navigate('projects')" id="nav-projects">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" />
+        </svg>
+        Clients &amp; Projects
+      </button>
+
+      <button class="nav-item" onclick="navigate('pm-board')" id="nav-pm-board">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <line x1="9" y1="3" x2="9" y2="21" />
+          <line x1="15" y1="3" x2="15" y2="21" />
+        </svg>
+        Projects Board
+      </button>
+
+      <button class="nav-item" onclick="navigate('allocation')" id="nav-allocation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+          <line x1="16" y1="2" x2="16" y2="6" />
+          <line x1="8" y1="2" x2="8" y2="6" />
+          <line x1="3" y1="10" x2="21" y2="10" />
+          <line x1="8" y1="14" x2="13" y2="14" />
+          <line x1="8" y1="18" x2="17" y2="18" />
+        </svg>
+        Resource Allocation
+      </button>
+
+      <button class="nav-item" onclick="navigate('ai-mandays')" id="nav-ai-mandays">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="2" width="20" height="8" rx="2" ry="2" />
+          <rect x="2" y="14" width="20" height="8" rx="2" ry="2" />
+          <line x1="6" y1="6" x2="6.01" y2="6" />
+          <line x1="6" y1="18" x2="6.01" y2="18" />
+        </svg>
+        AI Mandays Estimator
+      </button>
+
+      <button class="nav-item" onclick="navigate('archived')" id="nav-archived">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="21 8 21 21 3 21 3 8" />
+          <rect x="1" y="3" width="22" height="5" />
+          <line x1="10" y1="12" x2="14" y2="12" />
+        </svg>
+        Archived Projects
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="notif-wrapper" style="margin-bottom:12px; display:flex; justify-content:center;">
+        <button class="notif-bell" onclick="PortalShared.toggleNotifDropdown()" id="notif-btn" style="position:relative;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px;">
+            <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+          </svg>
+          <span class="nav-badge" id="notif-count" style="display:none; position:absolute; top:-4px; right:-4px; margin:0; padding:1px 5px; font-size:9px;">0</span>
+        </button>
+
+        <div class="notif-dropdown" id="notif-dropdown">
+          <div class="notif-dropdown-header">
+            <span>Notifications</span>
+            <button onclick="PortalShared.markAllRead()" style="background:none;border:none;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;padding:0;">Mark all read</button>
+          </div>
+          <div id="notif-list">
+            <div class="notif-empty">Loading notifications...</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="user-card">
+        <div class="user-avatar" id="user-avatar-initials">OS</div>
+        <div class="user-info">
+          <div class="user-name" id="user-name">—</div>
+          <div class="user-role" id="user-role">Offensive Ops</div>
+        </div>
+        <button class="logout-btn" onclick="PortalShared.logout()" title="Logout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" />
+          </svg>
+        </button>
+      </div>
+
+      <div style="margin-top:12px; text-align:center;">
+        <a href="/portal.html" style="color:var(--muted); font-size:12px; text-decoration:none; display:inline-flex; align-items:center; gap:4px; font-weight:500;">
+          <span>&larr;</span> Portal Hub
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main Content ── -->
+  <main id="main">
+    <div id="toast-container"></div>
+
+    <!-- ── Dashboard Section ── -->
+    <section class="section active" id="section-dashboard">
+      <div class="topbar">
+        <div>
+          <h1 class="page-title">Offensive Dashboard</h1>
+          <div class="page-sub">Operational metrics for VAPT &amp; Security Assessments</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <!-- Filter bar -->
+          <div style="display:flex; align-items:center; background:#0f172a; border:1px solid #1e293b; border-radius:8px; padding:4px 12px; gap:16px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">TYPE</span>
+              <select id="dash-filter-type" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; cursor:pointer; height:30px;" onchange="updateDashFilterUI()">
+                <option value="month">Month</option>
+                <option value="quarter">Quarter</option>
+                <option value="year">Year</option>
+                <option value="custom">Custom</option>
+              </select>
+            </div>
+            <div style="width:1px; height:16px; background:#334155;"></div>
+
+            <!-- Month UI -->
+            <div id="dash-filter-month-ui" style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+              <select id="dash-month-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px;">
+                <option value="0">Jan</option>
+                <option value="1">Feb</option>
+                <option value="2">Mar</option>
+                <option value="3">Apr</option>
+                <option value="4">May</option>
+                <option value="5">Jun</option>
+                <option value="6">Jul</option>
+                <option value="7">Aug</option>
+                <option value="8">Sep</option>
+                <option value="9">Oct</option>
+                <option value="10">Nov</option>
+                <option value="11">Dec</option>
+              </select>
+              <select id="dash-year-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+            </div>
+
+            <!-- Quarter UI -->
+            <div id="dash-filter-quarter-ui" style="display:none; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+              <select id="dash-quarter-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px;">
+                <option value="1">Q1</option>
+                <option value="2">Q2</option>
+                <option value="3">Q3</option>
+                <option value="4">Q4</option>
+              </select>
+              <select id="dash-quarter-year-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+            </div>
+
+            <!-- Year UI -->
+            <div id="dash-filter-year-ui" style="display:none; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">PERIOD</span>
+              <select id="dash-year-only-sel" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; width:70px;"></select>
+            </div>
+
+            <!-- Custom UI -->
+            <div id="dash-filter-custom-ui" style="display:none; align-items:center; gap:8px;">
+              <span style="font-size:11px; font-weight:700; color:#64748b; letter-spacing:0.05em; text-transform:uppercase;">RANGE</span>
+              <input type="date" id="dash-custom-start" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; color-scheme:dark;">
+              <span style="color:#64748b; font-size:12px;">to</span>
+              <input type="date" id="dash-custom-end" style="background:#1e293b; border:1px solid #334155; border-radius:6px; color:#e2e8f0; font-size:13px; padding:4px 8px; outline:none; height:30px; color-scheme:dark;">
+            </div>
+
+            <div style="width:1px; height:16px; background:#334155;"></div>
+            <a href="#" onclick="applyDashFilter(); return false;" style="font-size:12px; color:#94a3b8; text-decoration:underline; cursor:pointer; font-weight:500;">Apply</a>
+          </div>
+
+          <div id="dash-showing-badge" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:6px; padding:0 12px; font-size:13px; font-weight:600; color:#818cf8; display:flex; align-items:center; height:32px; white-space:nowrap;">Showing: All</div>
+
+          <button class="btn-refresh" id="refresh-dashboard" onclick="loadDashboard()" title="Refresh" style="background:#1e293b; border:1px solid #334155; border-radius:6px; width:32px; height:32px; display:flex; align-items:center; justify-content:center; color:#94a3b8; cursor:pointer; margin:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 5.36A9 9 0 0020.49 15" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="dash-section-wrap" style="padding-top:24px">
+        <div class="kpi-grid" id="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Active Projects</div>
+            <div class="kpi-value" id="kpi-active-projects">0</div>
+            <div class="kpi-sub" id="kpi-active-projects-sub">0 last month</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">On Track</div>
+            <div class="kpi-value" id="kpi-ontrack" style="color:var(--green)">0</div>
+            <div class="kpi-sub" id="kpi-ontrack-sub">On track projects</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Off Track</div>
+            <div class="kpi-value" id="kpi-offtrack" style="color:var(--red)">0</div>
+            <div class="kpi-sub" id="kpi-offtrack-sub">Requires attention</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Findings Found</div>
+            <div class="kpi-value" id="kpi-findings">0</div>
+            <div class="kpi-sub" id="kpi-findings-sub">Vulnerabilities reported</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Row -->
+      <div class="dash-section-wrap">
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin-bottom:28px;">
+          <div class="table-wrap" style="padding:20px; background:var(--card);">
+            <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:16px;">VAPT Project Load &amp; Findings Trend</div>
+            <div id="dash-trend-chart-area" style="height:260px; position:relative;"><canvas id="dash-trend-chart"></canvas></div>
+          </div>
+          <div class="table-wrap" style="padding:20px; background:var(--card);">
+            <div style="font-size:14px; font-weight:700; color:var(--text); margin-bottom:16px;">Active Allocation Preview</div>
+            <div id="dash-alloc-area" style="max-height:260px; overflow-y:auto;">
+              <div class="empty-state">Loading allocation...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Projects Table -->
+      <div class="dash-section-wrap">
+        <div class="section-header">
+          <div class="section-heading">Ongoing Assessment Engagements</div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Project Name</th>
+                <th>Service</th>
+                <th>Type</th>
+                <th>Method</th>
+                <th>Target Date</th>
+                <th>Lead / PIC</th>
+                <th>Findings</th>
+              </tr>
+            </thead>
+            <tbody id="dash-active-body">
+              <tr>
+                <td colspan="8"><div class="empty-state">Loading active projects...</div></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Highlights Area -->
+      <div class="dash-section-wrap" style="margin-top:28px;">
+        <div class="section-header">
+          <div class="section-heading">Project Highlights &amp; Notes</div>
+        </div>
+        <div id="dash-highlights-area" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+          <div class="empty-state" style="grid-column:1/-1">Loading highlights...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Clients & Projects Section ── -->
+    <section class="section" id="section-projects">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">Clients &amp; VAPT Projects</h1>
+          <div class="page-sub">Client assessment histories, links, and operational records</div>
+        </div>
+        <button class="btn-primary" onclick="openCreateProject()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New Project
+        </button>
+      </div>
+
+      <!-- Filter Controls -->
+      <div style="display:flex; gap:12px; margin-bottom:20px; align-items:center;">
+        <input type="search" id="projects-search" placeholder="Search client or project name..." oninput="filterProjects()" style="flex:1; padding:9px 14px; border-radius:9px; border:1px solid var(--border); background:#0f172a; color:var(--text); font-size:13px; font-family:inherit; outline:none;">
+        <select id="projects-type-filter" onchange="filterProjects()" style="background:#0f172a; border:1px solid var(--border); border-radius:9px; color:var(--text); font-size:13px; padding:9px 14px; outline:none; cursor:pointer;">
+          <option value="">All Project Types</option>
+          <option value="web">Web</option>
+          <option value="api">API</option>
+          <option value="mobile">Mobile</option>
+          <option value="infra">Infrastructure</option>
+          <option value="phishing">Phishing</option>
+        </select>
+      </div>
+
+      <div id="client-groups">
+        <div class="empty-state">Loading clients and projects...</div>
+      </div>
+    </section>
+
+    <!-- ── Projects Board Section (Kanban) ── -->
+    <section class="section" id="section-pm-board">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">VAPT Delivery Board</h1>
+          <div class="page-sub">Visual Kanban workflow tracking project statuses and reporting phases</div>
+        </div>
+        <button class="btn-ghost" onclick="openBoardSetup()" style="max-width:140px; display:inline-flex; align-items:center; gap:6px;">
+          <span>⚙️</span> Setup Flow
+        </button>
+      </div>
+
+      <div id="board-container" style="display:flex; gap:16px; overflow-x:auto; padding-bottom:16px; min-height:60vh; align-items:flex-start;">
+        <div class="empty-state" style="width:100%">Loading Kanban board...</div>
+      </div>
+    </section>
+
+    <!-- ── Resource Allocation Section ── -->
+    <section class="section" id="section-allocation">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">Resource Capacity &amp; Allocation</h1>
+          <div class="page-sub">Track and balance assessor workloads across calendar months</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; background:#0f172a; border:1px solid var(--border); border-radius:9px; padding:3px 6px;">
+          <button class="btn-ghost" onclick="shiftAllocationMonth(-1)" style="padding:6px 12px; font-size:12px; font-weight:700;">&larr;</button>
+          <span id="capacity-month-label" style="font-size:13px; font-weight:700; color:var(--text); min-width:120px; text-align:center;">—</span>
+          <button class="btn-ghost" onclick="shiftAllocationMonth(1)" style="padding:6px 12px; font-size:12px; font-weight:700;">&rarr;</button>
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:flex-end; gap:20px; font-size:12px; color:var(--muted); margin-bottom:14px; padding-right:12px;">
+        <div style="display:flex; align-items:center; gap:6px;"><span style="display:block; width:10px; height:10px; border-radius:3px; background:#22c55e;"></span> 0-80% Safe</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="display:block; width:10px; height:10px; border-radius:3px; background:#f59e0b;"></span> 81-100% Full</div>
+        <div style="display:flex; align-items:center; gap:6px;"><span style="display:block; width:10px; height:10px; border-radius:3px; background:#ef4444;"></span> &gt;100% Overload</div>
+      </div>
+
+      <div class="table-wrap">
+        <div id="capacity-list" class="capacity-list">
+          <div class="empty-state">Loading capacity data...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── AI Mandays Estimator Section ── -->
+    <section class="section" id="section-ai-mandays">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">AI VAPT Mandays Estimator</h1>
+          <div class="page-sub">Generate technical mandays recommendations using Gemini models</div>
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+        <!-- Left: Form -->
+        <div class="table-wrap" style="padding:24px; background:var(--card);">
+          <div style="font-size:14px; font-weight:700; margin-bottom:20px; color:var(--accent);">Config &amp; Project Info</div>
+          
+          <div class="form-group">
+            <label>Gemini API Key</label>
+            <div style="display:flex; gap:8px;">
+              <input id="ai-api-key-input" type="password" placeholder="AIzaSy..." style="flex:1;">
+              <button class="btn-primary" onclick="saveAiApiKey()" style="font-size:12px; padding:0 14px;">Save</button>
+              <button class="btn-ghost" onclick="clearAiApiKey()" style="font-size:12px; padding:0 14px; flex:none; background:rgba(239,68,68,0.1); color:var(--red);">Clear</button>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px;">
+              <span id="ai-key-status" style="padding:2px 6px; border-radius:4px; font-weight:700;">Status</span>
+              <span style="color:var(--muted)">Key is saved locally in your browser.</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Gemini Model</label>
+            <select id="ai-model-select" onchange="saveAiApiKey()">
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended - Fast)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Thorough Reasoning)</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+            </select>
+          </div>
+
+          <hr style="border:0; border-top:1px solid var(--border); margin:20px 0;">
+
+          <div class="form-group">
+            <label>Project Type *</label>
+            <select id="ai-project-type" onchange="updateAiMethodOptions(); updateAiDynamicFields();">
+              <option value="web">Web Application Pentest</option>
+              <option value="api">API Security Assessment</option>
+              <option value="mobile">Mobile Application (Android/iOS)</option>
+              <option value="infra">Infrastructure/Network VAPT</option>
+              <option value="phishing">Phishing Simulation</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="ai-method-wrap">
+            <label>Methodology *</label>
+            <select id="ai-method">
+              <option value="blackbox">Black Box</option>
+              <option value="greybox">Grey Box</option>
+              <option value="whitebox">White Box</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="ai-dynamic-fields">
+            <!-- Dynamic fields render here -->
+          </div>
+
+          <div class="form-group" style="margin-top:16px;">
+            <label>Project Description &amp; Scope Details</label>
+            <textarea id="ai-description" placeholder="Include any details on authentication, integrations, custom features, compliance requirements, etc. to improve estimate precision..."></textarea>
+          </div>
+
+          <div id="ai-error" class="modal-err" style="margin-bottom:12px; padding:10px; border-radius:8px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2);"></div>
+
+          <button class="btn-primary" id="ai-estimate-btn" onclick="runAiEstimate()" style="width:100%; justify-content:center; padding:12px; font-size:14px;">
+            <span>🤖</span> Generate AI Estimate
+          </button>
+        </div>
+
+        <!-- Right: Results -->
+        <div style="display:flex; flex-direction:column; gap:20px;">
+          <!-- Loading -->
+          <div id="ai-loading" class="table-wrap" style="display:none; padding:48px; background:var(--card); text-align:center;">
+            <div style="animation: spin 1s linear infinite; display:inline-block; font-size:28px; margin-bottom:16px;">⏳</div>
+            <div style="font-weight:600; color:var(--text)">Analyzing scope parameters...</div>
+            <div style="font-size:12px; color:var(--muted); margin-top:6px;">Querying Gemini model. This may take 5-15 seconds.</div>
+          </div>
+
+          <!-- Result Card -->
+          <div id="ai-result" class="table-wrap" style="display:none; padding:24px; background:var(--card); flex:1;">
+            <div style="display:flex; align-items:center; justify-content:between; margin-bottom:20px;">
+              <span style="font-size:14px; font-weight:700; color:var(--green)">Estimate Results</span>
+              <span id="ai-r-confidence" style="margin-left:auto; font-size:11px; font-weight:700; padding:2px 8px; border-radius:10px;">Confidence</span>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+              <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:12px; border-radius:8px;">
+                <div style="font-size:11px; color:var(--muted)">KICK OFF</div>
+                <div style="font-size:20px; font-weight:800; margin-top:4px;"><span id="ai-r-kickoff">0</span> <span style="font-size:12px; font-weight:500;">days</span></div>
+              </div>
+              <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:12px; border-radius:8px;">
+                <div style="font-size:11px; color:var(--muted)">INFO GATHERING</div>
+                <div style="font-size:20px; font-weight:800; margin-top:4px;"><span id="ai-r-infogath">0</span> <span style="font-size:12px; font-weight:500;">days</span></div>
+              </div>
+              <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:12px; border-radius:8px;">
+                <div style="font-size:11px; color:var(--muted)">ASSESSMENT</div>
+                <div style="font-size:20px; font-weight:800; margin-top:4px; color:var(--accent);"><span id="ai-r-assessment">0</span> <span style="font-size:12px; font-weight:500; color:var(--muted);">days</span></div>
+              </div>
+              <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:12px; border-radius:8px;">
+                <div style="font-size:11px; color:var(--muted)">REPORTING</div>
+                <div style="font-size:20px; font-weight:800; margin-top:4px; color:#a78bfa;"><span id="ai-r-ir">0</span> <span style="font-size:12px; font-weight:500; color:var(--muted);">days</span></div>
+              </div>
+            </div>
+
+            <div style="background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); padding:16px; border-radius:10px; text-align:center; margin-bottom:20px;">
+              <div style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Total Recommended Mandays</div>
+              <div style="font-size:32px; font-weight:800; color:var(--text); margin-top:6px;"><span id="ai-r-total">0</span> <span style="font-size:18px; font-weight:500; color:var(--muted);">hari</span></div>
+            </div>
+
+            <div style="margin-bottom:20px;">
+              <div style="font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px;">Analysis &amp; Reasoning</div>
+              <div id="ai-r-reasoning" style="font-size:12px; color:var(--text); line-height:1.6; background:rgba(0,0,0,0.2); padding:12px; border-radius:8px; border:1px solid var(--border); white-space:pre-wrap;">Reasoning details...</div>
+            </div>
+
+            <div id="ai-r-notes-wrap" style="margin-bottom:24px; display:none;">
+              <div style="font-size:12px; font-weight:700; color:var(--muted); margin-bottom:6px;">Recommendations &amp; Caveats</div>
+              <div id="ai-r-notes" style="font-size:12px; color:#fca5a5; line-height:1.6; background:rgba(239,68,68,0.05); padding:12px; border-radius:8px; border:1px dashed rgba(239,68,68,0.25);">Notes...</div>
+            </div>
+
+            <button class="btn-primary" onclick="useEstimateInProject()" style="width:100%; justify-content:center; padding:10px; font-size:13px; background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); color:#86efac;">
+              Apply Estimate parameters to Create Project
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Archived Projects Section ── -->
+    <section class="section" id="section-archived">
+      <div class="section-header">
+        <div>
+          <h1 class="page-title">Archived VAPT Projects</h1>
+          <div class="page-sub">Historical project records and past security assessments</div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <input type="search" id="archived-search" placeholder="Search archived client or project name..." oninput="filterArchivedProjects()" style="width:100%; padding:9px 14px; border-radius:9px; border:1px solid var(--border); background:#0f172a; color:var(--text); font-size:13px; font-family:inherit; outline:none;">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Client</th>
+              <th>Project Name</th>
+              <th>Type</th>
+              <th>Lead / PIC</th>
+              <th>Completion Date</th>
+              <th>Timeline Performance</th>
+              <th>Findings</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="archived-body">
+            <tr>
+              <td colspan="8"><div class="empty-state">Loading archived projects...</div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── MODALS ── -->
+
+  <!-- Create/Edit Project Modal (Tabbed) -->
+  <div class="modal-overlay" id="modal-create-project" onclick="closeModal(event)">
+    <div class="modal" style="max-width:620px; max-height:90vh; overflow-y:auto;" onclick="event.stopPropagation()">
+      <div class="modal-title" id="modal-create-project-title">New Offensive Entry</div>
+
+      <!-- Tab Bar -->
+      <div id="ne-tab-bar" style="display:flex; margin-bottom:20px; border-radius:10px; overflow:hidden; border:1px solid var(--border);">
+        <button type="button" id="ne-tab-client" onclick="switchNeTab('client')" style="flex:1; padding:12px 16px; border:none; background:rgba(99,102,241,0.1); font-size:13px; font-weight:600; cursor:pointer; color:var(--text); transition:all .15s; border-right:1px solid var(--border);">Client Info</button>
+        <button type="button" id="ne-tab-project" onclick="switchNeTab('project')" style="flex:1; padding:12px 16px; border:none; background:transparent; font-size:13px; font-weight:600; cursor:pointer; color:var(--muted); transition:all .15s; opacity:0.5;">Project Details</button>
+      </div>
+
+      <!-- TAB 1: Client Selection -->
+      <div id="ne-client-section">
+        <input id="ne-client-search" type="search" placeholder="Search client name..." oninput="_filterClientCards()" style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:#0f172a; color:var(--text); font-size:13px; font-family:inherit; outline:none; margin-bottom:12px;">
+
+        <div id="ne-client-list" style="max-height:260px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; margin-bottom:12px;">
+          <div class="empty-state" style="padding:20px;">Loading clients...</div>
+        </div>
+
+        <!-- New client inline form -->
+        <div id="ne-new-client-fields" style="display:none; border:1px dashed rgba(99,102,241,0.3); border-radius:10px; padding:16px; margin-bottom:12px; background:rgba(99,102,241,0.04);">
+          <div style="font-size:12px; font-weight:700; color:var(--accent); margin-bottom:12px; display:flex; align-items:center; gap:6px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            New Client Info
+          </div>
+          <div class="form-group" style="margin-bottom:12px;">
+            <label>Client Name *</label>
+            <input id="ne-client-name" placeholder="e.g. PT Contoh Teknologi" oninput="_updateProjectTabState()">
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Engagement Reference</label>
+              <select id="ne-engagement-ref" onchange="_onEngRefChange()">
+                <option value="">— Select reference —</option>
+                <option value="Cisometric Proposal">Cisometric Proposal</option>
+                <option value="Pricing Letter">Pricing Letter</option>
+                <option value="Purchase Order">Purchase Order</option>
+                <option value="Cisometric Quotation">Cisometric Quotation</option>
+                <option value="__other__">Other (Custom)</option>
+              </select>
+              <input id="ne-engagement-ref-custom" placeholder="Type custom reference..." style="display:none; margin-top:6px;">
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+              <label>Engagement Info</label>
+              <input id="ne-engagement-info" placeholder="e.g. PO-2025-098">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+          <button type="button" id="ne-add-client-btn" onclick="_toggleNewClientForm()" style="background:none; border:1px solid var(--border); border-radius:8px; padding:7px 14px; font-size:12px; font-weight:600; color:var(--muted); cursor:pointer; font-family:inherit; transition:all .15s; display:inline-flex; align-items:center; gap:5px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+            Add New Client
+          </button>
+          <button type="button" class="btn-primary" style="font-size:12px; padding:8px 20px;" onclick="validateAndGoToProject()">Next &rarr;</button>
+        </div>
+      </div>
+
+      <!-- TAB 2: Project Details -->
+      <div id="ne-project-section" style="display:none;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:0 16px;">
+          <!-- Project Name -->
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Project Name *</label>
+            <input id="cp-name" placeholder="e.g. Core Banking Web App Pentest">
+          </div>
+
+          <!-- Scope Target -->
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Scope Target <span style="color:var(--muted); font-weight:500;">(optional)</span></label>
+            <input id="cp-scope-target" placeholder="e.g. https://api.example.com, iOS &amp; Android Apps">
+          </div>
+
+          <!-- Service -->
+          <div class="form-group">
+            <label>Service *</label>
+            <select id="cp-service" onchange="_onServiceChange()">
+              <option value="vapt">VAPT</option>
+              <option value="va">VA</option>
+              <option value="firewall_review">Firewall Review</option>
+              <option value="phishing">Phishing</option>
+              <option value="__other__">Other</option>
+            </select>
+            <input id="cp-service-custom" placeholder="Type custom service..." style="display:none; margin-top:6px;">
+          </div>
+
+          <!-- Scope Type -->
+          <div class="form-group">
+            <label>Scope Type *</label>
+            <select id="cp-type" onchange="updateCpMethodOptions()">
+              <option value="web">Web Application</option>
+              <option value="api">API Endpoint</option>
+              <option value="mobile">Mobile App</option>
+              <option value="infra">Infrastructure</option>
+              <option value="phishing">Phishing Simulation</option>
+            </select>
+          </div>
+
+          <!-- Methodology -->
+          <div class="form-group" id="cp-method-wrap">
+            <label>Methodology *</label>
+            <select id="cp-method">
+              <option value="blackbox">Black Box</option>
+              <option value="greybox">Grey Box</option>
+              <option value="whitebox">White Box</option>
+            </select>
+          </div>
+
+          <!-- Resource Count -->
+          <div class="form-group">
+            <label>Assessor Count *</label>
+            <select id="cp-resource-count" onchange="_onResourceCountChange()">
+              <option value="1">1 Assessor</option>
+              <option value="2">2 Assessors</option>
+              <option value="3">3 Assessors</option>
+              <option value="4">4 Assessors</option>
+              <option value="5">5 Assessors</option>
+              <option value="6">6 Assessors</option>
+              <option value="7">7 Assessors</option>
+              <option value="8">8 Assessors</option>
+              <option value="9">9 Assessors</option>
+              <option value="10">10 Assessors</option>
+            </select>
+          </div>
+
+          <!-- Dynamic PIC Dropdowns -->
+          <div class="form-group" id="cp-pic-1-wrap" style="grid-column:1/-1;">
+            <label>Lead Assessor / PIC 1 *</label>
+            <select id="cp-engineer"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-2-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 2</label>
+            <select id="cp-assist"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-3-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 3</label>
+            <select id="cp-engineer-3"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-4-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 4</label>
+            <select id="cp-engineer-4"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-5-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 5</label>
+            <select id="cp-engineer-5"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-6-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 6</label>
+            <select id="cp-engineer-6"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-7-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 7</label>
+            <select id="cp-engineer-7"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-8-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 8</label>
+            <select id="cp-engineer-8"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-9-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 9</label>
+            <select id="cp-engineer-9"><option value="">— Select Assessor —</option></select>
+          </div>
+          <div class="form-group" id="cp-pic-10-wrap" style="display:none; grid-column:1/-1;">
+            <label>Assessor / PIC 10</label>
+            <select id="cp-engineer-10"><option value="">— Select Assessor —</option></select>
+          </div>
+
+          <!-- Dates & Mandays -->
+          <div class="form-group">
+            <label>Kick Off Date *</label>
+            <input id="cp-kickoff" type="date">
+          </div>
+          <div class="form-group">
+            <label>Start Date *</label>
+            <input id="cp-start-date" type="date" oninput="onMandaysParamChanged()">
+          </div>
+          <div class="form-group">
+            <label>Assessment Mandays *</label>
+            <input id="cp-md-assessment" type="number" value="0" min="0" oninput="onAssessmentInput()">
+          </div>
+          <div class="form-group">
+            <label>Initial Report Mandays</label>
+            <input id="cp-md-initial-report" type="number" value="1" min="0" oninput="onMandaysParamChanged()">
+          </div>
+
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Target Initial Report Date</label>
+            <input id="cp-initial" type="date" readonly style="opacity:0.65; cursor:not-allowed; background:#0b0f19;">
+            <div id="cp-initial-warn" style="font-size:11px; color:#f87171; margin-top:4px; display:none;"></div>
+            <div id="cp-initial-auto-note" style="font-size:11px; color:#a78bfa; margin-top:4px;">🤖 Auto-calculated from start date &amp; mandays (excluding weekends &amp; holidays)</div>
+          </div>
+
+          <!-- Past Project toggle -->
+          <div class="form-group" style="grid-column:1/-1; margin-top:8px;">
+            <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:var(--text);">
+              <input type="checkbox" id="cp-is-past-project" onchange="_onPastProjectChange()" style="width:16px; height:16px;">
+              Input Past Project (Project lama yang selesai di masa lampau)
+            </label>
+          </div>
+
+          <div class="form-group" id="cp-actual-end-wrap" style="display:none; grid-column:1/-1; background:rgba(99,102,241,0.08); padding:12px; border-radius:8px; border:1px dashed rgba(99,102,241,0.3);">
+            <label>Actual Completion Date *</label>
+            <input id="cp-actual-end" type="date">
+          </div>
+
+          <!-- Resource Links -->
+          <div class="form-group" style="grid-column:1/-1; margin-top:8px;">
+            <label style="display:flex; align-items:center; justify-content:space-between;">
+              Project Resources / Evidence Links
+              <button type="button" onclick="addProjectLink()" style="background:rgba(99,102,241,0.15); border:1px solid rgba(99,102,241,0.3); border-radius:6px; color:#a5b4fc; font-size:11px; padding:3px 10px; cursor:pointer; font-weight:600;">+ Add Link</button>
+            </label>
+            <div id="cp-links-container" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;"></div>
+          </div>
+        </div>
+
+        <div class="modal-err" id="cp-err"></div>
+        <div class="modal-actions">
+          <button class="btn-ghost" onclick="document.getElementById('modal-create-project').classList.remove('open')">Cancel</button>
+          <button class="btn-primary" onclick="submitNewEntry()" id="cp-btn" style="justify-content:center;">Create Project</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Retest Modal -->
+  <div class="modal-overlay" id="modal-retest" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title">Schedule Retest</div>
+      <div class="form-group">
+        <label>Retest Lead Assessor *</label>
+        <select id="retest-engineer"><option value="">— Select Assessor —</option></select>
+      </div>
+      <div class="form-group">
+        <label>Retest Assist Assessor</label>
+        <select id="retest-assist"><option value="">— Select Assessor —</option></select>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>Start Date *</label>
+          <input id="retest-start-date" type="date">
+        </div>
+        <div class="form-group">
+          <label>End Date *</label>
+          <input id="retest-end-date" type="date">
+        </div>
+      </div>
+      <div class="modal-err" id="retest-err"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="document.getElementById('modal-retest').classList.remove('open')">Cancel</button>
+        <button class="btn-primary" onclick="submitRetest()" id="retest-btn">Schedule</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Highlight Modal -->
+  <div class="modal-overlay" id="modal-highlight" onclick="closeModal(event)">
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="modal-title">Project Highlight Note</div>
+      <div class="form-group">
+        <label>Highlight Content</label>
+        <textarea id="hl-text" placeholder="Type manual notes, achievements, or vulnerabilities discovered..."></textarea>
+      </div>
+      <div style="margin-bottom:16px;">
+        <button class="btn-ghost" id="hl-ai-btn" onclick="generateHighlight()" style="width:100%; display:inline-flex; align-items:center; justify-content:center; gap:6px; background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.25); color:var(--accent);">
+          <span>🤖</span> Generate summary with Gemini
+        </button>
+      </div>
+      <div class="modal-err" id="hl-err"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="document.getElementById('modal-highlight').classList.remove('open')">Cancel</button>
+        <button class="btn-primary" onclick="saveHighlight()" id="hl-btn">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Board Setup Modal -->
+  <div class="modal-overlay" id="modal-board-setup" onclick="closeModal(event)">
+    <div class="modal" style="max-width:500px;" onclick="event.stopPropagation()">
+      <div class="modal-title">⚙️ Setup Status Flow</div>
+      <p style="color:var(--muted); font-size:12px; margin:-14px 0 20px; line-height:1.6;">Configure column statuses for tracking assessment workflows. Drag status tiles to modify order.</p>
+      
+      <div class="setup-status-list" id="setup-status-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
+
+      <div style="display:flex; gap:8px; margin-bottom:20px;">
+        <input id="setup-new-name" placeholder="New status title..." style="flex:1;">
+        <input type="color" id="setup-new-color" value="#6366f1" style="width:36px; height:36px; padding:2px; border-radius:8px; cursor:pointer;">
+        <button class="btn-primary" onclick="addBoardStatus()" style="font-size:12px;">Add</button>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="document.getElementById('modal-board-setup').classList.remove('open')">Close</button>
+        <button class="btn-primary" onclick="saveBoardOrder()">Save Sequence</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Board Detail Modal -->
+  <div class="modal-overlay" id="modal-board-detail" onclick="closeModal(event)">
+    <div class="modal" style="max-width:560px; max-height:85vh; overflow-y:auto;" onclick="event.stopPropagation()">
+      <div class="modal-title" id="bd-title">Project Details</div>
+      <div id="bd-body"></div>
+      <div class="modal-actions" style="margin-top:20px;">
+        <button class="btn-ghost" onclick="document.getElementById('modal-board-detail').classList.remove('open')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <script src="/js/portal/shared.js"></script>
+  <script src="/js/portal/offensive.js"></script>
+</body>
+</html>
