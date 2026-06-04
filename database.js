@@ -673,7 +673,28 @@ function initializeDb() {
       UNIQUE(requester_id, target_engineer_id)
     )
   `);
+  setTimeout(createDatabaseIndexes, 500);
 }
+
+function createDatabaseIndexes() {
+  const indexes = [
+    "CREATE INDEX IF NOT EXISTS idx_projects_team ON projects(team);",
+    "CREATE INDEX IF NOT EXISTS idx_projects_client_id ON projects(client_id);",
+    "CREATE INDEX IF NOT EXISTS idx_projects_board_status_id ON projects(board_status_id);",
+    "CREATE INDEX IF NOT EXISTS idx_clients_team ON clients(team);",
+    "CREATE INDEX IF NOT EXISTS idx_users_team ON users(team);",
+    "CREATE INDEX IF NOT EXISTS idx_board_statuses_team ON board_statuses(team);",
+    "CREATE INDEX IF NOT EXISTS idx_project_access_requests_status ON project_access_requests(status);"
+  ];
+  indexes.forEach(idxQuery => {
+    db.run(idxQuery, (err) => {
+      if (err) {
+        console.error(`[DB Index] Error running index query: ${idxQuery}`, err.message);
+      }
+    });
+  });
+}
+
 
 async function seedDefaultUsers() {
   const defaults = [
@@ -824,7 +845,7 @@ function getDashboardSummary(opts, callback) {
            p.initial_completed_at, p.final_completed_at,
            p.is_archived, p.archived_at,
            p.start_date, p.mandays_assessment, p.mandays_initial_report,
-           p.team, p.service, p.audit_metadata,
+           p.team, p.service, p.audit_metadata, p.project_links,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -1006,8 +1027,12 @@ function getActivityLog(type, callback) {
   const params = [];
   let where = '';
   if (type) {
-    where = 'WHERE al.type = ?';
-    params.push(type);
+    if (type === 'project') {
+      where = "WHERE al.type IN ('project', 'crud')";
+    } else {
+      where = 'WHERE al.type = ?';
+      params.push(type);
+    }
   }
   getDb().all(`
     SELECT al.*, 
@@ -1987,11 +2012,61 @@ function runDiagnostics(callback) {
         if (err3) return callback(err3);
         results.userMismatches = rows3;
 
-        callback(null, results);
+        // Team distribution (Users)
+        db.all(`SELECT COALESCE(team, 'offensive') AS team, COUNT(*) AS count FROM users GROUP BY team`, [], (err4, rows4) => {
+          if (err4) return callback(err4);
+          results.userDistribution = rows4;
+
+          // Team distribution (Projects)
+          db.all(`SELECT COALESCE(team, 'offensive') AS team, COUNT(*) AS count FROM projects WHERE is_archived = 0 GROUP BY team`, [], (err5, rows5) => {
+            if (err5) return callback(err5);
+            results.projectDistribution = rows5;
+
+            // Recently changed projects
+            db.all(`
+              SELECT p.id, p.name, al.action, al.created_at, u.display_name AS actor_name
+              FROM activity_log al
+              JOIN projects p ON p.id = al.project_id
+              LEFT JOIN users u ON u.id = al.actor_id
+              WHERE al.action IN ('create_project', 'edit_project', 'archive_project', 'restore_project')
+              ORDER BY al.created_at DESC
+              LIMIT 5
+            `, [], (err6, rows6) => {
+              if (err6) return callback(err6);
+              results.recentlyChanged = rows6;
+
+              // Access request SLA
+              db.all(`
+                SELECT 
+                  COUNT(*) AS total_count,
+                  SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+                  AVG(CASE WHEN status IN ('approved', 'rejected') AND reviewed_at IS NOT NULL THEN (julianday(reviewed_at) - julianday(created_at)) * 24 ELSE NULL END) AS avg_hours
+                FROM project_access_requests
+              `, [], (err7, rows7) => {
+                if (err7) return callback(err7);
+                results.projectAccessSla = rows7[0] || { total_count: 0, pending_count: 0, avg_hours: null };
+
+                db.all(`
+                  SELECT 
+                    COUNT(*) AS total_count,
+                    SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count,
+                    AVG(CASE WHEN status IN ('approved', 'rejected') AND reviewed_at IS NOT NULL THEN (julianday(reviewed_at) - julianday(created_at)) * 24 ELSE NULL END) AS avg_hours
+                  FROM access_requests
+                `, [], (err8, rows8) => {
+                  if (err8) return callback(err8);
+                  results.accountAccessSla = rows8[0] || { total_count: 0, pending_count: 0, avg_hours: null };
+
+                  callback(null, results);
+                });
+              });
+            });
+          });
+        });
       });
     });
   });
 }
+
 
 function restoreProject(id, callback) {
   const db = getDb();

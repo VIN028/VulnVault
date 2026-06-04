@@ -500,6 +500,7 @@
 
     const q = (document.getElementById('projects-search')?.value || '').toLowerCase();
     const serviceFilter = document.getElementById('projects-service-filter')?.value || '';
+    const regFilter = document.getElementById('projects-regulatory-filter')?.value || '';
 
     let list = _clientGroups.map(c => {
       let projects = c.projects || [];
@@ -509,10 +510,21 @@
       if (serviceFilter) {
         projects = projects.filter(p => p.service === serviceFilter);
       }
+      if (regFilter) {
+        projects = projects.filter(p => {
+          try {
+            if (!p.audit_metadata) return false;
+            const meta = JSON.parse(p.audit_metadata);
+            return meta.regulatory_reference === regFilter;
+          } catch {
+            return false;
+          }
+        });
+      }
       return { ...c, projects };
     });
 
-    if (q || serviceFilter) {
+    if (q || serviceFilter || regFilter) {
       list = list.filter(c => c.projects.length > 0);
     }
 
@@ -530,7 +542,7 @@
 
       return `
         <div class="client-group">
-          <div class="client-group-header" onclick="toggleGroup('${pid}', ${c.client_id})">
+          <div class="client-group-header js-toggle-group" data-pid="${pid}" data-client-id="${c.client_id}">
             <div style="display:flex; align-items:center; gap:12px; font-weight:700;">
               <svg id="arr-${c.client_id}" class="cg-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px; height:14px; transform:${isExpanded ? 'rotate(90deg)' : 'none'};"><polyline points="9 6 15 12 9 18"/></svg>
               <span>${esc(c.client_name)}</span>
@@ -567,8 +579,8 @@
                         <td style="font-size:12px; color:var(--muted);">${fmt(p.final_report_date)}</td>
                         <td>
                           <div style="display:flex; gap:6px;">
-                            <button class="btn-ghost" onclick="openCreateProject(true, ${jsa(p)})" style="padding:4px 8px; font-size:11px; flex:none;">Edit</button>
-                            <button class="btn-ghost" onclick="openHighlightModal(${p.project_id}, ${jsa(p.highlight_text)})" style="padding:4px 8px; font-size:11px; flex:none;">Highlight</button>
+                            <button class="btn-ghost js-edit-project" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; flex:none;">Edit</button>
+                            <button class="btn-ghost js-open-highlight" data-id="${p.project_id}" data-highlight="${escA(p.highlight_text || '')}" style="padding:4px 8px; font-size:11px; flex:none;">Highlight</button>
                           </div>
                         </td>
                       </tr>
@@ -1077,10 +1089,37 @@
         card.onmouseover = () => { card.style.borderColor = 'rgba(255,255,255,0.2)'; card.style.transform = 'translateY(-2px)'; };
         card.onmouseout = () => { card.style.borderColor = 'var(--border)'; card.style.transform = 'none'; };
 
+        let meta = {};
+        try {
+          if (p.audit_metadata) meta = JSON.parse(p.audit_metadata);
+        } catch {}
+
+        let linksList = [];
+        try {
+          if (p.project_links) linksList = JSON.parse(p.project_links);
+        } catch {}
+
+        const regRef = meta.regulatory_reference || '';
+        const objective = meta.audit_objective || '';
+        const scope = meta.audit_scope || '';
+        const linksCount = Array.isArray(linksList) ? linksList.length : 0;
+
+        const regBadge = regRef ? `<span class="badge" style="background:rgba(99,102,241,0.12); color:var(--accent); font-size:9px; padding:2px 6px;">${esc(regRef)}</span>` : '';
+        const linksBadge = linksCount > 0 ? `<span class="badge" style="background:rgba(16,185,129,0.12); color:var(--green); font-size:9px; padding:2px 6px; display:inline-flex; align-items:center; gap:4px;">🔗 ${linksCount} Evidence${linksCount > 1 ? 's' : ''}</span>` : '';
+
+        const objectivePreview = objective ? `<div style="font-size:11px; color:var(--text); margin-bottom:4px; font-style:italic;"><strong>Obj:</strong> ${esc(objective.substring(0, 50) + (objective.length > 50 ? '...' : ''))}</div>` : '';
+        const scopePreview = scope ? `<div style="font-size:11px; color:var(--muted); margin-bottom:8px;"><strong>Scope:</strong> ${esc(scope.substring(0, 50) + (scope.length > 50 ? '...' : ''))}</div>` : '';
+
         card.innerHTML = `
           <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">${esc(p.client_name)}</div>
           <div style="font-weight:700; font-size:13px; color:var(--text); margin-bottom:8px; line-height:1.4;">${esc(p.project_name)}</div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
+          ${objectivePreview}
+          ${scopePreview}
+          <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">
+            ${regBadge}
+            ${linksBadge}
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.03); padding-top:8px;">
             <span class="badge badge-api" style="font-size:9px; padding:2px 6px;">${sl[p.service] || 'Audit'}</span>
             <span style="font-size:10px; color:var(--muted); font-weight:600;">Lead: ${esc(p.engineer_name ? p.engineer_name.split(' ')[0] : '—')}</span>
           </div>
@@ -1176,7 +1215,7 @@
 
     try {
       const order = _boardStatuses.length;
-      await apiFetch('/api/board-statuses', 'POST', { name, color, order_num: order, team: 'itaudit' });
+      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'itaudit' });
       nameInput.value = '';
 
       _boardStatuses = await apiFetch('/api/board-statuses?team=itaudit');
@@ -1274,8 +1313,8 @@
       </div>
       ${p.board_status_id === -1 ? `
         <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
-          <button class="btn-primary" onclick="archiveProjectFromBoard(${p.project_id})" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
-            Archive Audit
+          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
+            Archive Engagement
           </button>
         </div>
       ` : ''}
@@ -1289,6 +1328,8 @@
   let _allocationMonthIdx = 0;
   const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+  let _lastAllocationSummary = null;
+
   async function loadAllocation() {
     const listEl = document.getElementById('capacity-list');
     if (!listEl) return;
@@ -1296,6 +1337,7 @@
 
     try {
       const summary = await apiFetch('/api/dashboard/summary?team=itaudit');
+      _lastAllocationSummary = summary;
       buildAllocationMonths(summary);
       renderCapacityView(summary);
     } catch (e) {
@@ -1303,26 +1345,21 @@
     }
   }
 
+  window.toggleAllocationViewMode = function () {
+    const mode = document.getElementById('allocation-view-mode').value;
+    const controls = document.getElementById('allocation-month-controls');
+    if (controls) {
+      controls.style.display = mode === 'month' ? 'flex' : 'none';
+    }
+    if (_lastAllocationSummary) {
+      renderCapacityView(_lastAllocationSummary);
+    }
+  };
+
   function buildAllocationMonths(summary) {
-    const months = new Set();
-    const today = new Date();
-
-    summary.forEach(r => {
-      [r.kickoff_date, r.start_date, r.initial_report_date, r.final_report_date].filter(Boolean).forEach(d => {
-        const dt = new Date(d);
-        if (!isNaN(dt.getTime())) {
-          months.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
-        }
-      });
-    });
-
-    months.add(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
-    const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    months.add(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
-
-    _allocationMonths = [...months].sort();
-    const curVal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    _allocationMonthIdx = Math.max(0, _allocationMonths.indexOf(curVal));
+    const res = AllocationShared.buildAllocationMonths(summary);
+    _allocationMonths = res.allocationMonths;
+    _allocationMonthIdx = res.allocationMonthIdx;
     updateAllocationMonthLabel();
   }
 
@@ -1345,95 +1382,130 @@
     const listEl = document.getElementById('capacity-list');
     if (!listEl) return;
 
-    const m = _allocationMonths[_allocationMonthIdx];
-    if (!m) return;
-    const [y, mon] = m.split('-');
-    const year = Number(y), month = Number(mon) - 1;
-    const { workdays } = getWorkdaysInMonth(year, month);
+    const mode = document.getElementById('allocation-view-mode')?.value || 'month';
 
-    const engMap = new Map();
-    _allEngineers.forEach(e => engMap.set(e.id, { name: e.display_name, used: 0, projects: [] }));
+    if (mode === 'month') {
+      const m = _allocationMonths[_allocationMonthIdx];
+      if (!m) return;
+      const [y, mon] = m.split('-');
+      const year = Number(y), month = Number(mon) - 1;
+      const { workdays } = getWorkdaysInMonth(year, month);
 
-    summary.forEach(r => {
-      if (r.project_id && r.kickoff_date && r.mandays_assessment > 0) {
-        const md = _assessmentMandaysInMonth(r, year, month);
-        if (md > 0) {
-          const hasPic = r.assigned_engineer_id, hasAssist = r.assist_engineer_id;
-          const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
-          const perPerson = numEng > 0 ? md / numEng : md;
+      const engMap = new Map();
+      _allEngineers.forEach(e => engMap.set(e.id, { name: e.display_name, used: 0, projects: [] }));
 
-          const pName = `${r.client_name} - ${r.project_name} (${perPerson.toFixed(1)} d)`;
+      summary.forEach(r => {
+        if (r.project_id && r.kickoff_date && r.mandays_assessment > 0) {
+          const md = _assessmentMandaysInMonth(r, year, month);
+          if (md > 0) {
+            const hasPic = r.assigned_engineer_id, hasAssist = r.assist_engineer_id;
+            const numEng = (hasPic ? 1 : 0) + (hasAssist ? 1 : 0);
+            const perPerson = numEng > 0 ? md / numEng : md;
 
-          if (hasPic && engMap.has(r.assigned_engineer_id)) {
-            engMap.get(r.assigned_engineer_id).used += perPerson;
-            engMap.get(r.assigned_engineer_id).projects.push(pName);
-          }
-          if (hasAssist && engMap.has(r.assist_engineer_id)) {
-            engMap.get(r.assist_engineer_id).used += perPerson;
-            engMap.get(r.assist_engineer_id).projects.push(pName);
+            const pName = `${r.client_name} - ${r.project_name} (${perPerson.toFixed(1)} d)`;
+
+            if (hasPic && engMap.has(r.assigned_engineer_id)) {
+              engMap.get(r.assigned_engineer_id).used += perPerson;
+              engMap.get(r.assigned_engineer_id).projects.push(pName);
+            }
+            if (hasAssist && engMap.has(r.assist_engineer_id)) {
+              engMap.get(r.assist_engineer_id).used += perPerson;
+              engMap.get(r.assist_engineer_id).projects.push(pName);
+            }
           }
         }
+      });
+
+      const list = [...engMap.values()].sort((a, b) => b.used - a.used);
+      if (!list.length) {
+        listEl.innerHTML = '<div class="empty-state">No consultants defined for the IT Audit team.</div>';
+        return;
       }
-    });
 
-    const list = [...engMap.values()].sort((a, b) => b.used - a.used);
-    if (!list.length) {
-      listEl.innerHTML = '<div class="empty-state">No consultants defined for the IT Audit team.</div>';
-      return;
+      listEl.innerHTML = list.map(e => {
+        const pct = Math.round((e.used / workdays) * 100);
+        let barClass = 'green';
+        if (pct > 80) barClass = 'yellow';
+        if (pct > 100) barClass = 'red';
+        const fillWidth = Math.min(100, pct);
+        const subNotes = e.projects.length ? e.projects.join(', ') : 'No engagements staffed';
+
+        return `
+          <div class="capacity-row" style="border-bottom:1px solid var(--border); padding:16px 20px;">
+            <div class="capacity-row-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-weight:700; color:var(--text);">${esc(e.name)}</div>
+              <div style="color:var(--muted); font-size:12px;">Allocated: <strong>${e.used.toFixed(1)} / ${workdays} d</strong> (${pct}%)</div>
+            </div>
+            <div class="capacity-bar-track" style="height:8px; margin-bottom:8px;">
+              <div class="capacity-bar-fill ${barClass}" style="width:${fillWidth}%; height:100%;"></div>
+            </div>
+            <div style="font-size:11px; color:var(--muted); line-height:1.4;">Engagements: ${esc(subNotes)}</div>
+          </div>
+        `;
+      }).join('');
+    } else {
+      // Group allocations by Audit Period (from audit_metadata)
+      const engMap = new Map();
+      _allEngineers.forEach(e => engMap.set(e.id, { name: e.display_name, allocations: [] }));
+
+      summary.forEach(r => {
+        if (r.project_id && r.kickoff_date && r.mandays_assessment > 0) {
+          let meta = {};
+          try {
+            if (r.audit_metadata) meta = JSON.parse(r.audit_metadata);
+          } catch {}
+
+          const periodStart = meta.audit_period_start || r.start_date || r.kickoff_date;
+          const periodEnd = meta.audit_period_end || r.final_report_date;
+
+          const pInfo = {
+            clientName: r.client_name,
+            projectName: r.project_name,
+            period: (periodStart && periodEnd) ? `${periodStart} to ${periodEnd}` : 'N/A',
+            mandays: r.mandays_assessment
+          };
+
+          if (r.assigned_engineer_id && engMap.has(r.assigned_engineer_id)) {
+            engMap.get(r.assigned_engineer_id).allocations.push(pInfo);
+          }
+          if (r.assist_engineer_id && engMap.has(r.assist_engineer_id)) {
+            engMap.get(r.assist_engineer_id).allocations.push(pInfo);
+          }
+        }
+      });
+
+      const list = [...engMap.values()];
+      if (!list.length) {
+        listEl.innerHTML = '<div class="empty-state">No consultants defined for the IT Audit team.</div>';
+        return;
+      }
+
+      listEl.innerHTML = list.map(e => {
+        const allocHtml = e.allocations.length
+          ? e.allocations.map(a => `
+            <div style="background:rgba(255,255,255,0.01); border:1px solid var(--border); border-radius:8px; padding:10px 14px; margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-weight:600; color:var(--text);">${esc(a.clientName)} - ${esc(a.projectName)}</div>
+                <div style="font-size:11px; color:var(--muted); margin-top:2px;">Period: ${esc(a.period)}</div>
+              </div>
+              <span class="badge badge-api" style="font-size:10px; font-weight:700;">${a.mandays} mandays</span>
+            </div>
+          `).join('')
+          : '<div style="color:var(--muted); font-size:12px; margin-top:8px;">No engagements staffed in any audit period.</div>';
+
+        return `
+          <div class="capacity-row" style="border-bottom:1px solid var(--border); padding:16px 20px;">
+            <div style="font-weight:700; color:var(--text); font-size:14px; margin-bottom:4px;">${esc(e.name)}</div>
+            <div style="font-size:12px; color:var(--muted);">Audit Period Engagements:</div>
+            ${allocHtml}
+          </div>
+        `;
+      }).join('');
     }
-
-    listEl.innerHTML = list.map(e => {
-      const pct = Math.round((e.used / workdays) * 100);
-      let barClass = 'green';
-      if (pct > 80) barClass = 'yellow';
-      if (pct > 100) barClass = 'red';
-      const fillWidth = Math.min(100, pct);
-      const subNotes = e.projects.length ? e.projects.join(', ') : 'No engagements staffed';
-
-      return `
-        <div class="capacity-row" style="border-bottom:1px solid var(--border); padding:16px 20px;">
-          <div class="capacity-row-top" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-            <div style="font-weight:700; color:var(--text);">${esc(e.name)}</div>
-            <div style="color:var(--muted); font-size:12px;">Allocated: <strong>${e.used.toFixed(1)} / ${workdays} d</strong> (${pct}%)</div>
-          </div>
-          <div class="capacity-bar-track" style="height:8px; margin-bottom:8px;">
-            <div class="capacity-bar-fill ${barClass}" style="width:${fillWidth}%; height:100%;"></div>
-          </div>
-          <div style="font-size:11px; color:var(--muted); line-height:1.4;">Engagements: ${esc(subNotes)}</div>
-        </div>
-      `;
-    }).join('');
   }
 
   function _assessmentMandaysInMonth(r, year, month) {
-    const dtStart = r.start_date || r.kickoff_date;
-    if (!dtStart || !(r.mandays_assessment > 0)) return 0;
-
-    const ko = new Date(dtStart);
-    let curYear = ko.getFullYear();
-    let curMonth = ko.getMonth();
-    let remaining = r.mandays_assessment;
-
-    while (remaining > 0) {
-      const days = getWorkdaysInMonth(curYear, curMonth);
-      let avail = 0;
-      if (curYear === ko.getFullYear() && curMonth === ko.getMonth()) {
-        const overlap = workingDaysBetween(dtStart, new Date(curYear, curMonth + 1, 0).toLocaleDateString('en-CA')).days;
-        avail = overlap;
-      } else {
-        avail = days.workdays;
-      }
-
-      const consumed = Math.min(remaining, avail);
-      if (curYear === year && curMonth === month) {
-        return consumed;
-      }
-      remaining -= consumed;
-      curMonth++;
-      if (curMonth > 11) { curMonth = 0; curYear++; }
-      if (curYear > year + 2) break;
-    }
-    return 0;
+    return AllocationShared.assessmentMandaysInMonth(r, year, month);
   }
 
   // ── Highlight modal logic ──────────────────────────────────────────────────────
@@ -1504,7 +1576,7 @@
           <td style="font-size:12px; color:var(--muted);">${fmt(p.final_completed_at || p.archived_at)}</td>
           <td>${timelineBadge}</td>
           <td>
-            <button class="btn-ghost" onclick="restoreProjectFromArchive(${p.project_id})" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
+            <button class="btn-ghost js-restore-project-archive" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
               Restore
             </button>
           </td>
@@ -1543,5 +1615,70 @@
       showToast(e.message, 'error');
     }
   }
+
+  // Global click event delegation for IT Audit
+  document.addEventListener('click', function (e) {
+    // 1. Toggle group
+    const toggleGroupBtn = e.target.closest('.js-toggle-group');
+    if (toggleGroupBtn) {
+      toggleGroup(toggleGroupBtn.dataset.pid, Number(toggleGroupBtn.dataset.clientId));
+      return;
+    }
+
+    // 2. Edit project
+    const editProjBtn = e.target.closest('.js-edit-project');
+    if (editProjBtn) {
+      const projId = Number(editProjBtn.dataset.id);
+      let foundProj = null;
+      for (const c of _clientGroups) {
+        const p = c.projects.find(x => x.project_id === projId);
+        if (p) { foundProj = p; break; }
+      }
+      if (foundProj) openCreateProject(true, foundProj);
+      return;
+    }
+
+    // 3. Highlight project modal
+    const hlProjBtn = e.target.closest('.js-open-highlight');
+    if (hlProjBtn) {
+      openHighlightModal(Number(hlProjBtn.dataset.id), hlProjBtn.dataset.highlight);
+      return;
+    }
+
+    // 4. Select client in create project modal
+    const selectNeBtn = e.target.closest('.js-select-ne-client');
+    if (selectNeBtn) {
+      window.selectNeClient(Number(selectNeBtn.dataset.id));
+      return;
+    }
+
+    // 5. Delete board status
+    const deleteBoardStatusBtn = e.target.closest('.js-delete-board-status');
+    if (deleteBoardStatusBtn) {
+      deleteBoardStatus(Number(deleteBoardStatusBtn.dataset.id));
+      return;
+    }
+
+    // 6. Archive project from board detail
+    const archiveProjBtn = e.target.closest('.js-archive-project-from-board');
+    if (archiveProjBtn) {
+      archiveProjectFromBoard(Number(archiveProjBtn.dataset.id));
+      return;
+    }
+
+    // 7. Restore project from archive list
+    const restoreProjBtn = e.target.closest('.js-restore-project-archive');
+    if (restoreProjBtn) {
+      restoreProjectFromArchive(Number(restoreProjBtn.dataset.id));
+      return;
+    }
+
+    // 8. Remove project link (from shared form link row)
+    const removeLinkBtn = e.target.closest('.js-remove-project-link');
+    if (removeLinkBtn) {
+      document.getElementById(removeLinkBtn.dataset.id)?.remove();
+      return;
+    }
+  });
 
 })();

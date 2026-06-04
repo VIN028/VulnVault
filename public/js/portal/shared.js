@@ -39,22 +39,30 @@
   async function apiFetch(url, method, body) {
     method = method || 'GET';
     body = body || null;
+
     const headers = { 'Content-Type': 'application/json' };
+
     if (method !== 'GET') {
-      try {
-        const token = await getCsrfToken();
-        if (token) {
-          headers['X-CSRF-Token'] = token;
-        }
-      } catch (e) {
-        console.warn('Failed to fetch CSRF token:', e);
+      const token = await getCsrfToken();
+      if (!token) {
+        throw new Error('Missing CSRF token');
       }
+      headers['X-CSRF-Token'] = token;
     }
+
     const opts = { method: method, headers: headers };
     if (body) opts.body = JSON.stringify(body);
+
     const r = await fetch(url, opts);
     const j = await r.json().catch(function () { return {}; });
-    if (!r.ok) throw new Error(j.error || 'Request failed (' + r.status + ')');
+
+    if (!r.ok) {
+      if (r.status === 403 && /CSRF/i.test(j.error || '')) {
+        csrfToken = null;
+      }
+      throw new Error(j.error || 'Request failed (' + r.status + ')');
+    }
+
     return j;
   }
 

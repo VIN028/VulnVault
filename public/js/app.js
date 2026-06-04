@@ -1,7 +1,48 @@
-/* ═══════════════════════════════════════════════════════════════════
-   VulnVault — Main Application JavaScript
-   Features: Markdown rendering, multi-image POC, paste support
-═══════════════════════════════════════════════════════════════════ */
+let appCsrfToken = null;
+
+async function getCsrfToken() {
+  if (appCsrfToken) return appCsrfToken;
+
+  const res = await fetch('/api/csrf-token');
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok || !data.token) {
+    throw new Error(data.error || 'Failed to fetch CSRF token');
+  }
+
+  appCsrfToken = data.token;
+  return appCsrfToken;
+}
+
+async function apiRequest(url, options = {}) {
+  const method = (options.method || 'GET').toUpperCase();
+  const headers = { ...(options.headers || {}) };
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers['X-CSRF-Token'] = await getCsrfToken();
+  }
+
+  return fetch(url, {
+    ...options,
+    method,
+    headers
+  });
+}
+
+async function apiJson(url, method = 'GET', body = null) {
+  const headers = { 'Content-Type': 'application/json' };
+
+  const res = await apiRequest(url, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+
+  return data;
+}
 
 // ─── State ────────────────────────────────────────────────────────────────────
 let currentReport = null;
@@ -105,7 +146,7 @@ async function logoutApp() {
   });
   if (!ok) return;
   try {
-    await fetch('/api/logout', { method: 'POST' });
+    await apiRequest('/api/logout', { method: 'POST' });
   } catch (_) {}
   window.location.href = '/login.html';
 }
@@ -561,7 +602,7 @@ async function handleScreenshotFile(file) {
   const formData = new FormData();
   formData.append('screenshot', file);
   try {
-    const res  = await fetch('/api/upload', { method: 'POST', body: formData });
+    const res  = await apiRequest('/api/upload', { method: 'POST', body: formData });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
     uploadedScreenshotPaths.push(data.path);
@@ -651,7 +692,7 @@ async function handleGenerate(e) {
   }, 2200);
 
   try {
-    const res = await fetch('/api/ai/generate', {
+    const res = await apiRequest('/api/ai/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -764,7 +805,7 @@ async function saveToLibrary() {
       screenshot_path: allScreenshots.length ? JSON.stringify(allScreenshots) : null,
       bilingual_payload: hasBilingual ? JSON.stringify({ en: currentReport.en, id: currentReport.id }) : null,
     };
-    const res = await fetch('/api/vulnerabilities', {
+    const res = await apiRequest('/api/vulnerabilities', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -775,7 +816,7 @@ async function saveToLibrary() {
     // Auto-assign to project if context was selected
     const projId = currentReport.project_id;
     if (projId && saved?.id) {
-      await fetch(`/api/projects/${projId}/assign/${saved.id}`, { method: 'POST' });
+      await apiRequest(`/api/projects/${projId}/assign/${saved.id}`, { method: 'POST' });
       showToast(`"${currentReport.name}" saved & added to project!`, 'success');
     } else {
       showToast(`"${currentReport.name}" saved!`, 'success');
@@ -924,7 +965,7 @@ function closeDetailModal(e) {
 async function deleteVulnerability(id) {
   if (!id || !confirm('Delete this vulnerability?')) return;
   try {
-    const res = await fetch(`/api/vulnerabilities/${id}`, { method: 'DELETE' });
+    const res = await apiRequest(`/api/vulnerabilities/${id}`, { method: 'DELETE' });
     if (!res.ok) throw new Error();
     closeDetailModal();
     showToast('Vulnerability deleted', 'success');
@@ -988,7 +1029,7 @@ async function handleAskScreenshotFile(file) {
   const formData = new FormData();
   formData.append('screenshot', file);
   try {
-    const res  = await fetch('/api/upload', { method: 'POST', body: formData });
+    const res  = await apiRequest('/api/upload', { method: 'POST', body: formData });
     if (!res.ok) throw new Error('Upload failed');
     const data = await res.json();
     askScreenshotPaths.push(data.path);
@@ -1040,7 +1081,7 @@ async function handleAskAI() {
   showAskPanel('loading');
 
   try {
-    const res = await fetch('/api/ai/analyze', {
+    const res = await apiRequest('/api/ai/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1267,7 +1308,7 @@ async function promptAddClient() {
   const name = prompt('Client name:');
   if (!name?.trim()) return;
   try {
-    const res = await fetch('/api/clients', {
+    const res = await apiRequest('/api/clients', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ name: name.trim() }),
     });
@@ -1331,7 +1372,7 @@ async function submitRequestAccess() {
   const btn = document.getElementById('ra-btn');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/project-access-requests', {
+    const res = await apiRequest('/api/project-access-requests', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ project_id: Number(project_id), message }),
     });
@@ -1349,7 +1390,7 @@ async function renameClient(e, id, currentName) {
   const name = prompt('New name:', currentName);
   if (!name?.trim() || name.trim() === currentName) return;
   try {
-    const res = await fetch(`/api/clients/${id}`, {
+    const res = await apiRequest(`/api/clients/${id}`, {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ name: name.trim() }),
     });
@@ -1366,7 +1407,7 @@ async function deleteClient(e, id) {
   e.stopPropagation();
   if (!confirm('Delete this client and all its projects?')) return;
   try {
-    const res  = await fetch(`/api/clients/${id}`, { method:'DELETE' });
+    const res  = await apiRequest(`/api/clients/${id}`, { method:'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     showToast('Client deleted', 'success');
@@ -1498,7 +1539,7 @@ async function saveReportLinks() {
   btn.disabled = true;
   btn.textContent = 'Saving...';
   try {
-    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/reports`, {
+    const res = await apiRequest(`/api/projects/${clientsState.selectedProject.id}/reports`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ link_report_en, link_report_id })
@@ -1530,7 +1571,7 @@ async function markReportComplete(type) {
   if (type === 'final') payload.final_report_status = 'completed';
 
   try {
-    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/status`, {
+    const res = await apiRequest(`/api/projects/${clientsState.selectedProject.id}/status`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -1562,7 +1603,7 @@ async function promptAddProject() {
   const name = prompt('Project name:');
   if (!name?.trim()) return;
   try {
-    const res = await fetch(`/api/clients/${clientsState.selectedClient.id}/projects`, {
+    const res = await apiRequest(`/api/clients/${clientsState.selectedClient.id}/projects`, {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ name: name.trim() }),
     });
@@ -1580,7 +1621,7 @@ async function renameProject(e, id, currentName) {
   const name = prompt('New name:', currentName);
   if (!name?.trim() || name.trim() === currentName) return;
   try {
-    const res = await fetch(`/api/projects/${id}`, {
+    const res = await apiRequest(`/api/projects/${id}`, {
       method:'PUT', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ name: name.trim() }),
     });
@@ -1597,7 +1638,7 @@ async function deleteProject(e, id) {
   e.stopPropagation();
   if (!confirm('Delete this project?')) return;
   try {
-    const res  = await fetch(`/api/projects/${id}`, { method:'DELETE' });
+    const res  = await apiRequest(`/api/projects/${id}`, { method:'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     showToast('Project deleted', 'success');
@@ -1636,7 +1677,7 @@ function renderFindingsList() {
 async function removeFromProject(vulnId) {
   if (!clientsState.selectedProject) return;
   try {
-    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/assign/${vulnId}`, { method:'DELETE' });
+    const res = await apiRequest(`/api/projects/${clientsState.selectedProject.id}/assign/${vulnId}`, { method:'DELETE' });
     if (!res.ok) throw new Error((await res.json()).error);
     showToast('Removed from project', 'success');
     await refreshFindings();
@@ -1689,7 +1730,7 @@ function renderPickerList(vulns) {
 async function addFindingToProject(vulnId) {
   if (clientsState.pickerAddedIds.has(vulnId)) return;
   try {
-    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/assign/${vulnId}`, { method:'POST' });
+    const res = await apiRequest(`/api/projects/${clientsState.selectedProject.id}/assign/${vulnId}`, { method:'POST' });
     if (!res.ok) throw new Error((await res.json()).error);
     clientsState.pickerAddedIds.add(vulnId);
     const btn = document.getElementById(`pick-btn-${vulnId}`);
@@ -1714,7 +1755,7 @@ async function generateDocxReport() {
   btn.disabled = true;
   btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;animation:spin 1s linear infinite"><path d="M21 12a9 9 0 11-6.22-8.56"/></svg> Generating…`;
   try {
-    const res = await fetch(`/api/projects/${clientsState.selectedProject.id}/generate-report-docx`, { method: 'POST' });
+    const res = await apiRequest(`/api/projects/${clientsState.selectedProject.id}/generate-report-docx`, { method: 'POST' });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: 'Unknown error' }));
       throw new Error(errData.error || `HTTP ${res.status}`);
@@ -1770,7 +1811,7 @@ async function submitEngineerChangePassword() {
     const session = await sessionRes.json();
     if (!session.authenticated) throw new Error('Not logged in');
 
-    const res = await fetch(`/api/users/${session.userId}/password`, {
+    const res = await apiRequest(`/api/users/${session.userId}/password`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ old_password: oldPw, new_password: newPw })
@@ -1841,7 +1882,7 @@ async function loadNotificationsEng() {
 
 async function markAllReadEng() {
   try {
-    await fetch('/api/notifications/read', { method: 'PATCH', headers: { 'Content-Type': 'application/json' } });
+    await apiRequest('/api/notifications/read', { method: 'PATCH', headers: { 'Content-Type': 'application/json' } });
     const badge = document.getElementById('eng-notif-count');
     if (badge) badge.style.display = 'none';
     loadNotificationsEng();
@@ -1905,7 +1946,7 @@ async function uploadMfScreenshot(file) {
   const formData = new FormData();
   formData.append('screenshot', file);
   try {
-    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+    const res = await apiRequest('/api/upload', { method: 'POST', body: formData });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
     mfScreenshotPaths.push(data.path);
@@ -1992,7 +2033,7 @@ async function submitManualFinding() {
   try {
     const url = isEdit ? `/api/vulnerabilities/${mfEditingId}` : '/api/vulnerabilities';
     const method = isEdit ? 'PUT' : 'POST';
-    const res = await fetch(url, {
+    const res = await apiRequest(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

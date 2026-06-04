@@ -97,12 +97,28 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .map(s => s.trim())
   .filter(Boolean);
 
+const isProd = process.env.NODE_ENV === 'production';
+
+if (isProd && allowedOrigins.length === 0) {
+  throw new Error('ALLOWED_ORIGINS is required in production');
+}
+
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true);
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(origin) || origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1')) {
-      return cb(null, true);
+
+    const isLocal =
+      origin.startsWith('http://localhost') ||
+      origin.startsWith('http://127.0.0.1');
+
+    if (!isProd && isLocal) return cb(null, true);
+
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+
+    if (isProd && allowedOrigins.length === 0) {
+      return cb(new Error('ALLOWED_ORIGINS must be configured in production'));
     }
+
     return cb(new Error('CORS origin not allowed'));
   },
   credentials: true
@@ -281,11 +297,18 @@ function validateCsrf(req, res, next) {
     const tokenInHeader = req.headers['x-csrf-token'];
     const session = req.session;
     if (!session || !session.csrfToken || tokenInHeader !== session.csrfToken) {
+      db.writeActivityLog({
+        type: 'security',
+        actorId: req.session?.userId || null,
+        action: 'csrf_validation_failed',
+        details: `CSRF validation failed for method ${req.method} on route ${req.path}`
+      });
       return res.status(403).json({ error: 'Forbidden: CSRF token mismatch' });
     }
   }
   next();
 }
+
 
 // Everything under /api below requires a valid session cookie (except routes above)
 app.use(auth.requireApiAuth);
@@ -372,15 +395,26 @@ function parseTeamQuery(req) {
   return result;
 }
 
-function parseTeamValue(value, { required = false } = {}) {
-  return teamPolicy.parseTeam(value, { required });
+function parseTeamValue(value, { required = false, req = null } = {}) {
+  const result = teamPolicy.parseTeam(value, { required });
+  if (result && result.error) {
+    db.writeActivityLog({
+      type: 'security',
+      actorId: req?.session?.userId || null,
+      action: 'team_validation_failed',
+      details: `Team validation failed for value "${value}": ${result.error}`
+    });
+  }
+  return result;
 }
+
 
 app.get('/api/portal-capabilities', auth.requireRole(...mgmtRoles), (req, res) => {
   res.json({
     legacyEnabled:
       process.env.ENABLE_LEGACY_PORTAL === 'true' &&
-      req.session.role === 'admin'
+      req.session.role === 'admin',
+    legacySunsetDate: process.env.LEGACY_PORTAL_SUNSET_DATE || null
   });
 });
 
@@ -996,7 +1030,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   const clientId = Number(req.params.clientId);
   let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date, audit_metadata } = req.body;
   
-  const parsedTeam = parseTeamValue(team, { required: true });
+  const parsedTeam = parseTeamValue(team, { required: true, req });
   if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   team = parsedTeam;
 
@@ -1055,6 +1089,12 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
 
     const clientTeam = client.team || 'offensive';
     if (clientTeam !== team) {
+      db.writeActivityLog({
+        type: 'security',
+        actorId: req.session.userId,
+        action: 'team_validation_failed',
+        details: `Attempted to create project "${trimName}" under client ${clientId} (${clientTeam}) with team ${team}`
+      });
       return res.status(400).json({
         error: `Client belongs to ${clientTeam}; cannot create ${team} project under it.`
       });
@@ -1075,6 +1115,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   });
   });
 });
+
 
 app.get('/api/projects/archived', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
   const teamResult = parseTeamQuery(req);
@@ -1492,47 +1533,79 @@ app.put('/api/projects/:id', async (req, res) => {
   const id   = Number(req.params.id);
   let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, audit_metadata } = req.body;
   
-  const parsedTeam = parseTeamValue(team, { required: true });
+  const parsedTeam = parseTeamValue(team, { required: true, req });
   if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   team = parsedTeam;
 
   const trimScopeTarget = (scope_target || '').trim();
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
-  
-  let schedule_policy_version = null;
-  if (start_date && (Number(mandays_assessment) > 0 || Number(mandays_initial_report) > 0)) {
-    try {
-      const schedule = await calculateSchedule({
-        start_date,
-        assessment_days: Number(mandays_assessment) || 0,
-        initial_report_days: Number(mandays_initial_report) || 1,
-        remediation_days: 60,
-        retest_days: 2,
-        final_report_days: 1,
+
+  db.getProjectById(id, (lookupErr, project) => {
+    if (lookupErr) return res.status(500).json({ error: lookupErr.message });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const oldTeam = project.team || 'offensive';
+    if (oldTeam !== team) {
+      db.writeActivityLog({
+        type: 'security',
+        actorId: req.session.userId,
+        action: 'project_team_change_rejected',
+        details: `Attempted to change project ${id} from ${oldTeam} to ${team}`
       });
-      initial_report_date = schedule.initial_report_date;
-      final_report_date = final_report_date || schedule.final_report_date;
-      schedule_policy_version = schedule.schedule_policy_version;
-    } catch (err) {
-      return res.status(400).json({ error: err.message });
+      return res.status(400).json({ error: 'Project team cannot be changed from the edit endpoint.' });
     }
-  } else if (initial_report_date && !final_report_date) {
-    final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
-    schedule_policy_version = SCHEDULE_POLICY_VERSION;
-  }
-  
-  db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
-    if (err) {
-      if (err.message && /mismatch|cannot be changed/i.test(err.message)) {
-        return res.status(400).json({ error: err.message });
+
+    db.getClientById(project.client_id, async (clientErr, client) => {
+      if (clientErr) return res.status(500).json({ error: clientErr.message });
+      if (client) {
+        const clientTeam = client.team || 'offensive';
+        if (clientTeam !== team) {
+          db.writeActivityLog({
+            type: 'security',
+            actorId: req.session.userId,
+            action: 'team_validation_failed',
+            details: `Attempted to save project ${id} with team ${team} under client ${project.client_id} (${clientTeam})`
+          });
+          return res.status(400).json({ error: `Client belongs to ${clientTeam}; cannot save project with team ${team}` });
+        }
       }
-      if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
-      return res.status(500).json({ error: err.message });
-    }
-    if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-    db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
-    res.json({ id, name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version });
+
+      let schedule_policy_version = null;
+      if (start_date && (Number(mandays_assessment) > 0 || Number(mandays_initial_report) > 0)) {
+        try {
+          const schedule = await calculateSchedule({
+            start_date,
+            assessment_days: Number(mandays_assessment) || 0,
+            initial_report_days: Number(mandays_initial_report) || 1,
+            remediation_days: 60,
+            retest_days: 2,
+            final_report_days: 1,
+          });
+          initial_report_date = schedule.initial_report_date;
+          final_report_date = final_report_date || schedule.final_report_date;
+          schedule_policy_version = schedule.schedule_policy_version;
+        } catch (err) {
+          return res.status(400).json({ error: err.message });
+        }
+      } else if (initial_report_date && !final_report_date) {
+        final_report_date = await calculateFinalReportDate(initial_report_date) || final_report_date;
+        schedule_policy_version = SCHEDULE_POLICY_VERSION;
+      }
+      
+      db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
+        if (err) {
+          if (err.message && /mismatch|cannot be changed/i.test(err.message)) {
+            return res.status(400).json({ error: err.message });
+          }
+          if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
+          return res.status(500).json({ error: err.message });
+        }
+        if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+        db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'edit_project', details:`Updated project ID ${id}: name="${trimName}", PIC=${assigned_engineer_id||'none'}, Assist=${assist_engineer_id||'none'}` });
+        res.json({ id, name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version });
+      });
+    });
   });
 });
 
@@ -1863,8 +1936,15 @@ app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req
         const projTeam = proj.team || 'offensive';
         const statusTeam = status.team || 'offensive';
         if (statusTeam !== projTeam) {
+          db.writeActivityLog({
+            type: 'security',
+            actorId: req.session.userId,
+            action: 'board_status_team_mismatch_rejected',
+            details: `Attempted to change project ${id} (${projTeam}) board status to ${board_status_id} (${statusTeam})`
+          });
           return res.status(400).json({ error: 'Board status team does not match project team.' });
         }
+
 
         db.updateProjectBoardStatus(id, board_status_id, done);
       });
@@ -2016,6 +2096,12 @@ Return only valid JSON:
     }
 
     const assessmentDays = Math.max(1, Math.ceil(Number(aiResult.assessment_days)));
+    db.writeActivityLog({
+      type: 'ai',
+      actorId: req.session.userId,
+      action: 'ai_estimate_mandays',
+      details: `Generated mandays estimate for project draft of type "${project_type}" using model "${model}" (${assessmentDays} assessment days)`
+    });
     res.json({
       kickoff_days: 1,
       infogath_days: 5,
@@ -2027,6 +2113,12 @@ Return only valid JSON:
       notes: aiResult.notes || null
     });
   } catch (e) {
+    db.writeActivityLog({
+      type: 'ai',
+      actorId: req.session?.userId || null,
+      action: 'ai_estimate_mandays_failed',
+      details: `Failed to estimate mandays for project draft: ${e.message}`
+    });
     console.error('[AI Estimator] Error:', e.message);
     const msg = e?.message || 'AI request failed';
     if (msg.includes('API_KEY_INVALID') || msg.includes('API key not valid')) {
@@ -2205,12 +2297,39 @@ app.get('/api/projects/:projectId/report', auth.requireProjectAccess('projectId'
 });
 
 // ─── Screenshot Upload ────────────────────────────────────────────────────────
-app.post('/api/upload', upload.single('screenshot'), (req, res) => {
-  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-  res.json({
-    filename: req.file.filename,
-    path: `/uploads/${req.file.filename}`,
-    size: req.file.size,
+app.post('/api/upload', (req, res) => {
+  upload.single('screenshot')(req, res, (err) => {
+    if (err) {
+      db.writeActivityLog({
+        type: 'upload',
+        actorId: req.session?.userId || null,
+        action: 'screenshot_upload_failed',
+        details: `Failed to upload screenshot: ${err.message}`
+      });
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      db.writeActivityLog({
+        type: 'upload',
+        actorId: req.session?.userId || null,
+        action: 'screenshot_upload_failed',
+        details: 'Failed to upload screenshot: No file uploaded'
+      });
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    
+    db.writeActivityLog({
+      type: 'upload',
+      actorId: req.session.userId,
+      action: 'screenshot_upload_success',
+      details: `Uploaded screenshot "${req.file.filename}" (${req.file.size} bytes)`
+    });
+    
+    res.json({
+      filename: req.file.filename,
+      path: `/uploads/${req.file.filename}`,
+      size: req.file.size,
+    });
   });
 });
 

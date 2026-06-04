@@ -5987,7 +5987,7 @@
 
     // ── Logout ────────────────────────────────────────────────────────────────────
     async function doLogout() {
-      await fetch('/api/logout', { method: 'POST' });
+      await apiFetch('/api/logout', 'POST');
       window.location.replace('/login.html');
     }
 
@@ -6029,11 +6029,35 @@
       if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('open');
     }
 
+    let legacyCsrfToken = null;
+
+    async function getLegacyCsrfToken() {
+      if (legacyCsrfToken) return legacyCsrfToken;
+
+      const r = await fetch('/api/csrf-token');
+      const j = await r.json().catch(() => ({}));
+
+      if (!r.ok || !j.token) {
+        throw new Error(j.error || 'Failed to fetch CSRF token');
+      }
+
+      legacyCsrfToken = j.token;
+      return legacyCsrfToken;
+    }
+
     async function apiFetch(url, method = 'GET', body = null) {
-      const opts = { method, headers: { 'Content-Type': 'application/json' } };
+      const headers = { 'Content-Type': 'application/json' };
+
+      if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+        headers['X-CSRF-Token'] = await getLegacyCsrfToken();
+      }
+
+      const opts = { method, headers };
       if (body) opts.body = JSON.stringify(body);
+
       const r = await fetch(url, opts);
       const j = await r.json().catch(() => ({}));
+
       if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
       return j;
     }

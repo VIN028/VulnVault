@@ -264,33 +264,48 @@
 
       // Metrics in range
       const rangeProjects = allP.filter(r => isTotalProject(r, f.start, f.end, f.refDate));
-      const cur = {
-        total: rangeProjects.length,
-        ontrack: allP.filter(r => isOnTrack(r, f.start, f.end, f.refDate)).length,
-        offtrack: allP.filter(r => isOffTrack(r, f.start, f.end, f.refDate)).length,
-        findings: rangeProjects.reduce((sum, p) => sum + (p.finding_count || 0), 0)
-      };
-
       const prevRangeProjects = allP.filter(r => isTotalProject(r, f.prevStart, f.prevEnd, f.prevRefDate));
-      const prev = {
-        total: prevRangeProjects.length,
-        ontrack: allP.filter(r => isOnTrack(r, f.prevStart, f.prevEnd, f.prevRefDate)).length,
-        offtrack: allP.filter(r => isOffTrack(r, f.prevStart, f.prevEnd, f.prevRefDate)).length,
-        findings: prevRangeProjects.reduce((sum, p) => sum + (p.finding_count || 0), 0)
-      };
+      const curOverdue = rangeProjects.filter(p => p.final_report_status !== 'completed' && p.final_report_date && new Date(p.final_report_date) < new Date()).length;
+      const prevOverdue = prevRangeProjects.filter(p => p.final_report_status !== 'completed' && p.final_report_date && new Date(p.final_report_date) < f.prevEnd).length;
+
+      const curRetest = rangeProjects.filter(p => p.retest_status === 'started').length;
+      const prevRetest = prevRangeProjects.filter(p => p.retest_status === 'started').length;
+
+      const clientFindings = {};
+      rangeProjects.forEach(p => {
+        clientFindings[p.client_name] = (clientFindings[p.client_name] || 0) + (p.finding_count || 0);
+      });
+      let topClientName = '—';
+      let topClientCount = 0;
+      for (const name in clientFindings) {
+        if (clientFindings[name] > topClientCount) {
+          topClientCount = clientFindings[name];
+          topClientName = name;
+        }
+      }
+
+      const cur = { total: rangeProjects.length };
+      const prev = { total: prevRangeProjects.length };
 
       // Set values and deltas
       document.getElementById('kpi-active-projects').textContent = cur.total;
       setKpiDelta('kpi-active-projects-sub', cur.total - prev.total, f.deltaLabel);
 
-      document.getElementById('kpi-ontrack').textContent = cur.ontrack;
-      setKpiDelta('kpi-ontrack-sub', cur.ontrack - prev.ontrack, f.deltaLabel);
+      document.getElementById('kpi-overdue').textContent = curOverdue;
+      setKpiDelta('kpi-overdue-sub', curOverdue - prevOverdue, f.deltaLabel);
 
-      document.getElementById('kpi-offtrack').textContent = cur.offtrack;
-      setKpiDelta('kpi-offtrack-sub', cur.offtrack - prev.offtrack, f.deltaLabel);
+      document.getElementById('kpi-retest-pending').textContent = curRetest;
+      setKpiDelta('kpi-retest-pending-sub', curRetest - prevRetest, f.deltaLabel);
 
-      document.getElementById('kpi-findings').textContent = cur.findings;
-      setKpiDelta('kpi-findings-sub', cur.findings - prev.findings, f.deltaLabel);
+      const topClientEl = document.getElementById('kpi-top-client');
+      if (topClientEl) {
+        topClientEl.textContent = topClientCount > 0 ? topClientName : '—';
+        topClientEl.title = topClientCount > 0 ? `${topClientName} (${topClientCount} findings)` : '';
+      }
+      const topClientSubEl = document.getElementById('kpi-top-client-sub');
+      if (topClientSubEl) {
+        topClientSubEl.textContent = topClientCount > 0 ? `${topClientCount} findings` : 'No findings';
+      }
 
       // Rendering trend line chart
       renderDashTrendChart(rows, f.refDate);
@@ -583,7 +598,7 @@
 
       return `
         <div class="client-group">
-          <div class="client-group-header" onclick="toggleGroup('${pid}', ${c.client_id})">
+          <div class="client-group-header js-toggle-group" data-pid="${pid}" data-client-id="${c.client_id}">
             <div style="display:flex; align-items:center; gap:12px; font-weight:700;">
               <svg id="arr-${c.client_id}" class="cg-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px; height:14px; transform:${isExpanded ? 'rotate(90deg)' : 'none'};"><polyline points="9 6 15 12 9 18"/></svg>
               <span>${esc(c.client_name)}</span>
@@ -622,9 +637,9 @@
                         <td><span class="finding-count ${countColor(p.finding_count)}">${p.finding_count || 0}</span></td>
                         <td>
                           <div style="display:flex; gap:6px;">
-                            <button class="btn-ghost" onclick="openCreateProject(true, ${jsa(p)})" style="padding:4px 8px; font-size:11px; flex:none;">Edit</button>
-                            <button class="btn-ghost" onclick="openHighlightModal(${p.project_id}, ${jsa(p.highlight_text)})" style="padding:4px 8px; font-size:11px; flex:none;">Highlight</button>
-                            <button class="btn-ghost" onclick="openRetestModal(${p.project_id})" style="padding:4px 8px; font-size:11px; flex:none; background:rgba(34,197,94,0.1); color:var(--green);">Retest</button>
+                            <button class="btn-ghost js-edit-project" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; flex:none;">Edit</button>
+                            <button class="btn-ghost js-open-highlight" data-id="${p.project_id}" data-highlight="${escA(p.highlight_text || '')}" style="padding:4px 8px; font-size:11px; flex:none;">Highlight</button>
+                            <button class="btn-ghost js-open-retest" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; flex:none; background:rgba(34,197,94,0.1); color:var(--green);">Retest</button>
                           </div>
                         </td>
                       </tr>
@@ -902,7 +917,7 @@
       }
 
       listEl.innerHTML = clients.map(c => `
-        <div class="ne-client-card" id="ne-ccard-${c.id}" onclick="selectNeClient(${c.id})" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; cursor:pointer; background:rgba(255,255,255,0.02); transition:all 0.1s;">
+        <div class="ne-client-card js-select-ne-client" id="ne-ccard-${c.id}" data-id="${c.id}" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; cursor:pointer; background:rgba(255,255,255,0.02); transition:all 0.1s;">
           <div style="font-weight:600; font-size:13px; color:var(--text);">${esc(c.name)}</div>
           ${c.engagement_reference ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">Engagement: ${esc(c.engagement_reference)} (${esc(c.engagement_info)})</div>` : ''}
         </div>
@@ -958,34 +973,11 @@
 
   // ── Links inputs ───────────────────────────────────────────────────────────────
   function addProjectLink(title = '', url = '') {
-    const container = document.getElementById('cp-links-container');
-    if (!container) return;
-    const id = 'link-row-' + Date.now() + Math.random().toString(36).substr(2, 5);
-    const div = document.createElement('div');
-    div.id = id;
-    div.style = 'display:flex;gap:8px;align-items:center;';
-    div.innerHTML = `
-      <input class="cp-link-title" placeholder="e.g. Jira Issue" value="${escA(title)}" style="flex:1;padding:8px 12px;font-size:12px;">
-      <input class="cp-link-url" placeholder="e.g. https://..." value="${escA(url)}" style="flex:2;padding:8px 12px;font-size:12px;">
-      <button type="button" class="icon-btn" onclick="removeProjectLink('${id}')" style="color:var(--red);flex:none;padding:8px;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:14px;height:14px;"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-      </button>
-    `;
-    container.appendChild(div);
-  }
-
-  function removeProjectLink(id) {
-    document.getElementById(id)?.remove();
+    ProjectFormShared.addProjectLink('cp-links-container', title, url);
   }
 
   function collectProjectLinks() {
-    const links = [];
-    document.querySelectorAll('#cp-links-container > div').forEach(row => {
-      const title = row.querySelector('.cp-link-title').value.trim();
-      const url = row.querySelector('.cp-link-url').value.trim();
-      if (title && url) links.push({ title, url });
-    });
-    return links;
+    return ProjectFormShared.collectProjectLinks('cp-links-container');
   }
 
   function populateProjectLinks(links) {
@@ -1198,32 +1190,8 @@
   function renderSetupList() {
     const listEl = document.getElementById('setup-status-list');
     if (!listEl) return;
-    listEl.innerHTML = '';
-
-    if (!_boardStatuses.length) {
-      listEl.innerHTML = '<div style="padding:12px; text-align:center; color:var(--muted); font-size:12px;">No custom status columns. Add one below.</div>';
-      return;
-    }
-
-    _boardStatuses.forEach((s, idx) => {
-      const tile = document.createElement('div');
-      tile.className = 'status-setup-tile';
-      tile.draggable = true;
-      tile.ondragstart = (e) => e.dataTransfer.setData('text/plain', idx);
-      tile.ondragover = (e) => e.preventDefault();
-      tile.ondrop = (e) => reorderStatus(e, idx);
-      tile.style = `display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; cursor:grab; margin-bottom:6px;`;
-      tile.innerHTML = `
-        <div style="display:flex; align-items:center; gap:10px; font-size:12px; font-weight:700;">
-          <span style="color:var(--muted);">⋮⋮</span>
-          <span style="display:block; width:10px; height:10px; border-radius:50%; background:${s.color};"></span>
-          <span>${esc(s.name)}</span>
-        </div>
-        <button class="icon-btn" onclick="deleteBoardStatus(${s.id})" style="color:var(--red); padding:4px;">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:13px;height:13px;"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-        </button>
-      `;
-      listEl.appendChild(tile);
+    BoardShared.renderSetupList(listEl, _boardStatuses, () => {
+      renderSetupList();
     });
   }
 
@@ -1251,7 +1219,7 @@
 
     try {
       const order = _boardStatuses.length;
-      await apiFetch('/api/board-statuses', 'POST', { name, color, order_num: order, team: 'offensive' });
+      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'offensive' });
       nameInput.value = '';
       
       // Reload lists
@@ -1334,7 +1302,7 @@
       </div>
       ${p.board_status_id === -1 ? `
         <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
-          <button class="btn-primary" onclick="archiveProjectFromBoard(${p.project_id})" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
+          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
             Archive Project
           </button>
         </div>
@@ -1364,26 +1332,9 @@
   }
 
   function buildAllocationMonths(summary) {
-    const months = new Set();
-    const today = new Date();
-    
-    summary.forEach(r => {
-      [r.kickoff_date, r.start_date, r.initial_report_date, r.final_report_date].filter(Boolean).forEach(d => {
-        const dt = new Date(d);
-        if (!isNaN(dt.getTime())) {
-          months.add(`${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`);
-        }
-      });
-    });
-
-    // Seed current + next month
-    months.add(`${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`);
-    const next = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-    months.add(`${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`);
-
-    _allocationMonths = [...months].sort();
-    const curVal = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-    _allocationMonthIdx = Math.max(0, _allocationMonths.indexOf(curVal));
+    const res = AllocationShared.buildAllocationMonths(summary);
+    _allocationMonths = res.allocationMonths;
+    _allocationMonthIdx = res.allocationMonthIdx;
     updateAllocationMonthLabel();
   }
 
@@ -1469,36 +1420,10 @@
   }
 
   function _assessmentMandaysInMonth(r, year, month) {
-    const dtStart = r.start_date || r.kickoff_date;
-    if (!dtStart || !(r.mandays_assessment > 0)) return 0;
-    
-    // Start distributing from kickoff month onward
-    const ko = new Date(dtStart);
-    let curYear = ko.getFullYear();
-    let curMonth = ko.getMonth();
-    let remaining = r.mandays_assessment;
-    
-    while (remaining > 0) {
-      const days = getWorkdaysInMonth(curYear, curMonth);
-      // count overlap working days
-      let avail = 0;
-      if (curYear === ko.getFullYear() && curMonth === ko.getMonth()) {
-        const overlap = workingDaysBetween(dtStart, new Date(curYear, curMonth + 1, 0).toLocaleDateString('en-CA')).days;
-        avail = overlap;
-      } else {
-        avail = days.workdays;
-      }
-
-      const consumed = Math.min(remaining, avail);
-      if (curYear === year && curMonth === month) {
-        return consumed;
-      }
-      remaining -= consumed;
-      curMonth++;
-      if (curMonth > 11) { curMonth = 0; curYear++; }
-      if (curYear > year + 2) break; // guard
+    if (!window.AllocationShared || typeof AllocationShared.assessmentMandaysInMonth !== 'function') {
+      return 0;
     }
-    return 0;
+    return AllocationShared.assessmentMandaysInMonth(r, year, month);
   }
 
   // ── AI Mandays Estimator section ───────────────────────────────────────────────
@@ -1517,6 +1442,7 @@
     }
     updateAiMethodOptions();
     updateAiDynamicFields();
+    renderEstimateHistory();
   }
 
   function saveAiApiKey() {
@@ -1629,7 +1555,7 @@
 
     try {
       const data = await apiFetch('/api/ai/estimate-mandays', 'POST', { api_key: key, model, project_type, method, description, ...extra });
-      _lastAiEstimate = { ...data, project_type, method };
+      _lastAiEstimate = { ...data, project_type, method, description, ...extra };
 
       document.getElementById('ai-r-kickoff').textContent = data.kickoff_days;
       document.getElementById('ai-r-infogath').textContent = data.infogath_days;
@@ -1652,6 +1578,7 @@
       }
 
       document.getElementById('ai-result').style.display = 'block';
+      saveEstimateToHistory(_lastAiEstimate);
     } catch (e) {
       document.getElementById('ai-error').textContent = e.message;
       document.getElementById('ai-error').style.display = 'block';
@@ -1815,7 +1742,7 @@
           <td>${timelineBadge}</td>
           <td><span class="finding-count ${countColor(p.finding_count)}">${p.finding_count || 0}</span></td>
           <td>
-            <button class="btn-ghost" onclick="restoreProjectFromArchive(${p.project_id})" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
+            <button class="btn-ghost js-restore-project-archive" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
               Restore
             </button>
           </td>
@@ -1854,5 +1781,200 @@
       showToast(e.message, 'error');
     }
   }
+
+  // AI Estimate History helpers
+  function saveEstimateToHistory(est) {
+    try {
+      const historyStr = localStorage.getItem('vulnvault_estimate_history') || '[]';
+      const history = JSON.parse(historyStr);
+      
+      const newEntry = {
+        id: Date.now() + Math.random().toString(36).substr(2, 5),
+        timestamp: new Date().toISOString(),
+        project_type: est.project_type,
+        method: est.method,
+        description: est.description || '',
+        total_days: est.total_days,
+        data: est
+      };
+      
+      history.unshift(newEntry);
+      if (history.length > 10) history.pop();
+      
+      localStorage.setItem('vulnvault_estimate_history', JSON.stringify(history));
+      renderEstimateHistory();
+    } catch (e) {
+      console.error('Failed to save estimate to history:', e);
+    }
+  }
+
+  function renderEstimateHistory() {
+    const listEl = document.getElementById('ai-history-list');
+    if (!listEl) return;
+    
+    try {
+      const historyStr = localStorage.getItem('vulnvault_estimate_history') || '[]';
+      const history = JSON.parse(historyStr);
+      
+      if (!history.length) {
+        listEl.innerHTML = '<div style="color:var(--muted); font-size:12px; padding:10px 0;">No estimate history saved yet.</div>';
+        return;
+      }
+      
+      listEl.innerHTML = history.map(item => {
+        const dateStr = new Date(item.timestamp).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+        const typeLabel = item.project_type.toUpperCase();
+        const descPreview = item.description ? (item.description.substring(0, 50) + (item.description.length > 50 ? '...' : '')) : 'No description';
+        
+        return `
+          <div class="history-item js-apply-history-estimate" data-id="${item.id}" style="display:flex; justify-content:space-between; align-items:center; padding:10px 14px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; cursor:pointer; font-size:12px; transition: background 0.2s;">
+            <div style="flex:1; min-width:0; padding-right:12px;">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+                <span class="badge" style="background:rgba(99,102,241,0.1); color:var(--accent); font-size:10px; font-weight:700;">${esc(typeLabel)}</span>
+                <span style="color:var(--muted); font-size:10px;">${dateStr}</span>
+              </div>
+              <div style="color:var(--text); font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(descPreview)}</div>
+            </div>
+            <div style="flex:none; text-align:right;">
+              <div style="font-weight:700; color:var(--text);">${item.total_days} d</div>
+              <div style="font-size:10px; color:var(--muted); text-transform:capitalize;">${item.method || 'blackbox'}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    } catch (e) {
+      listEl.innerHTML = '<div style="color:var(--red); font-size:12px; padding:10px 0;">Error loading history.</div>';
+    }
+  }
+
+  function applyHistoryEstimate(id) {
+    try {
+      const historyStr = localStorage.getItem('vulnvault_estimate_history') || '[]';
+      const history = JSON.parse(historyStr);
+      const item = history.find(x => x.id === id);
+      if (!item) return;
+      
+      const { data } = item;
+      _lastAiEstimate = { ...data };
+      
+      document.getElementById('ai-project-type').value = item.project_type || 'web';
+      updateAiMethodOptions();
+      updateAiDynamicFields();
+      if (item.method) document.getElementById('ai-method').value = item.method;
+      document.getElementById('ai-description').value = item.description || '';
+      
+      if (data.num_pages && document.getElementById('ai-num-pages')) document.getElementById('ai-num-pages').value = data.num_pages;
+      if (data.num_features && document.getElementById('ai-num-features')) document.getElementById('ai-num-features').value = data.num_features;
+      if (data.num_endpoints && document.getElementById('ai-num-endpoints')) document.getElementById('ai-num-endpoints').value = data.num_endpoints;
+      if (data.avg_methods && document.getElementById('ai-avg-methods')) document.getElementById('ai-avg-methods').value = data.avg_methods;
+      if (data.infra_subtype && document.getElementById('ai-infra-subtype')) document.getElementById('ai-infra-subtype').value = data.infra_subtype;
+      if (data.num_items && document.getElementById('ai-num-items')) document.getElementById('ai-num-items').value = data.num_items;
+      if (data.num_targets && document.getElementById('ai-num-targets')) document.getElementById('ai-num-targets').value = data.num_targets;
+
+      document.getElementById('ai-r-kickoff').textContent = data.kickoff_days;
+      document.getElementById('ai-r-infogath').textContent = data.infogath_days;
+      document.getElementById('ai-r-assessment').textContent = data.assessment_days;
+      document.getElementById('ai-r-ir').textContent = data.initial_report_days;
+      document.getElementById('ai-r-total').textContent = data.total_days;
+      document.getElementById('ai-r-reasoning').textContent = data.reasoning;
+      
+      const confEl = document.getElementById('ai-r-confidence');
+      if (data.confidence === 'high') { confEl.textContent = '🟢 High Confidence'; confEl.style.background = 'rgba(34,197,94,0.15)'; confEl.style.color = '#86efac'; }
+      else if (data.confidence === 'low') { confEl.textContent = '🔴 Low Confidence'; confEl.style.background = 'rgba(239,68,68,0.15)'; confEl.style.color = '#fca5a5'; }
+      else { confEl.textContent = '🟡 Medium Confidence'; confEl.style.background = 'rgba(234,179,8,0.15)'; confEl.style.color = '#fde047'; }
+
+      const notesWrap = document.getElementById('ai-r-notes-wrap');
+      if (data.notes) {
+        document.getElementById('ai-r-notes').textContent = data.notes;
+        notesWrap.style.display = 'block';
+      } else {
+        notesWrap.style.display = 'none';
+      }
+      
+      document.getElementById('ai-result').style.display = 'block';
+      showToast('Loaded saved estimate parameters!');
+    } catch (e) {
+      showToast('Failed to apply history estimate: ' + e.message, 'error');
+    }
+  }
+
+  // Global click event listener for event delegation
+  document.addEventListener('click', function (e) {
+    // 1. Toggle group
+    const toggleGroupBtn = e.target.closest('.js-toggle-group');
+    if (toggleGroupBtn) {
+      toggleGroup(toggleGroupBtn.dataset.pid, Number(toggleGroupBtn.dataset.clientId));
+      return;
+    }
+
+    // 2. Edit project
+    const editProjBtn = e.target.closest('.js-edit-project');
+    if (editProjBtn) {
+      const projId = Number(editProjBtn.dataset.id);
+      let foundProj = null;
+      for (const c of _clientGroups) {
+        const p = c.projects.find(x => x.project_id === projId);
+        if (p) { foundProj = p; break; }
+      }
+      if (foundProj) openCreateProject(true, foundProj);
+      return;
+    }
+
+    // 3. Highlight project modal
+    const hlProjBtn = e.target.closest('.js-open-highlight');
+    if (hlProjBtn) {
+      openHighlightModal(Number(hlProjBtn.dataset.id), hlProjBtn.dataset.highlight);
+      return;
+    }
+
+    // 4. Retest project modal
+    const retestProjBtn = e.target.closest('.js-open-retest');
+    if (retestProjBtn) {
+      openRetestModal(Number(retestProjBtn.dataset.id));
+      return;
+    }
+
+    // 5. Select client in create project modal
+    const selectNeBtn = e.target.closest('.js-select-ne-client');
+    if (selectNeBtn) {
+      window.selectNeClient(Number(selectNeBtn.dataset.id));
+      return;
+    }
+
+    // 6. Delete board status
+    const deleteBoardStatusBtn = e.target.closest('.js-delete-board-status');
+    if (deleteBoardStatusBtn) {
+      deleteBoardStatus(Number(deleteBoardStatusBtn.dataset.id));
+      return;
+    }
+
+    // 7. Archive project from board detail
+    const archiveProjBtn = e.target.closest('.js-archive-project-from-board');
+    if (archiveProjBtn) {
+      archiveProjectFromBoard(Number(archiveProjBtn.dataset.id));
+      return;
+    }
+
+    // 8. Restore project from archive list
+    const restoreProjBtn = e.target.closest('.js-restore-project-archive');
+    if (restoreProjBtn) {
+      restoreProjectFromArchive(Number(restoreProjBtn.dataset.id));
+      return;
+    }
+
+    // 9. Remove project link (from shared form link row)
+    const removeLinkBtn = e.target.closest('.js-remove-project-link');
+    if (removeLinkBtn) {
+      document.getElementById(removeLinkBtn.dataset.id)?.remove();
+      return;
+    }
+
+    // 10. Saved estimate history selection
+    const applyHistoryBtn = e.target.closest('.js-apply-history-estimate');
+    if (applyHistoryBtn) {
+      applyHistoryEstimate(applyHistoryBtn.dataset.id);
+      return;
+    }
+  });
 
 })();

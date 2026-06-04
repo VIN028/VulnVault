@@ -217,19 +217,19 @@
             <div class="kpi-sub" id="kpi-active-projects-sub">0 last month</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-label">On Track</div>
-            <div class="kpi-value" id="kpi-ontrack" style="color:var(--green)">0</div>
-            <div class="kpi-sub" id="kpi-ontrack-sub">On track projects</div>
+            <div class="kpi-label">Overdue Projects</div>
+            <div class="kpi-value" id="kpi-overdue" style="color:var(--red)">0</div>
+            <div class="kpi-sub" id="kpi-overdue-sub">Past target date</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-label">Off Track</div>
-            <div class="kpi-value" id="kpi-offtrack" style="color:var(--red)">0</div>
-            <div class="kpi-sub" id="kpi-offtrack-sub">Requires attention</div>
+            <div class="kpi-label">Retest Pending</div>
+            <div class="kpi-value" id="kpi-retest-pending" style="color:var(--accent)">0</div>
+            <div class="kpi-sub" id="kpi-retest-pending-sub">Active retests</div>
           </div>
           <div class="kpi-card">
-            <div class="kpi-label">Findings Found</div>
-            <div class="kpi-value" id="kpi-findings">0</div>
-            <div class="kpi-sub" id="kpi-findings-sub">Vulnerabilities reported</div>
+            <div class="kpi-label">Top Client</div>
+            <div class="kpi-value" id="kpi-top-client" style="font-size:16px; line-height:1.2; padding-top:8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">—</div>
+            <div class="kpi-sub" id="kpi-top-client-sub">Most findings</div>
           </div>
         </div>
       </div>
@@ -493,6 +493,14 @@
             <button class="btn-primary" onclick="useEstimateInProject()" style="width:100%; justify-content:center; padding:10px; font-size:13px; background:rgba(34,197,94,0.15); border:1px solid rgba(34,197,94,0.3); color:#86efac;">
               Apply Estimate parameters to Create Project
             </button>
+          </div>
+
+          <!-- Estimate History Card -->
+          <div id="ai-history-card" class="table-wrap" style="padding:20px; background:var(--card); display:flex; flex-direction:column; gap:12px;">
+            <div style="font-size:14px; font-weight:700; color:var(--accent);">Saved Estimates History</div>
+            <div id="ai-history-list" style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto;">
+              <div style="color:var(--muted); font-size:12px; padding:10px 0;">No estimate history saved yet.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -848,6 +856,9 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script src="/js/portal/shared.js"></script>
+  <script src="/js/portal/projectFormShared.js"></script>
+  <script src="/js/portal/boardShared.js"></script>
+  <script src="/js/portal/allocationShared.js"></script>
   <script src="/js/portal/offensive.js"></script>
 </body>
 </html>

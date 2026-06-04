@@ -129,7 +129,7 @@
       // Hide delete button for the current logged-in user
       const deleteBtn = currentUser.id === u.id
         ? ''
-        : `<button class="btn-ghost" onclick="deleteUser(${u.id})" style="padding:4px 8px; font-size:11px; flex:none; background:rgba(239,68,68,0.1); color:var(--red);">Delete</button>`;
+        : `<button class="btn-ghost js-delete-user" data-id="${u.id}" style="padding:4px 8px; font-size:11px; flex:none; background:rgba(239,68,68,0.1); color:var(--red);">Delete</button>`;
 
       return `
         <tr>
@@ -140,7 +140,7 @@
           <td style="font-size:12px; color:var(--muted);">${fmtDate}</td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn-ghost" onclick="openChangePassword(${u.id}, ${jsa(u.display_name)})" style="padding:4px 8px; font-size:11px; flex:none;">Reset PW</button>
+              <button class="btn-ghost js-reset-pw" data-id="${u.id}" data-name="${escA ? escA(u.display_name) : u.display_name}" style="padding:4px 8px; font-size:11px; flex:none;">Reset PW</button>
               ${deleteBtn}
             </div>
           </td>
@@ -302,8 +302,8 @@
       let actions = '—';
       if (r.status === 'pending') {
         actions = `
-          <button class="approve-btn" onclick="reviewProjectRequest(${r.id}, 'approved')">Approve</button>
-          <button class="reject-btn" onclick="reviewProjectRequest(${r.id}, 'rejected')">Reject</button>
+          <button class="approve-btn js-review-project-request" data-id="${r.id}" data-status="approved">Approve</button>
+          <button class="reject-btn js-review-project-request" data-id="${r.id}" data-status="rejected">Reject</button>
         `;
       } else {
         const cls = r.status === 'approved' ? 'badge-approved' : 'badge-rejected';
@@ -339,8 +339,8 @@
       let actions = '—';
       if (r.status === 'pending') {
         actions = `
-          <button class="approve-btn" onclick="reviewRequest(${r.id}, 'approved')">Approve</button>
-          <button class="reject-btn" onclick="reviewRequest(${r.id}, 'rejected')">Reject</button>
+          <button class="approve-btn js-review-request" data-id="${r.id}" data-status="approved">Approve</button>
+          <button class="reject-btn js-review-request" data-id="${r.id}" data-status="rejected">Reject</button>
         `;
       } else {
         const cls = r.status === 'approved' ? 'badge-approved' : 'badge-rejected';
@@ -381,14 +381,9 @@
 
   // ── Activity Log Section ───────────────────────────────────────────────────────
   function filterActivityLog(type) {
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    
-    let btnId = 'tab-act-all';
-    if (type === 'user') btnId = 'tab-act-user';
-    if (type === 'crud') btnId = 'tab-act-crud';
-    if (type === 'request') btnId = 'tab-act-request';
-
-    document.getElementById(btnId).classList.add('active');
+    document.querySelectorAll('.js-tab-act').forEach(btn => btn.classList.remove('active'));
+    const btn = document.getElementById('tab-act-' + type);
+    if (btn) btn.classList.add('active');
     loadActivityLog(type);
   }
 
@@ -410,7 +405,14 @@
         'create_project': '#10b981', 'delete_project': '#ef4444', 'edit_project': '#3b82f6',
         'create_client': '#10b981', 'delete_client': '#ef4444', 'rename_client': '#3b82f6',
         'create_user': '#10b981', 'delete_user': '#ef4444',
-        'approve_request': '#10b981', 'reject_request': '#ef4444'
+        'approve_request': '#10b981', 'reject_request': '#ef4444',
+        // Security events
+        'team_validation_failed': '#ef4444', 'project_team_change_rejected': '#ef4444',
+        'board_status_team_mismatch_rejected': '#ef4444', 'invalid_legacy_access_attempt': '#ef4444',
+        'csrf_validation_failed': '#ef4444',
+        // AI & Upload
+        'ai_estimate_success': '#10b981', 'ai_estimate_failed': '#ef4444',
+        'screenshot_upload_success': '#10b981', 'screenshot_upload_failed': '#ef4444'
       };
 
       tbody.innerHTML = rows.map(r => {
@@ -475,7 +477,7 @@
           <td>${esc(p.engineer_name || '—')}</td>
           <td style="font-size:12px; color:var(--muted);">${fmt(p.final_completed_at || p.archived_at)}</td>
           <td>
-            <button class="btn-ghost" onclick="restoreProjectFromArchive(${p.project_id})" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
+            <button class="btn-ghost js-restore-project" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; font-weight:700; background:rgba(16,185,129,0.1); color:#10b981;">
               Restore
             </button>
           </td>
@@ -541,15 +543,15 @@
     try {
       const [data, caps] = await Promise.all([
         apiFetch('/api/admin/diagnostics'),
-        apiFetch('/api/portal-capabilities').catch(() => ({ legacyEnabled: false }))
+        apiFetch('/api/portal-capabilities').catch(() => ({ legacyEnabled: false, legacySunsetDate: null }))
       ]);
-      renderDiagnostics(data, caps.legacyEnabled);
+      renderDiagnostics(data, caps.legacyEnabled, caps.legacySunsetDate);
     } catch (e) {
       container.innerHTML = `<div class="empty-state">Error: ${esc(e.message)}</div>`;
     }
   }
 
-  function renderDiagnostics(data, legacyEnabled) {
+  function renderDiagnostics(data, legacyEnabled, legacySunsetDate) {
     const container = document.getElementById('diagnostics-root');
     if (!container) return;
 
@@ -658,6 +660,13 @@
       `;
     }
 
+    // Extended metrics panels
+    const userDistText = data.userDistribution ? data.userDistribution.map(u => `${u.team === 'offensive' ? 'Offensive' : 'IT Audit'}: ${u.count}`).join(', ') : 'N/A';
+    const projDistText = data.projectDistribution ? data.projectDistribution.map(p => `${p.team === 'offensive' ? 'Offensive' : 'IT Audit'}: ${p.count}`).join(', ') : 'N/A';
+
+    const pSla = data.projectAccessSla || { total_count: 0, pending_count: 0, avg_hours: null };
+    const uSla = data.accountAccessSla || { total_count: 0, pending_count: 0, avg_hours: null };
+
     container.innerHTML = `
       <div style="display:flex; align-items:center; justify-content:space-between; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:16px 20px; margin-bottom:30px;">
         <div>
@@ -684,8 +693,107 @@
         </div>
       </div>
 
+      <!-- Extended Diagnostics Metrics -->
+      <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; margin-bottom:30px;">
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px;">
+          <h3 style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-bottom:12px;">Team Distributions</h3>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; line-height:1.4;">
+            <div><strong>Users:</strong> ${esc(userDistText)}</div>
+            <div><strong>Projects:</strong> ${esc(projDistText)}</div>
+          </div>
+        </div>
+        
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px;">
+          <h3 style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-bottom:12px;">Average SLA Response Times</h3>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; line-height:1.4;">
+            <div><strong>Project Access:</strong> ${pSla.avg_hours != null ? `${pSla.avg_hours.toFixed(1)} hours` : 'N/A'} (${pSla.pending_count} pending)</div>
+            <div><strong>Account Elevation:</strong> ${uSla.avg_hours != null ? `${uSla.avg_hours.toFixed(1)} hours` : 'N/A'} (${uSla.pending_count} pending)</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; padding:20px;">
+          <h3 style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; margin-bottom:12px;">Legacy Portal Sunset Status</h3>
+          <div style="display:flex; flex-direction:column; gap:10px; font-size:12px; line-height:1.4;">
+            <div><strong>Sunset Date:</strong> <span style="font-family:monospace; color:var(--accent); font-weight:700;">${esc(legacySunsetDate || 'N/A')}</span></div>
+            <div><strong>Access Allowed:</strong> <span class="badge" style="background:${legacyEnabled ? '#f59e0b' : '#ef4444'}; color:#fff; border-radius:4px; padding:2px 6px; font-size:10px; font-weight:700;">${legacyEnabled ? 'ENABLED' : 'SUNSET / DISABLED'}</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recent Project Changes -->
+      <div style="margin-top: 30px;">
+        <h3 style="font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 12px;">Recent Project Changes</h3>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Project Name</th>
+                <th>Action</th>
+                <th>Actor</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.recentlyChanged && data.recentlyChanged.length > 0 ? data.recentlyChanged.map(c => `
+                <tr>
+                  <td style="font-size:12px; color:var(--muted);">${new Date(c.created_at).toLocaleString()}</td>
+                  <td style="font-weight:600; color:var(--text);">${esc(c.name)}</td>
+                  <td><span class="badge" style="background:rgba(255,255,255,0.05); color:var(--accent);">${c.action?.toUpperCase().replace(/_/g, ' ')}</span></td>
+                  <td style="font-size:12px; color:var(--text);">${esc(c.actor_name || 'System')}</td>
+                </tr>
+              `).join('') : `<tr><td colspan="4"><div class="empty-state">No recent project changes found.</div></td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       ${anomalyTableHtml}
     `;
   }
+
+  // Global click event delegation for Admin Console
+  document.addEventListener('click', function (e) {
+    // 1. Delete user
+    const deleteUserBtn = e.target.closest('.js-delete-user');
+    if (deleteUserBtn) {
+      deleteUser(Number(deleteUserBtn.dataset.id));
+      return;
+    }
+
+    // 2. Reset PW
+    const resetPwBtn = e.target.closest('.js-reset-pw');
+    if (resetPwBtn) {
+      openChangePassword(Number(resetPwBtn.dataset.id), resetPwBtn.dataset.name);
+      return;
+    }
+
+    // 3. Review project request
+    const reviewProjBtn = e.target.closest('.js-review-project-request');
+    if (reviewProjBtn) {
+      reviewProjectRequest(Number(reviewProjBtn.dataset.id), reviewProjBtn.dataset.status);
+      return;
+    }
+
+    // 4. Review request
+    const reviewReqBtn = e.target.closest('.js-review-request');
+    if (reviewReqBtn) {
+      reviewRequest(Number(reviewReqBtn.dataset.id), reviewReqBtn.dataset.status);
+      return;
+    }
+
+    // 5. Restore project
+    const restoreProjBtn = e.target.closest('.js-restore-project');
+    if (restoreProjBtn) {
+      restoreProjectFromArchive(Number(restoreProjBtn.dataset.id));
+      return;
+    }
+
+    // 6. Tab Activity Trail
+    const tabActBtn = e.target.closest('.js-tab-act');
+    if (tabActBtn) {
+      filterActivityLog(tabActBtn.dataset.type);
+      return;
+    }
+  });
 
 })();

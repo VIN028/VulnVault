@@ -158,6 +158,12 @@ function requirePageAuth(req, res, next) {
     if (p === '/portal-legacy.html') {
       const enableLegacy = process.env.ENABLE_LEGACY_PORTAL === 'true';
       if (!enableLegacy || session.role !== 'admin') {
+        db.writeActivityLog({
+          type: 'security',
+          actorId: session.userId,
+          action: 'invalid_legacy_access_attempt',
+          details: `Attempted to access legacy portal. Enable flag: ${enableLegacy}, User role: ${session.role}`
+        });
         return res.redirect(302, '/portal.html');
       }
     }

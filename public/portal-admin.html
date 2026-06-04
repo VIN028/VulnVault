@@ -218,11 +218,13 @@
       </div>
 
       <!-- Log Tabs -->
-      <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px;">
-        <button class="tab-btn active" id="tab-act-all" onclick="filterActivityLog('all')">All Activity</button>
-        <button class="tab-btn" id="tab-act-user" onclick="filterActivityLog('user')">User Operations</button>
-        <button class="tab-btn" id="tab-act-crud" onclick="filterActivityLog('crud')">CRUD Logs</button>
-        <button class="tab-btn" id="tab-act-request" onclick="filterActivityLog('request')">Access Approvals</button>
+      <div style="display:flex; gap:8px; margin-bottom:16px; border-bottom:1px solid var(--border); padding-bottom:12px; flex-wrap:wrap;">
+        <button class="tab-btn active js-tab-act" id="tab-act-all" data-type="all">All Activity</button>
+        <button class="tab-btn js-tab-act" id="tab-act-user" data-type="user">User Operations</button>
+        <button class="tab-btn js-tab-act" id="tab-act-project" data-type="project">Project Operations</button>
+        <button class="tab-btn js-tab-act" id="tab-act-security" data-type="security">Security Events</button>
+        <button class="tab-btn js-tab-act" id="tab-act-ai" data-type="ai">AI Estimates</button>
+        <button class="tab-btn js-tab-act" id="tab-act-upload" data-type="upload">Screenshot Uploads</button>
       </div>
 
       <div class="table-wrap">
