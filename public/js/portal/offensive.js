@@ -1279,8 +1279,8 @@
 
   async function saveBoardOrder() {
     try {
-      const updates = _boardStatuses.map((s, idx) => ({ id: s.id, order_num: idx }));
-      await apiFetch('/api/board-statuses/reorder', 'PATCH', { updates });
+      const ordered_ids = _boardStatuses.map(s => s.id);
+      await apiFetch('/api/board-statuses/reorder', 'PUT', { ordered_ids, team: 'offensive' });
       showToast('Sequence saved successfully');
       document.getElementById('modal-board-setup').classList.remove('open');
       loadBoard();

@@ -149,11 +149,22 @@ function requirePageAuth(req, res, next) {
 
   const isDelivery = DELIVERY_ROLES.includes(session.role);
 
+  // Hardening portal page access and legacy portal restrictions
+  const PORTAL_PAGES = new Set(['/portal.html', '/portal-offensive.html', '/portal-itaudit.html', '/portal-admin.html', '/portal-legacy.html']);
+  if (PORTAL_PAGES.has(p)) {
+    if (!MANAGEMENT_ROLES.includes(session.role)) {
+      return res.redirect(302, '/');
+    }
+    if (p === '/portal-legacy.html') {
+      const enableLegacy = process.env.ENABLE_LEGACY_PORTAL === 'true';
+      if (!enableLegacy || session.role !== 'admin') {
+        return res.redirect(302, '/portal.html');
+      }
+    }
+  }
+
   // Management roles landing on main app (/) → portal
   if (!isDelivery && p === '/') return res.redirect(302, '/portal.html');
-  // Delivery roles landing on any portal page → main app (/)
-  const PORTAL_PAGES = new Set(['/portal.html', '/portal-offensive.html', '/portal-itaudit.html', '/portal-admin.html', '/portal-legacy.html']);
-  if (isDelivery && PORTAL_PAGES.has(p)) return res.redirect(302, '/');
 
   // Always allow portal itself once logged in as management
   return next();

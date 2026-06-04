@@ -321,6 +321,19 @@ function parseTeamQuery(req) {
   return team;
 }
 
+function parseTeamValue(value, { required = false } = {}) {
+  if (!value) {
+    if (required) return { error: 'Team is required. Must be offensive or itaudit.' };
+    return null;
+  }
+
+  if (value !== 'offensive' && value !== 'itaudit') {
+    return { error: 'Invalid team. Must be offensive or itaudit.' };
+  }
+
+  return value;
+}
+
 app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
   db.getAllUsers((err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -813,7 +826,11 @@ app.post('/api/clients', (req, res) => {
   const name = (req.body?.name || '').trim();
   const engagement_reference = (req.body?.engagement_reference || '').trim() || null;
   const engagement_info = (req.body?.engagement_info || '').trim() || null;
-  const team = (req.body?.team || 'offensive').trim();
+  
+  const parsedTeam = parseTeamValue(req.body?.team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  const team = parsedTeam;
+
   if (!name) return res.status(400).json({ error: 'Client name is required' });
   db.createClient(name, { engagement_reference, engagement_info, team }, (err, result) => {
     if (err) {
@@ -921,6 +938,11 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
   if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to create projects. Ask your PM to create and assign you.' });
   const clientId = Number(req.params.clientId);
   let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_past_project, actual_end_date, audit_metadata } = req.body;
+  
+  const parsedTeam = parseTeamValue(team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  team = parsedTeam;
+
   const trimScopeTarget = (scope_target || '').trim();
   const trimName = (name || '').trim();
   if (!Number.isInteger(clientId) || clientId < 1) {
@@ -969,7 +991,19 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
     archived_at = new Date().toISOString();
   }
 
-  db.createProject(clientId, trimName, { scope_target: trimScopeTarget, project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, initial_report_status, final_report_status, initial_completed_at, final_completed_at, initial_completed_by, final_completed_by, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
+  // Priority 2: project-client team consistency validation
+  db.getClientById(clientId, (errClient, client) => {
+    if (errClient) return res.status(500).json({ error: errClient.message });
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const clientTeam = client.team || 'offensive';
+    if (clientTeam !== team) {
+      return res.status(400).json({
+        error: `Client belongs to ${clientTeam}; cannot create ${team} project under it.`
+      });
+    }
+
+    db.createProject(clientId, trimName, { scope_target: trimScopeTarget, project_type, project_method: project_method || 'blackbox', assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, initial_report_status, final_report_status, initial_completed_at, final_completed_at, initial_completed_by, final_completed_by, is_archived, archived_at, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
     if (err) {
       if (err.message?.includes('UNIQUE')) return res.status(409).json({ error: 'Project already exists for this client' });
       if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
@@ -981,6 +1015,7 @@ app.post('/api/clients/:clientId/projects', async (req, res) => {
       const created = rows.find(r => r.id === result.id);
       res.status(201).json(created || { id: result.id, client_id: clientId, name: trimName });
     });
+  });
   });
 });
 
@@ -1378,6 +1413,12 @@ app.put('/api/clients/:id', (req, res) => {
   if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to edit clients.' });
   const id   = Number(req.params.id);
   const name = (req.body?.name || '').trim();
+
+  if (req.body?.team !== undefined) {
+    const parsedTeam = parseTeamValue(req.body.team, { required: true });
+    if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  }
+
   if (!name) return res.status(400).json({ error: 'Name is required' });
   db.renameClient(id, name, (err, result) => {
     if (err) {
@@ -1393,6 +1434,11 @@ app.put('/api/projects/:id', async (req, res) => {
   if (!auth.MANAGEMENT_ROLES.includes(req.session?.role)) return res.status(403).json({ error: 'Unauthorized to edit projects.' });
   const id   = Number(req.params.id);
   let { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, audit_metadata } = req.body;
+  
+  const parsedTeam = parseTeamValue(team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  team = parsedTeam;
+
   const trimScopeTarget = (scope_target || '').trim();
   const trimName = (name || '').trim();
   if (!trimName) return res.status(400).json({ error: 'Name is required' });
@@ -1642,7 +1688,9 @@ Buatlah satu paragraf highlight yang profesional dalam Bahasa Indonesia. Jika ad
 
 // ── Board Statuses (Kanban) ────────────────────────────────────────────────────
 app.get('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
-  const team = req.query.team;
+  const parsedTeam = parseTeamValue(req.query.team, { required: false });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  const team = parsedTeam;
   db.getBoardStatuses(team, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
@@ -1651,20 +1699,34 @@ app.get('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
 
 app.post('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
   const { name, color, sort_order, team } = req.body;
+  const parsedTeam = parseTeamValue(team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   if (!name || !name.trim()) return res.status(400).json({ error: 'Status name is required.' });
-  db.createBoardStatus({ name: name.trim(), color, sort_order, team }, (err, result) => {
+  db.createBoardStatus({ name: name.trim(), color, sort_order, team: parsedTeam }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
-    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}" for team "${team || 'offensive'}"` });
-    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0, team });
+    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}" for team "${parsedTeam || 'offensive'}"` });
+    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0, team: parsedTeam });
   });
 });
 
 app.put('/api/board-statuses/reorder', auth.requireRole(...mgmtRoles), (req, res) => {
   const { ordered_ids, team } = req.body;
+  const parsedTeam = parseTeamValue(team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   if (!Array.isArray(ordered_ids)) return res.status(400).json({ error: 'ordered_ids array is required.' });
-  db.reorderBoardStatuses(ordered_ids.map(Number), team, (err) => {
+
+  db.getBoardStatuses(parsedTeam, (err, statuses) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json({ ok: true });
+    const allowedIds = new Set(statuses.map(s => s.id));
+    for (const id of ordered_ids) {
+      if (!allowedIds.has(Number(id))) {
+        return res.status(400).json({ error: 'Invalid board status ID for this team.' });
+      }
+    }
+    db.reorderBoardStatuses(ordered_ids.map(Number), parsedTeam, (err2) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.json({ ok: true });
+    });
   });
 });
 
@@ -1701,11 +1763,28 @@ app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req
       return res.status(400).json({ error: 'Complete final report first' });
     }
 
-    db.updateProjectBoardStatus(id, board_status_id, (err2, result) => {
+    const done = (err2, result) => {
       if (err2) return res.status(500).json({ error: err2.message });
       if (!result.changes) return res.status(404).json({ error: 'Project not found' });
       res.json({ ok: true, isClosed, final_completed_at: proj.final_completed_at });
-    });
+    };
+
+    if (board_status_id !== null && board_status_id !== undefined && board_status_id !== -1) {
+      db.getBoardStatusById(board_status_id, (errStatus, status) => {
+        if (errStatus) return res.status(500).json({ error: errStatus.message });
+        if (!status) return res.status(400).json({ error: 'Invalid board status.' });
+
+        const projTeam = proj.team || 'offensive';
+        const statusTeam = status.team || 'offensive';
+        if (statusTeam !== projTeam) {
+          return res.status(400).json({ error: 'Board status team does not match project team.' });
+        }
+
+        db.updateProjectBoardStatus(id, board_status_id, done);
+      });
+    } else {
+      db.updateProjectBoardStatus(id, board_status_id, done);
+    }
   });
 });
 

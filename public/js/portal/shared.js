@@ -48,7 +48,7 @@
       .replace(/'/g, '&#39;');
   }
 
-  /** Attribute-safe escape (no single-quote encoding – for use in attributes) */
+  /** Safe only for double-quoted HTML attributes. NOT safe for single-quoted JS strings or onclick event handlers. */
   function escA(s) {
     return (s || '')
       .replace(/&/g, '&amp;')

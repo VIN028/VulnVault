@@ -135,7 +135,7 @@
           <td style="font-size:12px; color:var(--muted);">${fmtDate}</td>
           <td>
             <div style="display:flex; gap:6px;">
-              <button class="btn-ghost" onclick="openChangePassword(${u.id}, '${escA(u.display_name)}')" style="padding:4px 8px; font-size:11px; flex:none;">Reset PW</button>
+              <button class="btn-ghost" onclick="openChangePassword(${u.id}, ${jsa(u.display_name)})" style="padding:4px 8px; font-size:11px; flex:none;">Reset PW</button>
               ${deleteBtn}
             </div>
           </td>

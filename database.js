@@ -939,8 +939,19 @@ function getClientsWithProjects(opts, callback) {
            u3.display_name AS retest_pic_name,
            u4.display_name AS retest_assist_name,
            (SELECT COUNT(*) FROM project_vulnerabilities pv WHERE pv.project_id = p.id) AS finding_count
-    FROM clients c
-    LEFT JOIN projects p ON p.client_id = c.id
+    FROM clients c`;
+
+  const params = [];
+  if (opts.team === 'itaudit') {
+    sql += `\n    LEFT JOIN projects p ON p.client_id = c.id AND p.team = ?`;
+    params.push('itaudit');
+  } else if (opts.team === 'offensive') {
+    sql += `\n    LEFT JOIN projects p ON p.client_id = c.id AND (p.team = 'offensive' OR p.team IS NULL)`;
+  } else {
+    sql += `\n    LEFT JOIN projects p ON p.client_id = c.id`;
+  }
+
+  sql += `
     LEFT JOIN users u ON u.id = p.assigned_engineer_id
     LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
     LEFT JOIN users u3 ON u3.id = p.retest_pic_id
@@ -953,15 +964,14 @@ function getClientsWithProjects(opts, callback) {
     LEFT JOIN users u10 ON u10.id = p.engineer_8_id
     LEFT JOIN users u11 ON u11.id = p.engineer_9_id
     LEFT JOIN users u12 ON u12.id = p.engineer_10_id`;
-  const params = [];
-  if (opts.team) {
-    if (opts.team === 'offensive') {
-      sql += `\n    WHERE (c.team = ? OR c.team IS NULL)`;
-    } else {
-      sql += `\n    WHERE c.team = ?`;
-    }
-    params.push(opts.team);
+
+  if (opts.team === 'itaudit') {
+    sql += `\n    WHERE c.team = ?`;
+    params.push('itaudit');
+  } else if (opts.team === 'offensive') {
+    sql += `\n    WHERE (c.team = 'offensive' OR c.team IS NULL)`;
   }
+
   sql += `\n    ORDER BY c.name, p.name`;
   getDb().all(sql, params, callback);
 }
@@ -1611,6 +1621,10 @@ function renameClient(id, name, callback) {
   });
 }
 
+function getClientById(id, callback) {
+  getDb().get('SELECT * FROM clients WHERE id = ?', [id], callback);
+}
+
 function getProjectById(id, callback) {
   getDb().get('SELECT * FROM projects WHERE id = ?', [id], callback);
 }
@@ -1623,7 +1637,7 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, is_archived, schedule_policy_version, audit_metadata }, callback) {
+function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata }, callback) {
   const db = getDb();
   const teamVal = team || 'offensive';
   validateDeliveryAssignments(teamVal, {
@@ -1657,11 +1671,10 @@ function updateProject(id, { name, scope_target, project_type, project_method, a
          mandays_assessment = ?,
          team = ?,
          service = ?,
-         is_archived = ?,
          schedule_policy_version = ?,
          audit_metadata = ?
        WHERE id = ?`,
-      [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, is_archived || 0, schedule_policy_version || null, audit_metadata || null, id],
+      [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, schedule_policy_version || null, audit_metadata || null, id],
       function(err) {
         if (err) return callback(err);
         callback(null, { changes: this.changes });
@@ -1860,6 +1873,10 @@ function getBoardStatuses(team, callback) {
     : 'SELECT * FROM board_statuses ORDER BY sort_order ASC';
   const params = team ? [team] : [];
   getDb().all(sql, params, callback);
+}
+
+function getBoardStatusById(id, callback) {
+  getDb().get('SELECT * FROM board_statuses WHERE id = ?', [id], callback);
 }
 
 function createBoardStatus({ name, color, sort_order, team }, callback) {
@@ -2084,6 +2101,7 @@ module.exports = {
   createClient,
   deleteClient,
   renameClient,
+  getClientById,
   // Projects
   getProjectsByClient,
   createProject,
@@ -2141,6 +2159,7 @@ module.exports = {
   markNotificationsRead,
   // Board statuses (Kanban)
   getBoardStatuses,
+  getBoardStatusById,
   createBoardStatus,
   updateBoardStatus,
   deleteBoardStatus,
