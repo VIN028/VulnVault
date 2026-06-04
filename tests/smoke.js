@@ -272,6 +272,53 @@ async function wait(ms) {
     }
     console.log('✅ Test 7 Passed: display name with single quotes is serialized safely into attribute-safe JSON.');
 
+    // --- TEST 8: Project team immutability & validation ---
+    console.log('\n🔍 Running Test 8: Project team immutability & validation...');
+    const editTeamRes = await request({
+      path: `/api/projects/${offProjectId}`,
+      method: 'PUT',
+      headers: { 'cookie': cookie, 'Content-Type': 'application/json' }
+    }, {
+      name: 'Offensive Project Edited',
+      team: 'itaudit', // trying to change team
+      project_type: 'web',
+      project_method: 'blackbox'
+    });
+
+    if (editTeamRes.statusCode !== 400) {
+      throw new Error(`Test 8 Failed: Expected 400 when changing project team, got ${editTeamRes.statusCode}`);
+    }
+    console.log('✅ Test 8 Passed: Project team modification rejected with 400.');
+
+    // --- TEST 9: Scoped deletion of another team's board status ---
+    console.log('\n🔍 Running Test 9: Scoped deletion of another team\'s board status...');
+    const deleteScopedRes = await request({
+      path: `/api/board-statuses/${itStatusId}?team=offensive`,
+      method: 'DELETE',
+      headers: { 'cookie': cookie }
+    });
+
+    if (deleteScopedRes.statusCode !== 400 && deleteScopedRes.statusCode !== 404) {
+      throw new Error(`Test 9 Failed: Expected 400 or 404 when deleting another team's status, got ${deleteScopedRes.statusCode}`);
+    }
+    console.log('✅ Test 9 Passed: Deleting other team\'s status rejected with ' + deleteScopedRes.statusCode + '.');
+
+    // --- TEST 10: Admin diagnostics validation ---
+    console.log('\n🔍 Running Test 10: Admin diagnostics validation...');
+    const diagRes = await request({
+      path: '/api/admin/diagnostics',
+      method: 'GET',
+      headers: { 'cookie': cookie }
+    });
+
+    if (diagRes.statusCode !== 200) {
+      throw new Error(`Test 10 Failed: Expected 200 for diagnostics, got ${diagRes.statusCode}`);
+    }
+    if (!diagRes.body || !Array.isArray(diagRes.body.clientMismatches) || !Array.isArray(diagRes.body.boardMismatches) || !Array.isArray(diagRes.body.userMismatches)) {
+      throw new Error(`Test 10 Failed: Invalid diagnostics response structure: ${JSON.stringify(diagRes.body)}`);
+    }
+    console.log('✅ Test 10 Passed: Diagnostics retrieved successfully with correct structure.');
+
     console.log('\n🏆 ALL SMOKE TESTS COMPLETED SUCCESSFULLY! 🎉\n');
     cleanupAndExit(0);
   } catch (err) {

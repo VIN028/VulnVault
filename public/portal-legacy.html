@@ -6580,7 +6580,7 @@
       const ok = await customConfirm('Hapus Status', 'Hapus status ini? Project yang menggunakan status ini akan kembali ke kolom Projects.', 'Hapus', 'danger');
       if (!ok) return;
       try {
-        await apiFetch('/api/board-statuses/' + id, 'DELETE');
+        await apiFetch('/api/board-statuses/' + id + '?team=' + (_boardTeamFilter || 'offensive'), 'DELETE');
         _boardStatuses = _boardStatuses.filter(s => s.id !== id);
         _renderSetupList();
         showToast('Status dihapus', 'success');
@@ -6588,7 +6588,7 @@
     }
 
     async function _updateStatusColor(id, color) {
-      try { await apiFetch('/api/board-statuses/' + id, 'PUT', { color }); } catch { }
+      try { await apiFetch('/api/board-statuses/' + id, 'PUT', { color, team: _boardTeamFilter || 'offensive' }); } catch { }
       const s = _boardStatuses.find(s => s.id === id);
       if (s) s.color = color;
     }

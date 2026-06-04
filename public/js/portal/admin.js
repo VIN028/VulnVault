@@ -34,6 +34,7 @@
   window.loadActivityLog = loadActivityLog;
   window.loadArchived = loadArchived;
   window.restoreProjectFromArchive = restoreProjectFromArchive;
+  window.runSystemDiagnostics = runSystemDiagnostics;
 
   // ── Init ───────────────────────────────────────────────────────────────────────
   PortalShared.initSessionGuard(function (s) {
@@ -49,6 +50,8 @@
 
     const savedTab = localStorage.getItem('vulnvault_admin_active_tab') || 'users';
     navigate(savedTab);
+
+    runSystemDiagnostics();
   });
 
   function getInitials(name) {
@@ -489,6 +492,42 @@
       loadArchived();
     } catch (e) {
       showToast(e.message, 'error');
+    }
+  }
+
+  async function runSystemDiagnostics() {
+    const banner = document.getElementById('diagnostic-warning-banner');
+    const details = document.getElementById('diagnostic-details');
+    if (!banner || !details) return;
+
+    try {
+      const res = await apiFetch('/api/admin/diagnostics');
+      const clientErrors = res.clientMismatches || [];
+      const boardErrors = res.boardMismatches || [];
+      const userErrors = res.userMismatches || [];
+
+      if (clientErrors.length > 0 || boardErrors.length > 0 || userErrors.length > 0) {
+        let html = '<ul style="margin: 0; padding-left: 20px;">';
+        clientErrors.forEach(item => {
+          html += `<li>Project <strong>${esc(item.name)}</strong> (ID: ${item.id}, team: ${esc(item.project_team || 'offensive')}) has client team mismatch: Client <strong>${esc(item.client_name)}</strong> is team: <strong>${esc(item.client_team || 'offensive')}</strong></li>`;
+        });
+        boardErrors.forEach(item => {
+          html += `<li>Project <strong>${esc(item.name)}</strong> (ID: ${item.id}, team: ${esc(item.project_team || 'offensive')}) has board status team mismatch: Status <strong>${esc(item.status_name)}</strong> is team: <strong>${esc(item.status_team || 'offensive')}</strong></li>`;
+        });
+        userErrors.forEach(item => {
+          html += `<li>Project <strong>${esc(item.name)}</strong> (ID: ${item.id}, team: ${esc(item.project_team || 'offensive')}) has user assignment team mismatch: User <strong>${esc(item.display_name)}</strong> is team: <strong>${esc(item.user_team || 'offensive')}</strong></li>`;
+        });
+        html += '</ul>';
+        details.innerHTML = html;
+        banner.style.display = 'block';
+      } else {
+        banner.style.display = 'none';
+        details.innerHTML = '';
+      }
+    } catch (e) {
+      console.error('Failed to run diagnostics:', e);
+      banner.style.display = 'block';
+      details.innerHTML = `Failed to retrieve diagnostic data: ${esc(e.message)}`;
     }
   }
 

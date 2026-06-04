@@ -1192,7 +1192,7 @@
     if (!ok) return;
 
     try {
-      await apiFetch(`/api/board-statuses/${id}`, 'DELETE');
+      await apiFetch(`/api/board-statuses/${id}?team=itaudit`, 'DELETE');
       _boardStatuses = await apiFetch('/api/board-statuses?team=itaudit');
       renderSetupList();
       loadBoard();

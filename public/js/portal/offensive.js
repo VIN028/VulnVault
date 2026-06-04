@@ -1268,7 +1268,7 @@
     if (!ok) return;
 
     try {
-      await apiFetch(`/api/board-statuses/${id}`, 'DELETE');
+      await apiFetch(`/api/board-statuses/${id}?team=offensive`, 'DELETE');
       _boardStatuses = await apiFetch('/api/board-statuses?team=offensive');
       renderSetupList();
       loadBoard();

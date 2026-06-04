@@ -334,6 +334,21 @@ function parseTeamValue(value, { required = false } = {}) {
   return value;
 }
 
+app.get('/api/portal-capabilities', auth.requireRole(...mgmtRoles), (req, res) => {
+  res.json({
+    legacyEnabled:
+      process.env.ENABLE_LEGACY_PORTAL === 'true' &&
+      req.session.role === 'admin'
+  });
+});
+
+app.get('/api/admin/diagnostics', auth.requireRole('admin'), (req, res) => {
+  db.runDiagnostics((err, results) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(results);
+  });
+});
+
 app.get('/api/users', auth.requireRole(...mgmtRoles), (req, res) => {
   db.getAllUsers((err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1467,6 +1482,9 @@ app.put('/api/projects/:id', async (req, res) => {
   
   db.updateProject(id, { name: trimName, scope_target: trimScopeTarget, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links: project_links ? JSON.stringify(project_links) : null, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata: audit_metadata ? (typeof audit_metadata === 'string' ? audit_metadata : JSON.stringify(audit_metadata)) : null }, (err, result) => {
     if (err) {
+      if (err.message && /mismatch|cannot be changed/i.test(err.message)) {
+        return res.status(400).json({ error: err.message });
+      }
       if (/assigned user|duplicate engineer|invalid assignment/i.test(err.message || '')) return res.status(400).json({ error: err.message });
       return res.status(500).json({ error: err.message });
     }
@@ -1733,20 +1751,46 @@ app.put('/api/board-statuses/reorder', auth.requireRole(...mgmtRoles), (req, res
 app.put('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
   const { name, color, sort_order } = req.body;
-  db.updateBoardStatus(id, { name: name?.trim(), color, sort_order }, (err, result) => {
+  const parsedTeam = parseTeamValue(req.body.team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  const team = parsedTeam;
+
+  db.getBoardStatusById(id, (err, status) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!result.changes) return res.status(404).json({ error: 'Status not found' });
-    res.json({ ok: true });
+    if (!status) return res.status(404).json({ error: 'Status not found' });
+
+    if ((status.team || 'offensive') !== team) {
+      return res.status(400).json({ error: 'Invalid board status ID for this team.' });
+    }
+
+    db.updateBoardStatusForTeam(id, team, { name: name?.trim(), color, sort_order }, (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      if (!result.changes) return res.status(404).json({ error: 'Status not found for this team.' });
+      res.json({ ok: true });
+    });
   });
 });
 
 app.delete('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
-  db.deleteBoardStatus(id, (err, result) => {
+  const parsedTeam = parseTeamValue(req.query.team || req.body?.team, { required: true });
+  if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
+  const team = parsedTeam;
+
+  db.getBoardStatusById(id, (err, status) => {
     if (err) return res.status(500).json({ error: err.message });
-    if (!result.changes) return res.status(404).json({ error: 'Status not found' });
-    db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'delete_board_status', details: `Deleted board status ID ${id}` });
-    res.json({ ok: true });
+    if (!status) return res.status(404).json({ error: 'Status not found' });
+
+    if ((status.team || 'offensive') !== team) {
+      return res.status(400).json({ error: 'Invalid board status ID for this team.' });
+    }
+
+    db.deleteBoardStatusForTeam(id, team, (err2, result) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      if (!result.changes) return res.status(404).json({ error: 'Status not found for this team.' });
+      db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'delete_board_status', details: `Deleted board status ID ${id} for team "${team}"` });
+      res.json({ ok: true });
+    });
   });
 });
 

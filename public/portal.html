@@ -580,7 +580,7 @@
       </a>
 
       <!-- Legacy Portal -->
-      <a href="/portal-legacy.html" class="hub-card hub-card--legacy">
+      <a id="legacy-card" href="/portal-legacy.html" class="hub-card hub-card--legacy" style="display:none">
         <div class="hub-card-header">
           <div class="hub-card-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -637,7 +637,7 @@
         return parts[0].substring(0, 2).toUpperCase();
       }
 
-      function onReady(session) {
+      async function onReady(session) {
         var displayName = session.displayName || session.username || 'User';
 
         // Greeting
@@ -649,6 +649,16 @@
         // User name and role
         document.getElementById('hubUserName').textContent = displayName;
         document.getElementById('hubUserRole').textContent = session.role || 'user';
+
+        // Check legacy capabilities
+        try {
+          const caps = await PortalShared.apiFetch('/api/portal-capabilities');
+          if (caps && caps.legacyEnabled) {
+            document.getElementById('legacy-card').style.display = '';
+          }
+        } catch (e) {
+          console.error('Failed to load portal capabilities:', e);
+        }
 
         // Reveal
         document.getElementById('hubRoot').style.display = '';

@@ -1637,49 +1637,73 @@ function renameProject(id, name, callback) {
   });
 }
 
-function updateProject(id, { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, team, service, schedule_policy_version, audit_metadata }, callback) {
+function updateProject(id, payload, callback) {
   const db = getDb();
-  const teamVal = team || 'offensive';
-  validateDeliveryAssignments(teamVal, {
-    assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id,
-    engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
-  }, (validationErr) => {
-    if (validationErr) return callback(validationErr);
 
-    db.run(
-      `UPDATE projects SET
-         name = ?,
-         scope_target = ?,
-         project_type = ?,
-         project_method = ?,
-         assigned_engineer_id = ?,
-         assist_engineer_id = ?,
-         engineer_3_id = ?,
-         engineer_4_id = ?,
-         engineer_5_id = ?,
-         engineer_6_id = ?,
-         engineer_7_id = ?,
-         engineer_8_id = ?,
-         engineer_9_id = ?,
-         engineer_10_id = ?,
-         kickoff_date = ?,
-         initial_report_date = ?,
-         final_report_date = ?,
-         project_links = ?,
-         start_date = ?,
-         mandays_initial_report = ?,
-         mandays_assessment = ?,
-         team = ?,
-         service = ?,
-         schedule_policy_version = ?,
-         audit_metadata = ?
-       WHERE id = ?`,
-      [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, schedule_policy_version || null, audit_metadata || null, id],
-      function(err) {
-        if (err) return callback(err);
-        callback(null, { changes: this.changes });
-      }
-    );
+  db.get(`
+    SELECT p.id, p.client_id, p.team AS project_team, c.team AS client_team
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    WHERE p.id = ?
+  `, [id], (lookupErr, row) => {
+    if (lookupErr) return callback(lookupErr);
+    if (!row) return callback(null, { changes: 0 });
+
+    const clientTeam = row.client_team || 'offensive';
+    const targetTeam = payload.team || row.project_team || 'offensive';
+
+    if (clientTeam !== targetTeam) {
+      return callback(new Error('Client/project team mismatch'));
+    }
+
+    if (payload.team && payload.team !== row.project_team) {
+      return callback(new Error('Project team cannot be changed from the edit endpoint.'));
+    }
+
+    const { name, scope_target, project_type, project_method, assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id, engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id, kickoff_date, initial_report_date, final_report_date, project_links, start_date, mandays_initial_report, mandays_assessment, service, schedule_policy_version, audit_metadata } = payload;
+    const teamVal = row.project_team;
+
+    validateDeliveryAssignments(teamVal, {
+      assigned_engineer_id, assist_engineer_id, engineer_3_id, engineer_4_id, engineer_5_id,
+      engineer_6_id, engineer_7_id, engineer_8_id, engineer_9_id, engineer_10_id,
+    }, (validationErr) => {
+      if (validationErr) return callback(validationErr);
+
+      db.run(
+        `UPDATE projects SET
+           name = ?,
+           scope_target = ?,
+           project_type = ?,
+           project_method = ?,
+           assigned_engineer_id = ?,
+           assist_engineer_id = ?,
+           engineer_3_id = ?,
+           engineer_4_id = ?,
+           engineer_5_id = ?,
+           engineer_6_id = ?,
+           engineer_7_id = ?,
+           engineer_8_id = ?,
+           engineer_9_id = ?,
+           engineer_10_id = ?,
+           kickoff_date = ?,
+           initial_report_date = ?,
+           final_report_date = ?,
+           project_links = ?,
+           start_date = ?,
+           mandays_initial_report = ?,
+           mandays_assessment = ?,
+           team = ?,
+           service = ?,
+           schedule_policy_version = ?,
+           audit_metadata = ?
+         WHERE id = ?`,
+        [name, scope_target || null, project_type || 'web', project_method || 'blackbox', assigned_engineer_id || null, assist_engineer_id || null, engineer_3_id || null, engineer_4_id || null, engineer_5_id || null, engineer_6_id || null, engineer_7_id || null, engineer_8_id || null, engineer_9_id || null, engineer_10_id || null, kickoff_date || null, initial_report_date || null, final_report_date || null, project_links || null, start_date || null, mandays_initial_report ?? 1, mandays_assessment ?? 0, teamVal, service || null, schedule_policy_version || null, audit_metadata || null, id],
+        function(err) {
+          if (err) return callback(err);
+          callback(null, { changes: this.changes });
+        }
+      );
+    });
   });
 }
 
@@ -1887,24 +1911,26 @@ function createBoardStatus({ name, color, sort_order, team }, callback) {
   );
 }
 
-function updateBoardStatus(id, { name, color, sort_order }, callback) {
+function updateBoardStatusForTeam(id, team, { name, color, sort_order }, callback) {
   const updates = [], params = [];
   if (name !== undefined) { updates.push('name = ?'); params.push(name); }
   if (color !== undefined) { updates.push('color = ?'); params.push(color); }
   if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
   if (!updates.length) return callback(null, { changes: 0 });
-  params.push(id);
-  getDb().run(`UPDATE board_statuses SET ${updates.join(', ')} WHERE id = ?`, params,
-    function(err) { callback(err, { changes: this?.changes }); }
+  
+  params.push(id, team || 'offensive');
+  getDb().run(`UPDATE board_statuses SET ${updates.join(', ')} WHERE id = ? AND COALESCE(team, 'offensive') = ?`, params,
+    function(err) { callback(err, { changes: this?.changes || 0 }); }
   );
 }
 
-function deleteBoardStatus(id, callback) {
+function deleteBoardStatusForTeam(id, team, callback) {
   const db = getDb();
+  const teamVal = team || 'offensive';
   db.serialize(() => {
-    db.run('UPDATE projects SET board_status_id = NULL WHERE board_status_id = ?', [id]);
-    db.run('DELETE FROM board_statuses WHERE id = ?', [id], function(err) {
-      callback(err, { changes: this?.changes });
+    db.run(`UPDATE projects SET board_status_id = NULL WHERE board_status_id = ? AND COALESCE(team, 'offensive') = ?`, [id, teamVal]);
+    db.run(`DELETE FROM board_statuses WHERE id = ? AND COALESCE(team, 'offensive') = ?`, [id, teamVal], function(err) {
+      callback(err, { changes: this?.changes || 0 });
     });
   });
 }
@@ -1913,9 +1939,57 @@ function reorderBoardStatuses(orderedIds, team, callback) {
   if (typeof team === 'function') { callback = team; team = null; }
   const db = getDb();
   db.serialize(() => {
-    const stmt = db.prepare('UPDATE board_statuses SET sort_order = ? WHERE id = ?');
-    orderedIds.forEach((id, idx) => stmt.run([idx, id]));
+    const stmt = db.prepare('UPDATE board_statuses SET sort_order = ? WHERE id = ? AND team = ?');
+    orderedIds.forEach((id, idx) => stmt.run([idx, id, team]));
     stmt.finalize(callback);
+  });
+}
+
+function runDiagnostics(callback) {
+  const db = getDb();
+  const results = {};
+
+  db.all(`
+    SELECT p.id, p.name, p.team AS project_team, c.name AS client_name, c.team AS client_team
+    FROM projects p
+    JOIN clients c ON c.id = p.client_id
+    WHERE COALESCE(p.team, 'offensive') <> COALESCE(c.team, 'offensive')
+  `, [], (err1, rows1) => {
+    if (err1) return callback(err1);
+    results.clientMismatches = rows1;
+
+    db.all(`
+      SELECT p.id, p.name, p.team AS project_team, b.name AS status_name, b.team AS status_team
+      FROM projects p
+      JOIN board_statuses b ON b.id = p.board_status_id
+      WHERE COALESCE(p.team, 'offensive') <> COALESCE(b.team, 'offensive')
+    `, [], (err2, rows2) => {
+      if (err2) return callback(err2);
+      results.boardMismatches = rows2;
+
+      db.all(`
+        SELECT p.id, p.name, u.id AS user_id, u.display_name, u.team AS user_team, p.team AS project_team
+        FROM projects p
+        JOIN users u ON u.id IN (
+          p.assigned_engineer_id,
+          p.assist_engineer_id,
+          p.engineer_3_id,
+          p.engineer_4_id,
+          p.engineer_5_id,
+          p.engineer_6_id,
+          p.engineer_7_id,
+          p.engineer_8_id,
+          p.engineer_9_id,
+          p.engineer_10_id
+        )
+        WHERE COALESCE(p.team, 'offensive') <> COALESCE(u.team, 'offensive')
+      `, [], (err3, rows3) => {
+        if (err3) return callback(err3);
+        results.userMismatches = rows3;
+
+        callback(null, results);
+      });
+    });
   });
 }
 
@@ -2161,8 +2235,8 @@ module.exports = {
   getBoardStatuses,
   getBoardStatusById,
   createBoardStatus,
-  updateBoardStatus,
-  deleteBoardStatus,
+  updateBoardStatusForTeam,
+  deleteBoardStatusForTeam,
   reorderBoardStatuses,
   updateProjectBoardStatus,
   updateProjectBoardStatusAndCompletion,
@@ -2171,4 +2245,5 @@ module.exports = {
   getEngagementsByClient,
   getAllEngagements,
   createEngagement,
+  runDiagnostics,
 };
