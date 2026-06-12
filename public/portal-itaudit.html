@@ -654,10 +654,13 @@
       
       <div class="setup-status-list" id="setup-status-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
 
-      <div style="display:flex; gap:8px; margin-bottom:20px;">
-        <input id="setup-new-name" placeholder="New status title..." style="flex:1;">
+      <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; align-items:center;">
+        <input id="setup-new-name" placeholder="New status title..." style="flex:1; min-width:150px;">
         <input type="color" id="setup-new-color" value="#06b6d4" style="width:36px; height:36px; padding:2px; border-radius:8px; cursor:pointer;">
-        <button class="btn-primary" id="btn-add-status" type="button" style="font-size:12px;">Add</button>
+        <label style="font-size:12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; color:var(--muted); margin-left:8px;">
+          <input type="checkbox" id="setup-new-terminal"> Final / Closed stage
+        </label>
+        <button class="btn-primary" id="btn-add-status" type="button" style="font-size:12px; margin-left:auto;">Add</button>
       </div>
 
       <div class="modal-actions">
@@ -679,8 +682,8 @@
   </div>
 
   <!-- Global scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" async></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0" async></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0" defer></script>
   <script src="/js/portal/shared.js" defer></script>
   <script src="/js/portal/projectFormShared.js" defer></script>
   <script src="/js/portal/boardShared.js" defer></script>

@@ -345,9 +345,15 @@ const generatedReportsDir = path.join(__dirname, 'generated_reports');
 if (!fs.existsSync(generatedReportsDir)) {
   fs.mkdirSync(generatedReportsDir, { recursive: true });
 }
+const generatedBastDir = path.join(generatedReportsDir, 'bast');
+if (!fs.existsSync(generatedBastDir)) {
+  fs.mkdirSync(generatedBastDir, { recursive: true });
+}
 
 const reportTemplateEnPath = path.join(__dirname, 'templates', 'initial_report_en.docx');
 const reportGeneratorScript = path.join(__dirname, 'tools', 'report_generator_docx.py');
+const bastTemplatePath = path.join(__dirname, 'templates', 'bast_vapt_template.docx');
+const bastGeneratorScript = path.join(__dirname, 'tools', 'bast_generator_docx.py');
 
 // Multer config for screenshot uploads
 const storage = multer.diskStorage({
@@ -984,7 +990,83 @@ app.get('/api/clients/full', auth.requireRole('admin','manager','pm'), (req, res
   const team = typeof teamResult === 'string' ? teamResult : null;
   db.getClientsWithProjects({ team }, (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+
+    const clientMap = new Map();
+    for (const r of rows) {
+      const cid = r.client_id;
+      if (!clientMap.has(cid)) {
+        clientMap.set(cid, {
+          client_id: cid,
+          client_name: r.client_name,
+          client_team: r.client_team,
+          engagement_reference: r.engagement_reference,
+          engagement_info: r.engagement_info,
+          projects: []
+        });
+      }
+
+      const isActive = r.project_id && r.is_archived !== 1 && r.final_report_status !== 'completed';
+      if (isActive) {
+        clientMap.get(cid).projects.push({
+          project_id: r.project_id,
+          id: r.project_id,
+          project_name: r.project_name,
+          name: r.project_name,
+          scope_target: r.scope_target,
+          project_type: r.project_type,
+          board_status_id: r.board_status_id,
+          kickoff_date: r.kickoff_date,
+          initial_report_date: r.initial_report_date,
+          final_report_date: r.final_report_date,
+          initial_report_status: r.initial_report_status,
+          final_report_status: r.final_report_status,
+          is_archived: r.is_archived,
+          archived_at: r.archived_at,
+          assigned_engineer_id: r.assigned_engineer_id,
+          assist_engineer_id: r.assist_engineer_id,
+          engineer_3_id: r.engineer_3_id,
+          engineer_4_id: r.engineer_4_id,
+          engineer_5_id: r.engineer_5_id,
+          engineer_6_id: r.engineer_6_id,
+          engineer_7_id: r.engineer_7_id,
+          engineer_8_id: r.engineer_8_id,
+          engineer_9_id: r.engineer_9_id,
+          engineer_10_id: r.engineer_10_id,
+          link_report_en: r.link_report_en,
+          link_report_id: r.link_report_id,
+          project_links: r.project_links,
+          project_method: r.project_method,
+          start_date: r.start_date,
+          mandays_assessment: r.mandays_assessment,
+          mandays_initial_report: r.mandays_initial_report,
+          team: r.team,
+          service: r.service,
+          audit_metadata: r.audit_metadata,
+          highlight_notes: r.highlight_notes ? JSON.parse(r.highlight_notes) : [],
+          highlight_text: r.highlight_text || '',
+          retest_status: r.retest_status,
+          retest_start_date: r.retest_start_date,
+          retest_end_date: r.retest_end_date,
+          retest_pic_id: r.retest_pic_id,
+          retest_assist_id: r.retest_assist_id,
+          engineer_name: r.engineer_name,
+          assist_engineer_name: r.assist_engineer_name,
+          engineer_3_name: r.engineer_3_name,
+          engineer_4_name: r.engineer_4_name,
+          engineer_5_name: r.engineer_5_name,
+          engineer_6_name: r.engineer_6_name,
+          engineer_7_name: r.engineer_7_name,
+          engineer_8_name: r.engineer_8_name,
+          engineer_9_name: r.engineer_9_name,
+          engineer_10_name: r.engineer_10_name,
+          retest_pic_name: r.retest_pic_name,
+          retest_assist_name: r.retest_assist_name,
+          finding_count: r.finding_count
+        });
+      }
+    }
+
+    res.json(Array.from(clientMap.values()));
   });
 });
 
@@ -1129,19 +1211,39 @@ app.get('/api/projects/archived', auth.requireRole('admin', 'manager', 'pm'), (r
 
 app.patch('/api/projects/:id/archive', auth.requireRole('admin', 'manager', 'pm'), (req, res) => {
   const id = Number(req.params.id);
-  db.getProjectById(id, (err, proj) => {
-    if (err || !proj) return res.status(404).json({ error: 'Project not found' });
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
 
-    const isCompleted = proj.final_report_status === 'completed';
-    if (!isCompleted) {
+  db.getProjectById(id, (err, proj) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!proj) return res.status(404).json({ error: 'Project not found' });
+
+    if (proj.final_report_status !== 'completed') {
       return res.status(400).json({ error: 'Cannot archive active project. Complete final report first.' });
     }
 
-    db.archiveProject(id, (err2, result) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
-      db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'archive_project', details:`Archived project "${proj.name}"` });
-      res.json({ message: 'Project archived successfully' });
+    if (!proj.board_status_id) {
+      return res.status(400).json({ error: 'Move project to a final board status before archiving.' });
+    }
+
+    db.getBoardStatusById(proj.board_status_id, (statusErr, status) => {
+      if (statusErr) return res.status(500).json({ error: statusErr.message });
+      if (!status) return res.status(400).json({ error: 'Invalid board status.' });
+
+      const projTeam = proj.team || 'offensive';
+      const statusTeam = status.team || 'offensive';
+
+      if (projTeam !== statusTeam || status.is_terminal !== 1) {
+        return res.status(400).json({ error: 'Move project to a final board status before archiving.' });
+      }
+
+      db.archiveProject(id, (archiveErr, result) => {
+        if (archiveErr) return res.status(500).json({ error: archiveErr.message });
+        if (!result?.changes) return res.status(404).json({ error: 'Project not found' });
+        db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'archive_project', details:`Archived project "${proj.name}"` });
+        res.json({ message: 'Project archived successfully' });
+      });
     });
   });
 });
@@ -1306,6 +1408,58 @@ function safeFilename(value) {
     .slice(0, 120) || 'report';
 }
 
+function formatBastDate(value) {
+  if (!value) return formatReportDate(new Date());
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) return formatReportDate(value);
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? String(value).trim() : formatReportDate(parsed);
+}
+
+function bastInput(body, snakeKey, fallback = '') {
+  const upperKey = snakeKey.toUpperCase();
+  const spacedKey = upperKey.replace(/_/g, ' ');
+  const value = body?.[snakeKey] ?? body?.[upperKey] ?? body?.[spacedKey] ?? fallback;
+  return String(value ?? '').trim();
+}
+
+function buildBastData(rows, body = {}) {
+  const first = rows[0];
+  const clientName = String(first.client_name || 'Client').trim();
+  const serviceType = String(first.service || 'VAPT Services').trim() || 'VAPT Services';
+  const reportDateSource = body.report_date || first.final_report_date || first.initial_report_date || first.start_date || first.kickoff_date;
+  const data = {
+    CLIENT_NAME: clientName,
+    CLIENT_PIC_NAME: bastInput(body, 'client_pic_name'),
+    CLIENT_COMPANY: bastInput(body, 'client_company', clientName),
+    CLIENT_COMPANY_ADDRESS: bastInput(body, 'client_company_address'),
+    SERVICE_TYPE: serviceType,
+    PROJECT_PHASE: bastInput(body, 'project_phase', 'Final'),
+    REFERENCE_TYPE: bastInput(body, 'reference_type'),
+    REPORT_DATE: formatBastDate(reportDateSource),
+    REPORT_TYPE: bastInput(body, 'report_type', 'Final Report'),
+    BILLING_PERCENTAGE: bastInput(body, 'billing_percentage'),
+    CLIENT_PIC_POSITION: bastInput(body, 'client_pic_position'),
+  };
+  data['BILLING PERCENTAGE'] = data.BILLING_PERCENTAGE;
+  return data;
+}
+
+function validateBastData(data) {
+  const required = [
+    'CLIENT_PIC_NAME',
+    'CLIENT_COMPANY',
+    'CLIENT_COMPANY_ADDRESS',
+    'PROJECT_PHASE',
+    'REFERENCE_TYPE',
+    'REPORT_DATE',
+    'REPORT_TYPE',
+    'BILLING_PERCENTAGE',
+    'CLIENT_PIC_POSITION',
+  ];
+  const missing = required.filter(key => !String(data[key] || '').trim());
+  return missing;
+}
+
 function buildInitialReportData(rows, language = 'en') {
   const first = rows[0];
   const vulns = rows.filter(row => row.id);
@@ -1382,6 +1536,7 @@ function findPythonBinary() {
   const candidates = [
     process.env.PYTHON_BIN,
     path.join(__dirname, '.venv', 'bin', 'python3'),
+    process.env.HOME ? path.join(process.env.HOME, '.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3') : null,
     '/Users/vincentius/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/bin/python3',
     'python3',
   ].filter(Boolean);
@@ -1404,6 +1559,32 @@ function runDocxGenerator({ dataPath, outputPath }) {
         } catch {
           return reject(new Error(`Generator returned invalid JSON: ${stdout || stderr}`));
         }
+      }
+    );
+  });
+}
+
+function runBastDocxGenerator({ dataPath, outputPath }) {
+  return new Promise((resolve, reject) => {
+    execFile(
+      findPythonBinary(),
+      [bastGeneratorScript, '--template', bastTemplatePath, '--data', dataPath, '--out', outputPath],
+      { cwd: __dirname, timeout: 120000, maxBuffer: 1024 * 1024 * 10 },
+      (error, stdout, stderr) => {
+        let parsed = null;
+        try {
+          parsed = stdout ? JSON.parse(stdout) : null;
+        } catch {}
+        if (error) {
+          if (parsed?.unresolved?.length) {
+            error.message = `Unresolved BAST placeholders: ${parsed.unresolved.join(', ')}`;
+          } else {
+            error.message = `${error.message}${stderr ? `\n${stderr}` : ''}`;
+          }
+          return reject(error);
+        }
+        if (!parsed) return reject(new Error(`BAST generator returned invalid JSON: ${stdout || stderr}`));
+        return resolve(parsed);
       }
     );
   });
@@ -1502,6 +1683,164 @@ app.post('/api/projects/:projectId/generate-report-docx', auth.requireProjectAcc
       console.error('[DOCX Generator Error]', genErr.message);
       return res.status(500).json({ error: `Report generation failed: ${genErr.message}` });
     }
+  });
+});
+
+app.get('/api/projects/:projectId/bast/preview', auth.requireRole('admin', 'pm'), auth.requireProjectAccess('projectId'), (req, res) => {
+  const projectId = Number(req.params.projectId);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+
+  db.getProjectExportData(projectId, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!rows.length) return res.status(404).json({ error: 'Project not found' });
+    if ((rows[0].team || 'offensive') !== 'offensive') {
+      return res.status(400).json({ error: 'BAST generation is only available for Offensive projects.' });
+    }
+
+    res.json({
+      project: {
+        id: rows[0].project_id,
+        name: rows[0].project_name,
+        client_name: rows[0].client_name,
+        service: rows[0].service || 'VAPT Services',
+      },
+      placeholders: buildBastData(rows),
+    });
+  });
+});
+
+app.get('/api/projects/:projectId/bast-documents', auth.requireRole('admin', 'pm'), auth.requireProjectAccess('projectId'), (req, res) => {
+  const projectId = Number(req.params.projectId);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+
+  db.getProjectById(projectId, (projectErr, project) => {
+    if (projectErr) return res.status(500).json({ error: projectErr.message });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if ((project.team || 'offensive') !== 'offensive') {
+      return res.status(400).json({ error: 'BAST history is only available for Offensive projects.' });
+    }
+
+    db.listBastDocumentsByProject(projectId, (err, rows) => {
+      if (err) return res.status(500).json({ error: err.message });
+      res.json(rows.map(row => ({
+        ...row,
+        download_url: `/api/bast-documents/${row.id}/download`,
+      })));
+    });
+  });
+});
+
+app.post('/api/projects/:projectId/generate-bast-docx', auth.requireRole('admin', 'pm'), auth.requireProjectAccess('projectId'), async (req, res) => {
+  const projectId = Number(req.params.projectId);
+  if (!Number.isInteger(projectId) || projectId < 1) {
+    return res.status(400).json({ error: 'Invalid project id' });
+  }
+
+  if (!fs.existsSync(bastTemplatePath)) {
+    return res.status(500).json({ error: 'BAST template not found on server. Please contact admin.' });
+  }
+
+  db.getProjectExportData(projectId, async (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!rows.length) return res.status(404).json({ error: 'Project not found' });
+    if ((rows[0].team || 'offensive') !== 'offensive') {
+      return res.status(400).json({ error: 'BAST generation is only available for Offensive projects.' });
+    }
+
+    let dataPath = null;
+    let outputPath = null;
+    try {
+      const bastData = buildBastData(rows, req.body || {});
+      const missing = validateBastData(bastData);
+      if (missing.length) {
+        return res.status(400).json({
+          error: `Missing required BAST field(s): ${missing.join(', ')}`,
+          missing,
+        });
+      }
+
+      const clientName = safeFilename(rows[0].client_name || 'Client');
+      const projectName = safeFilename(rows[0].project_name || 'Project');
+      const tempId = `bast_${projectId}_${Date.now()}_${randomUUID().slice(0, 8)}`;
+      dataPath = path.join(generatedReportsDir, `${tempId}.json`);
+      const downloadName = `BAST_${clientName}_${projectName}.docx`;
+      const storedFilename = `${tempId}_${downloadName}`;
+      outputPath = path.join(generatedBastDir, storedFilename);
+      fs.writeFileSync(dataPath, JSON.stringify(bastData, null, 2));
+
+      await runBastDocxGenerator({ dataPath, outputPath });
+
+      if (!fs.existsSync(outputPath)) {
+        return res.status(500).json({ error: 'BAST generator did not produce output file' });
+      }
+
+      const result = await new Promise((resolve, reject) => {
+        db.createBastDocument({
+          project_id: projectId,
+          generated_by_user_id: req.session.userId,
+          generated_by_name: req.session.displayName || req.session.username,
+          filename: downloadName,
+          file_path: path.relative(__dirname, outputPath),
+          data_json: JSON.stringify(bastData),
+        }, (historyErr, historyResult) => {
+          if (historyErr) return reject(historyErr);
+          resolve(historyResult);
+        });
+      });
+
+      db.writeActivityLog({
+        type: 'project',
+        actorId: req.session.userId,
+        projectId,
+        action: 'generate_bast',
+        details: `Generated BAST DOCX for project "${rows[0].project_name}"`,
+      }, () => {});
+
+      res.status(201).json({
+        id: result.id,
+        filename: downloadName,
+        download_url: `/api/bast-documents/${result.id}/download`,
+      });
+    } catch (genErr) {
+      if (outputPath && fs.existsSync(outputPath)) {
+        try { fs.unlinkSync(outputPath); } catch {}
+      }
+      console.error('[BAST Generator Error]', genErr.message);
+      return res.status(500).json({ error: `BAST generation failed: ${genErr.message}` });
+    } finally {
+      if (dataPath && fs.existsSync(dataPath)) {
+        try { fs.unlinkSync(dataPath); } catch {}
+      }
+    }
+  });
+});
+
+app.get('/api/bast-documents/:documentId/download', auth.requireRole('admin', 'pm'), (req, res) => {
+  const documentId = Number(req.params.documentId);
+  if (!Number.isInteger(documentId) || documentId < 1) {
+    return res.status(400).json({ error: 'Invalid document id' });
+  }
+
+  db.getBastDocumentById(documentId, (err, row) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!row) return res.status(404).json({ error: 'BAST document not found' });
+    if ((row.project_team || 'offensive') !== 'offensive') {
+      return res.status(400).json({ error: 'BAST document is only available for Offensive projects.' });
+    }
+
+    const filePath = path.resolve(__dirname, row.file_path);
+    const bastRoot = path.resolve(generatedBastDir);
+    if (!filePath.startsWith(bastRoot + path.sep) || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'BAST file is no longer available on server.' });
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename(row.filename).replace(/_docx$/i, '.docx')}"`);
+    fs.createReadStream(filePath).pipe(res);
   });
 });
 
@@ -1763,6 +2102,9 @@ app.get('/api/projects/:projectId/findings', auth.requireProjectAccess('projectI
 // ── Project Highlights ─────────────────────────────────────────────────────────
 app.get('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
   db.getProjectHighlight(id, (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Project not found' });
@@ -1770,11 +2112,15 @@ app.get('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'),
   });
 });
 
-app.put('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), (req, res) => {
+function saveProjectHighlight(req, res) {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
+
   const { highlight_notes, highlight_text } = req.body;
   db.updateProjectHighlight(id, {
-    highlight_notes: highlight_notes ? JSON.stringify(highlight_notes) : null,
+    highlight_notes: Array.isArray(highlight_notes) ? JSON.stringify(highlight_notes) : null,
     highlight_text: highlight_text || null
   }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
@@ -1782,10 +2128,16 @@ app.put('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'),
     db.writeActivityLog({ type:'crud', actorId: req.session.userId, projectId: id, action:'update_highlight', details:`Updated highlight for project ID ${id}` });
     res.json({ ok: true });
   });
-});
+}
+
+app.put('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), saveProjectHighlight);
+app.patch('/api/projects/:id/highlight', auth.requireRole('pm','admin','manager'), saveProjectHighlight);
 
 app.post('/api/projects/:id/highlight/generate', auth.requireRole('pm','admin','manager'), async (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
   const { api_key, model, notes, project_name, client_name, project_type, kickoff_date, initial_report_date, final_report_date } = req.body;
   if (!api_key) return res.status(400).json({ error: 'API key is required' });
   if (!notes || !notes.length) return res.status(400).json({ error: 'At least one highlight note is required' });
@@ -1831,14 +2183,15 @@ app.get('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
 });
 
 app.post('/api/board-statuses', auth.requireRole(...mgmtRoles), (req, res) => {
-  const { name, color, sort_order, team } = req.body;
+  const { name, color, sort_order, team, is_terminal } = req.body;
   const parsedTeam = parseTeamValue(team, { required: true });
   if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   if (!name || !name.trim()) return res.status(400).json({ error: 'Status name is required.' });
-  db.createBoardStatus({ name: name.trim(), color, sort_order, team: parsedTeam }, (err, result) => {
+  const isTerminalVal = is_terminal ? 1 : 0;
+  db.createBoardStatus({ name: name.trim(), color, sort_order, team: parsedTeam, is_terminal: isTerminalVal }, (err, result) => {
     if (err) return res.status(500).json({ error: err.message });
     db.writeActivityLog({ type: 'crud', actorId: req.session.userId, action: 'create_board_status', details: `Created board status "${name.trim()}" for team "${parsedTeam || 'offensive'}"` });
-    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0, team: parsedTeam });
+    res.status(201).json({ id: result.id, name: name.trim(), color: color || '#6366f1', sort_order: sort_order ?? 0, team: parsedTeam, is_terminal: isTerminalVal });
   });
 });
 
@@ -1865,7 +2218,7 @@ app.put('/api/board-statuses/reorder', auth.requireRole(...mgmtRoles), (req, res
 
 app.put('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
-  const { name, color, sort_order } = req.body;
+  const { name, color, sort_order, is_terminal } = req.body;
   const parsedTeam = parseTeamValue(req.body.team, { required: true });
   if (parsedTeam && parsedTeam.error) return res.status(400).json({ error: parsedTeam.error });
   const team = parsedTeam;
@@ -1878,7 +2231,8 @@ app.put('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res) =>
       return res.status(400).json({ error: 'Invalid board status ID for this team.' });
     }
 
-    db.updateBoardStatusForTeam(id, team, { name: name?.trim(), color, sort_order }, (err2, result) => {
+    const isTerminalVal = is_terminal !== undefined ? (is_terminal ? 1 : 0) : undefined;
+    db.updateBoardStatusForTeam(id, team, { name: name?.trim(), color, sort_order, is_terminal: isTerminalVal }, (err2, result) => {
       if (err2) return res.status(500).json({ error: err2.message });
       if (!result.changes) return res.status(404).json({ error: 'Status not found for this team.' });
       res.json({ ok: true });
@@ -1911,24 +2265,15 @@ app.delete('/api/board-statuses/:id', auth.requireRole(...mgmtRoles), (req, res)
 
 app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req, res) => {
   const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id < 1) {
+    return res.status(400).json({ error: 'Invalid project ID' });
+  }
   const { board_status_id } = req.body;
-
-  const isClosed = (board_status_id === -1);
 
   db.getProjectById(id, (err, proj) => {
     if (err || !proj) return res.status(404).json({ error: 'Project not found' });
 
-    if (isClosed && proj.final_report_status !== 'completed') {
-      return res.status(400).json({ error: 'Complete final report first' });
-    }
-
-    const done = (err2, result) => {
-      if (err2) return res.status(500).json({ error: err2.message });
-      if (!result.changes) return res.status(404).json({ error: 'Project not found' });
-      res.json({ ok: true, isClosed, final_completed_at: proj.final_completed_at });
-    };
-
-    if (board_status_id !== null && board_status_id !== undefined && board_status_id !== -1) {
+    if (board_status_id !== null && board_status_id !== undefined) {
       db.getBoardStatusById(board_status_id, (errStatus, status) => {
         if (errStatus) return res.status(500).json({ error: errStatus.message });
         if (!status) return res.status(400).json({ error: 'Invalid board status.' });
@@ -1945,11 +2290,32 @@ app.patch('/api/projects/:id/board-status', auth.requireRole(...mgmtRoles), (req
           return res.status(400).json({ error: 'Board status team does not match project team.' });
         }
 
-
-        db.updateProjectBoardStatus(id, board_status_id, done);
+        db.updateProjectBoardStatus(id, board_status_id, (err2, result) => {
+          if (err2) return res.status(500).json({ error: err2.message });
+          if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+          const is_terminal = status.is_terminal === 1;
+          const archive_eligible = is_terminal && proj.final_report_status === 'completed';
+          res.json({
+            ok: true,
+            project_id: id,
+            board_status_id: board_status_id,
+            is_terminal,
+            archive_eligible
+          });
+        });
       });
     } else {
-      db.updateProjectBoardStatus(id, board_status_id, done);
+      db.updateProjectBoardStatus(id, null, (err2, result) => {
+        if (err2) return res.status(500).json({ error: err2.message });
+        if (!result.changes) return res.status(404).json({ error: 'Project not found' });
+        res.json({
+          ok: true,
+          project_id: id,
+          board_status_id: null,
+          is_terminal: false,
+          archive_eligible: false
+        });
+      });
     }
   });
 });

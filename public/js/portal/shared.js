@@ -53,7 +53,12 @@
     const opts = { method: method, headers: headers };
     if (body) opts.body = JSON.stringify(body);
 
-    const r = await fetch(url, opts);
+    let r;
+    try {
+      r = await fetch(url, opts);
+    } catch (err) {
+      throw new Error('Cannot reach VulnVault server. Please make sure the backend is running, then refresh this page.');
+    }
     const j = await r.json().catch(function () { return {}; });
 
     if (!r.ok) {

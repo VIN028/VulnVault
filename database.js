@@ -447,6 +447,30 @@ function runProjectDataMigrations() {
   });
 }
 
+// ── Schema Migration Helper ──────────────────────────────────────────────────
+// Ensures a migration runs exactly once by tracking it in a schema_migrations table.
+function runMigration(key, migrationFn, callback) {
+  const db = getDb();
+  db.run(`
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      key TEXT PRIMARY KEY,
+      applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) return callback(err);
+
+    db.get('SELECT key FROM schema_migrations WHERE key = ?', [key], (err2, row) => {
+      if (err2) return callback(err2);
+      if (row) return callback(null); // Already applied
+
+      migrationFn((err3) => {
+        if (err3) return callback(err3);
+        db.run('INSERT INTO schema_migrations (key) VALUES (?)', [key], callback);
+      });
+    });
+  });
+}
+
 function initializeDb() {
   const createTable = `
     CREATE TABLE IF NOT EXISTS vulnerabilities (
@@ -573,11 +597,31 @@ function initializeDb() {
       color TEXT DEFAULT '#6366f1',
       sort_order INTEGER NOT NULL DEFAULT 0,
       team TEXT DEFAULT 'offensive',
+      is_terminal INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `, () => {
     db.run(`ALTER TABLE board_statuses ADD COLUMN team TEXT DEFAULT 'offensive'`, () => {});
+    db.run(`ALTER TABLE board_statuses ADD COLUMN is_terminal INTEGER DEFAULT 0`, () => {});
+
+    // One-time migration: backfill terminal statuses using schema_migrations guard
+    runMigration('board_statuses_is_terminal_backfill_v1', (done) => {
+      db.run(`
+        UPDATE board_statuses
+        SET is_terminal = 1
+        WHERE LOWER(name) IN ('closed', 'done', 'complete', 'completed', 'selesai')
+          AND NOT EXISTS (
+            SELECT 1
+            FROM board_statuses bs2
+            WHERE COALESCE(bs2.team, 'offensive') = COALESCE(board_statuses.team, 'offensive')
+              AND bs2.is_terminal = 1
+          )
+      `, done);
+    }, (err) => {
+      if (err) console.error('Migration board_statuses_is_terminal_backfill_v1 failed:', err.message);
+    });
   });
+
 
   db.run(`
     CREATE TABLE IF NOT EXISTS project_vulnerabilities (
@@ -595,6 +639,21 @@ function initializeDb() {
     }
     migrateProjectVulnerabilitiesConstraints();
   });
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS bast_documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      generated_by_user_id INTEGER,
+      generated_by_name TEXT,
+      filename TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      data_json TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (generated_by_user_id) REFERENCES users(id) ON DELETE SET NULL
+    )
+  `);
 
   // Initialize project access requests table
   setTimeout(initProjectAccessRequests, 200);
@@ -684,7 +743,8 @@ function createDatabaseIndexes() {
     "CREATE INDEX IF NOT EXISTS idx_clients_team ON clients(team);",
     "CREATE INDEX IF NOT EXISTS idx_users_team ON users(team);",
     "CREATE INDEX IF NOT EXISTS idx_board_statuses_team ON board_statuses(team);",
-    "CREATE INDEX IF NOT EXISTS idx_project_access_requests_status ON project_access_requests(status);"
+    "CREATE INDEX IF NOT EXISTS idx_project_access_requests_status ON project_access_requests(status);",
+    "CREATE INDEX IF NOT EXISTS idx_bast_documents_project_id ON bast_documents(project_id);"
   ];
   indexes.forEach(idxQuery => {
     db.run(idxQuery, (err) => {
@@ -935,7 +995,7 @@ function getClientsWithProjects(opts, callback) {
   let sql = `
     SELECT c.id AS client_id, c.name AS client_name, c.team AS client_team,
            c.engagement_reference, c.engagement_info,
-           p.id AS project_id, p.name AS project_name, p.scope_target, p.project_type,
+           p.id AS project_id, p.id AS id, p.name AS project_name, p.name AS name, p.scope_target, p.project_type, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
@@ -945,6 +1005,7 @@ function getClientsWithProjects(opts, callback) {
            p.link_report_en, p.link_report_id, p.project_links,
            p.project_method, p.start_date, p.mandays_assessment, p.mandays_initial_report,
            p.team, p.service, p.audit_metadata,
+           p.highlight_notes, p.highlight_text,
            p.retest_status, p.retest_start_date, p.retest_end_date,
            p.retest_pic_id, p.retest_assist_id,
            u.display_name AS engineer_name,
@@ -1070,11 +1131,11 @@ function initProjectAccessRequests() {
 
 function getAllProjects(callback) {
   getDb().all(`
-    SELECT p.id, p.name, p.scope_target, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
+    SELECT p.id AS project_id, p.id AS id, p.name AS project_name, p.name AS name, p.scope_target, p.project_type, p.client_id, p.assigned_engineer_id, p.assist_engineer_id,
            p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id,
            p.engineer_8_id, p.engineer_9_id, p.engineer_10_id, p.team,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
-           p.link_report_en, p.link_report_id,
+           p.link_report_en, p.link_report_id, p.board_status_id, p.initial_report_status, p.final_report_status, p.is_archived,
            c.name AS client_name
     FROM projects p JOIN clients c ON c.id = p.client_id
     WHERE p.is_archived = 0
@@ -1443,7 +1504,7 @@ function deleteClient(clientId, callback) {
 function getProjectsByClient(clientId, callback) {
   const db = getDb();
   db.all(
-    `SELECT p.id, p.client_id, p.name, p.project_type, p.project_method,
+    `SELECT p.id AS project_id, p.id AS id, p.client_id, p.name AS project_name, p.name AS name, p.project_type, p.project_method, p.board_status_id,
             p.assigned_engineer_id, p.assist_engineer_id,
             p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
             p.kickoff_date,
@@ -1453,6 +1514,7 @@ function getProjectsByClient(clientId, callback) {
             p.link_report_en, p.link_report_id, p.project_links,
             p.start_date, p.mandays_assessment, p.mandays_initial_report,
             p.team, p.service,
+            p.highlight_notes, p.highlight_text,
             p.created_at,
             p.retest_status, p.retest_start_date, p.retest_end_date,
             p.retest_pic_id, p.retest_assist_id,
@@ -1465,8 +1527,10 @@ function getProjectsByClient(clientId, callback) {
             u9.display_name AS engineer_7_name,
             u10.display_name AS engineer_8_name,
             u11.display_name AS engineer_9_name,
-            u12.display_name AS engineer_10_name
+            u12.display_name AS engineer_10_name,
+            c.name AS client_name
      FROM projects p
+     JOIN clients c ON c.id = p.client_id
      LEFT JOIN users u ON u.id = p.assigned_engineer_id
      LEFT JOIN users u2 ON u2.id = p.assist_engineer_id
      LEFT JOIN users u5 ON u5.id = p.engineer_3_id
@@ -1634,6 +1698,57 @@ function getProjectExportData(projectId, callback) {
       END DESC,
       v.created_at DESC`,
     [projectId],
+    callback
+  );
+}
+
+function createBastDocument(record, callback) {
+  const db = getDb();
+  const {
+    project_id,
+    generated_by_user_id,
+    generated_by_name,
+    filename,
+    file_path,
+    data_json,
+  } = record;
+  db.run(
+    `INSERT INTO bast_documents (
+      project_id, generated_by_user_id, generated_by_name, filename, file_path, data_json
+    ) VALUES (?, ?, ?, ?, ?, ?)`,
+    [
+      project_id,
+      generated_by_user_id || null,
+      generated_by_name || null,
+      filename,
+      file_path,
+      data_json || null,
+    ],
+    function (err) {
+      if (err) return callback(err);
+      callback(null, { id: this.lastID });
+    }
+  );
+}
+
+function listBastDocumentsByProject(projectId, callback) {
+  getDb().all(
+    `SELECT id, project_id, generated_by_user_id, generated_by_name, filename, created_at
+     FROM bast_documents
+     WHERE project_id = ?
+     ORDER BY datetime(created_at) DESC, id DESC`,
+    [projectId],
+    callback
+  );
+}
+
+function getBastDocumentById(id, callback) {
+  getDb().get(
+    `SELECT bd.*, p.team AS project_team
+     FROM bast_documents bd
+     JOIN projects p ON p.id = bd.project_id
+     WHERE bd.id = ?`,
+    [id],
     callback
   );
 }
@@ -1928,25 +2043,93 @@ function getBoardStatusById(id, callback) {
   getDb().get('SELECT * FROM board_statuses WHERE id = ?', [id], callback);
 }
 
-function createBoardStatus({ name, color, sort_order, team }, callback) {
-  getDb().run(
-    'INSERT INTO board_statuses (name, color, sort_order, team) VALUES (?, ?, ?, ?)',
-    [name, color || '#6366f1', sort_order ?? 0, team || 'offensive'],
-    function(err) { callback(err, err ? null : { id: this.lastID }); }
-  );
+function createBoardStatus({ name, color, sort_order, team, is_terminal }, callback) {
+  const isTerminalVal = is_terminal ? 1 : 0;
+  const db = getDb();
+  const teamVal = team || 'offensive';
+
+  if (isTerminalVal === 1) {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      db.run(
+        "UPDATE board_statuses SET is_terminal = 0 WHERE COALESCE(team, 'offensive') = ?",
+        [teamVal],
+        (err) => {
+          if (err) {
+            return db.run('ROLLBACK', () => callback(err));
+          }
+        }
+      );
+      db.run(
+        'INSERT INTO board_statuses (name, color, sort_order, team, is_terminal) VALUES (?, ?, ?, ?, ?)',
+        [name, color || '#6366f1', sort_order ?? 0, teamVal, isTerminalVal],
+        function(err) {
+          if (err) {
+            return db.run('ROLLBACK', () => callback(err));
+          }
+          const lastId = this.lastID;
+          db.run('COMMIT', (commitErr) => {
+            callback(commitErr, commitErr ? null : { id: lastId });
+          });
+        }
+      );
+    });
+  } else {
+    db.run(
+      'INSERT INTO board_statuses (name, color, sort_order, team, is_terminal) VALUES (?, ?, ?, ?, ?)',
+      [name, color || '#6366f1', sort_order ?? 0, teamVal, isTerminalVal],
+      function(err) { callback(err, err ? null : { id: this.lastID }); }
+    );
+  }
 }
 
-function updateBoardStatusForTeam(id, team, { name, color, sort_order }, callback) {
+function updateBoardStatusForTeam(id, team, { name, color, sort_order, is_terminal }, callback) {
   const updates = [], params = [];
   if (name !== undefined) { updates.push('name = ?'); params.push(name); }
   if (color !== undefined) { updates.push('color = ?'); params.push(color); }
   if (sort_order !== undefined) { updates.push('sort_order = ?'); params.push(sort_order); }
+  if (is_terminal !== undefined) {
+    updates.push('is_terminal = ?');
+    params.push(is_terminal ? 1 : 0);
+  }
   if (!updates.length) return callback(null, { changes: 0 });
   
-  params.push(id, team || 'offensive');
-  getDb().run(`UPDATE board_statuses SET ${updates.join(', ')} WHERE id = ? AND COALESCE(team, 'offensive') = ?`, params,
-    function(err) { callback(err, { changes: this?.changes || 0 }); }
-  );
+  const teamVal = team || 'offensive';
+  const db = getDb();
+
+  const updateSql = `UPDATE board_statuses SET ${updates.join(', ')} WHERE id = ? AND COALESCE(team, 'offensive') = ?`;
+
+  if (is_terminal) {
+    db.serialize(() => {
+      db.run('BEGIN TRANSACTION');
+      db.run(
+        "UPDATE board_statuses SET is_terminal = 0 WHERE COALESCE(team, 'offensive') = ? AND id <> ?",
+        [teamVal, id],
+        (err) => {
+          if (err) {
+            return db.run('ROLLBACK', () => callback(err));
+          }
+        }
+      );
+      const localParams = [...params, id, teamVal];
+      db.run(updateSql, localParams,
+        function(err) {
+          if (err) {
+            return db.run('ROLLBACK', () => callback(err));
+          }
+          const changes = this?.changes || 0;
+          db.run('COMMIT', (commitErr) => {
+            callback(commitErr, { changes });
+          });
+        }
+      );
+    });
+  } else {
+    const localParams = [...params, id, teamVal];
+    db.run(updateSql, localParams,
+      function(err) { callback(err, { changes: this?.changes || 0 }); }
+    );
+  }
 }
 
 function deleteBoardStatusForTeam(id, team, callback) {
@@ -2106,7 +2289,22 @@ function updateProjectBoardStatusAndCompletion(projectId, statusId, finalReportS
 function getArchivedProjects(opts, callback) {
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   let sql = `
-    SELECT p.*, c.name AS client_name, u.display_name AS engineer_name
+    SELECT p.id AS project_id, p.id AS id, p.name AS project_name, p.name AS name,
+           p.project_type, p.project_method, p.board_status_id,
+           p.kickoff_date, p.initial_report_date, p.final_report_date,
+           p.initial_report_status, p.final_report_status,
+           p.is_archived, p.archived_at,
+           p.initial_completed_at, p.final_completed_at,
+           p.initial_completed_by, p.final_completed_by,
+           p.assigned_engineer_id, p.assist_engineer_id,
+           p.engineer_3_id, p.engineer_4_id, p.engineer_5_id, p.engineer_6_id, p.engineer_7_id, p.engineer_8_id, p.engineer_9_id, p.engineer_10_id,
+           p.start_date, p.mandays_assessment, p.mandays_initial_report,
+           p.link_report_en, p.link_report_id, p.project_links,
+           p.retest_status, p.retest_start_date, p.retest_end_date,
+           p.retest_pic_id, p.retest_assist_id,
+           p.team, p.service, p.audit_metadata,
+           c.id AS client_id, c.name AS client_name,
+           u.display_name AS engineer_name
     FROM projects p
     JOIN clients c ON c.id = p.client_id
     LEFT JOIN users u ON u.id = p.assigned_engineer_id
@@ -2116,7 +2314,7 @@ function getArchivedProjects(opts, callback) {
     sql += ' AND p.team = ?';
     params.push(opts.team);
   }
-  sql += `\n    ORDER BY p.archived_at DESC`;
+  sql += `\n    ORDER BY COALESCE(p.final_completed_at, p.archived_at) DESC`;
   getDb().all(sql, params, callback);
 }
 
@@ -2131,7 +2329,7 @@ function archiveProject(id, callback) {
 function getProjectsForBoard(opts, callback) {
   if (typeof opts === 'function') { callback = opts; opts = {}; }
   let sql = `
-    SELECT p.id, p.name, p.project_type, p.project_method, p.board_status_id,
+    SELECT p.id AS project_id, p.id AS id, p.name AS project_name, p.name AS name, p.project_type, p.project_method, p.board_status_id,
            p.kickoff_date, p.initial_report_date, p.final_report_date,
            p.initial_report_status, p.final_report_status,
            p.is_archived, p.archived_at,
@@ -2267,6 +2465,9 @@ module.exports = {
   removeVulnerabilityFromProject,
   getProjectFullVulnerabilities,
   getProjectExportData,
+  createBastDocument,
+  listBastDocumentsByProject,
+  getBastDocumentById,
   getProjectHighlight,
   updateProjectHighlight,
   getArchivedProjects,

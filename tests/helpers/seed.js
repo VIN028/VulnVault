@@ -26,6 +26,7 @@ async function seedDatabase(dbPath) {
     await runQuery(db, 'PRAGMA foreign_keys = OFF');
 
     // Clean tables
+    await runQuery(db, 'DELETE FROM bast_documents').catch(() => {});
     await runQuery(db, 'DELETE FROM clients');
     await runQuery(db, 'DELETE FROM projects');
     await runQuery(db, 'DELETE FROM board_statuses');

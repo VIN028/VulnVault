@@ -83,7 +83,9 @@
     document.getElementById('btn-save-board-order')?.addEventListener('click', function () {
       runUiAction(saveBoardOrder, 'Failed to save board sequence');
     });
+    bindNewEntryClientSelection();
   }
+
 
   // Bind high-priority static buttons as soon as the deferred script executes.
   bindStaticEventListeners();
@@ -890,24 +892,36 @@
       }
 
       listEl.innerHTML = clients.map(c => `
-        <div class="ne-client-card" id="ne-ccard-${c.id}" onclick="selectNeClient(${c.id})" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; cursor:pointer; background:rgba(255,255,255,0.02); transition:all 0.1s;">
+        <div class="ne-client-card js-select-ne-client" id="ne-ccard-${c.id}" data-id="${c.id}" style="border:1px solid var(--border); border-radius:8px; padding:12px 16px; cursor:pointer; background:rgba(255,255,255,0.02); transition:all 0.1s;">
           <div style="font-weight:600; font-size:13px; color:var(--text);">${esc(c.name)}</div>
           ${c.engagement_reference ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">Reference: ${esc(c.engagement_reference)}</div>` : ''}
         </div>
       `).join('');
+      bindNewEntryClientSelection();
     } catch { }
+  }
+
+  function bindNewEntryClientSelection() {
+    const listEl = document.getElementById('ne-client-list');
+    if (!listEl || listEl.dataset.bound === 'true') return;
+
+    listEl.addEventListener('click', function (e) {
+      const card = e.target.closest('.js-select-ne-client');
+      if (!card || !listEl.contains(card)) return;
+      window.selectNeClient(Number(card.dataset.id));
+    });
+
+    listEl.dataset.bound = 'true';
   }
 
   window.selectNeClient = function(id) {
     _selectedClientId = id;
     document.querySelectorAll('.ne-client-card').forEach(el => {
-      el.style.borderColor = 'var(--border)';
-      el.style.background = 'rgba(255,255,255,0.02)';
+      el.classList.remove('selected');
     });
     const sel = document.getElementById('ne-ccard-' + id);
     if (sel) {
-      sel.style.borderColor = 'var(--accent)';
-      sel.style.background = 'rgba(99,102,241,0.05)';
+      sel.classList.add('selected');
     }
     document.getElementById('ne-new-client-fields').style.display = 'none';
     document.getElementById('ne-client-name').value = '';
@@ -916,9 +930,9 @@
   function _toggleNewClientForm() {
     _selectedClientId = null;
     document.querySelectorAll('.ne-client-card').forEach(el => {
-      el.style.borderColor = 'var(--border)';
-      el.style.background = 'rgba(255,255,255,0.02)';
+      el.classList.remove('selected');
     });
+
 
     const fields = document.getElementById('ne-new-client-fields');
     const isShowing = fields.style.display === 'block';
@@ -1073,6 +1087,7 @@
 
   // ── Kanban Board logic ─────────────────────────────────────────────────────────
   async function loadBoard() {
+    closeQuickMoveMenu();
     const boardEl = document.getElementById('board-container');
     if (!boardEl) return;
     boardEl.innerHTML = '<div class="empty-state">Loading board data...</div>';
@@ -1127,18 +1142,14 @@
       const cardContainer = document.createElement('div');
       cardContainer.id = `board-col-${col.info.id}`;
       cardContainer.style = `flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; min-height:300px;`;
-      cardContainer.ondragover = (e) => e.preventDefault();
-      cardContainer.ondrop = (e) => onCardDrop(e, col.info.id);
 
       col.projects.forEach(p => {
         const card = document.createElement('div');
         card.className = 'board-card';
-        card.draggable = true;
-        card.ondragstart = (e) => e.dataTransfer.setData('text/plain', p.project_id);
-        card.onclick = () => openBoardDetail(p);
-        card.style = `padding:14px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:grab; transition:all 0.15s;`;
-        card.onmouseover = () => { card.style.borderColor = 'rgba(255,255,255,0.2)'; card.style.transform = 'translateY(-2px)'; };
-        card.onmouseout = () => { card.style.borderColor = 'var(--border)'; card.style.transform = 'none'; };
+        card.style = `padding:14px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:all 0.15s;`;
+
+        const isTerminal = col.info.is_terminal === 1;
+        const isArchiveReady = isTerminal && p.final_report_status === 'completed';
 
         let meta = {};
         try {
@@ -1161,39 +1172,74 @@
         const objectivePreview = objective ? `<div style="font-size:11px; color:var(--text); margin-bottom:4px; font-style:italic;"><strong>Obj:</strong> ${esc(objective.substring(0, 50) + (objective.length > 50 ? '...' : ''))}</div>` : '';
         const scopePreview = scope ? `<div style="font-size:11px; color:var(--muted); margin-bottom:8px;"><strong>Scope:</strong> ${esc(scope.substring(0, 50) + (scope.length > 50 ? '...' : ''))}</div>` : '';
 
+        let badgeHtml = `<span class="badge badge-api" style="font-size:9px; padding:2px 6px;">${sl[p.service] || 'Audit'}</span>`;
+        if (isArchiveReady) {
+          badgeHtml += ` <span class="badge badge-archive-ready" style="font-size:9px; padding:2px 6px; margin-left:4px;">Ready to archive</span>`;
+        } else if (isTerminal) {
+          badgeHtml += ` <span class="badge badge-terminal" style="font-size:9px; padding:2px 6px; margin-left:4px;">Final stage</span>`;
+        }
+
         card.innerHTML = `
-          <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">${esc(p.client_name)}</div>
-          <div style="font-weight:700; font-size:13px; color:var(--text); margin-bottom:8px; line-height:1.4;">${esc(p.project_name)}</div>
-          ${objectivePreview}
-          ${scopePreview}
-          <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">
-            ${regBadge}
-            ${linksBadge}
+          <div class="js-open-board-detail">
+            <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">${esc(p.client_name)}</div>
+            <div style="font-weight:700; font-size:13px; color:var(--text); margin-bottom:8px; line-height:1.4;">${esc(p.project_name)}</div>
+            ${objectivePreview}
+            ${scopePreview}
+            <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:8px;">
+              ${regBadge}
+              ${linksBadge}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.03); padding-top:8px;">
+              <div>
+                ${badgeHtml}
+              </div>
+              <span style="font-size:10px; color:var(--muted); font-weight:600;">Lead: ${esc(p.engineer_name ? p.engineer_name.split(' ')[0] : '—')}</span>
+            </div>
           </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid rgba(255,255,255,0.03); padding-top:8px;">
-            <span class="badge badge-api" style="font-size:9px; padding:2px 6px;">${sl[p.service] || 'Audit'}</span>
-            <span style="font-size:10px; color:var(--muted); font-weight:600;">Lead: ${esc(p.engineer_name ? p.engineer_name.split(' ')[0] : '—')}</span>
+          <div class="board-card-actions">
+            <button
+              class="board-card-action js-card-move-menu"
+              data-project-id="${p.project_id}"
+              type="button"
+            >
+              Move ▾
+            </button>
+            ${isArchiveReady ? `
+              <button
+                class="board-card-action archive js-card-archive"
+                data-project-id="${p.project_id}"
+                type="button"
+              >
+                Archive
+              </button>
+            ` : ''}
           </div>
         `;
+
+        card.addEventListener('click', (e) => {
+          const moveBtn = e.target.closest('.js-card-move-menu');
+          const archiveBtn = e.target.closest('.js-card-archive');
+          if (moveBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openQuickMoveMenu(p, moveBtn);
+            return;
+          }
+          if (archiveBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            archiveProjectFromBoard(Number(archiveBtn.dataset.projectId));
+            return;
+          }
+          openBoardDetail(p);
+        });
+
         cardContainer.appendChild(card);
       });
 
       colEl.appendChild(cardContainer);
       boardEl.appendChild(colEl);
     });
-  }
-
-  async function onCardDrop(e, colId) {
-    e.preventDefault();
-    const projId = e.dataTransfer.getData('text/plain');
-    if (!projId) return;
-
-    try {
-      await apiFetch(`/api/projects/${projId}/board-status`, 'PATCH', { board_status_id: colId === -1 ? null : colId });
-      loadBoard();
-    } catch (err) {
-      showToast('Failed to update board status: ' + err.message, 'error');
-    }
   }
 
   // ── Kanban board setup modal ───────────────────────────────────────────────────
@@ -1227,6 +1273,36 @@
   function renderSetupList() {
     const listEl = document.getElementById('setup-status-list');
     if (!listEl) return;
+
+    if (!listEl.dataset.bound) {
+      listEl.addEventListener('change', async function(e) {
+        const toggle = e.target.closest('.js-status-terminal');
+        if (toggle) {
+          const statusId = Number(toggle.dataset.id);
+          const is_terminal = toggle.checked ? 1 : 0;
+          const status = _boardStatuses.find(s => Number(s.id) === statusId);
+          if (!status) return;
+
+          try {
+            await apiFetch(`/api/board-statuses/${statusId}`, 'PUT', {
+              name: status.name,
+              color: status.color,
+              team: 'itaudit',
+              is_terminal: is_terminal
+            });
+            showToast('Status updated');
+            _boardStatuses = await apiFetch('/api/board-statuses?team=itaudit');
+            renderSetupList();
+            loadBoard();
+          } catch (err) {
+            showToast('Failed to update status: ' + err.message, 'error');
+            toggle.checked = !toggle.checked;
+          }
+        }
+      });
+      listEl.dataset.bound = 'true';
+    }
+
     BoardShared.renderSetupList(listEl, _boardStatuses, () => {
       renderSetupList();
     });
@@ -1245,8 +1321,10 @@
   async function addBoardStatus() {
     const nameInput = document.getElementById('setup-new-name');
     const colorInput = document.getElementById('setup-new-color');
+    const terminalInput = document.getElementById('setup-new-terminal');
     const name = nameInput.value.trim();
     const color = colorInput ? colorInput.value : '';
+    const is_terminal = terminalInput ? (terminalInput.checked ? 1 : 0) : 0;
 
     if (!name) {
       showToast('Status title cannot be empty', 'error');
@@ -1266,8 +1344,9 @@
 
     try {
       const order = _boardStatuses.length;
-      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'itaudit' });
+      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'itaudit', is_terminal });
       nameInput.value = '';
+      if (terminalInput) terminalInput.checked = false;
 
       _boardStatuses = await apiFetch('/api/board-statuses?team=itaudit');
       renderSetupList();
@@ -1306,6 +1385,82 @@
     } catch (e) {
       showToast('Failed to reorder: ' + e.message, 'error');
     }
+  }
+
+  async function moveBoardProject(projectId, statusId, options = {}) {
+    try {
+      await apiFetch(`/api/projects/${projectId}/board-status`, 'PATCH', {
+        board_status_id: statusId === null ? null : Number(statusId)
+      });
+      showToast('Project status updated');
+      if (options.closeDetailModal !== false) {
+        document.getElementById('modal-board-detail')?.classList.remove('open');
+      }
+      loadBoard();
+    } catch (e) {
+      showToast('Failed to update status: ' + e.message, 'error');
+    }
+  }
+
+  function closeQuickMoveMenu() {
+    if (window.BoardShared && typeof window.BoardShared.closeFloatingMenu === 'function') {
+      window.BoardShared.closeFloatingMenu('.quick-move-menu');
+    } else {
+      document.querySelector('.quick-move-menu')?.remove();
+    }
+  }
+
+  function openQuickMoveMenu(project, anchorEl) {
+    closeQuickMoveMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'quick-move-menu';
+
+    let optionsHtml = `
+      <button class="quick-move-option" data-status-id="null" ${project.board_status_id === null ? 'disabled' : ''}>
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#64748b; margin-right:6px;"></span>
+        Uncategorized
+      </button>
+    `;
+
+    optionsHtml += _boardStatuses.map(s => `
+      <button
+        class="quick-move-option"
+        data-status-id="${s.id}"
+        ${Number(s.id) === Number(project.board_status_id) ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${escA(s.color)}; margin-right:6px;"></span>
+        ${esc(s.name)}
+        ${s.is_terminal ? '<small style="margin-left:auto; font-size:9px; background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:4px;">Final</small>' : ''}
+      </button>
+    `).join('');
+
+    menu.innerHTML = optionsHtml;
+    document.body.appendChild(menu);
+
+    menu.addEventListener('click', async (e) => {
+      const option = e.target.closest('.quick-move-option');
+      if (!option) return;
+      e.stopPropagation();
+
+      const statusId = option.dataset.statusId === 'null' ? null : Number(option.dataset.statusId);
+      closeQuickMoveMenu();
+      await moveBoardProject(project.project_id, statusId, { closeDetailModal: false });
+    });
+
+    if (window.BoardShared && typeof window.BoardShared.positionFloatingMenu === 'function') {
+      window.BoardShared.positionFloatingMenu(menu, anchorEl);
+    } else {
+      positionMenu(menu, anchorEl);
+    }
+  }
+
+  function positionMenu(menu, anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
   }
 
   // ── Kanban detail card modal ───────────────────────────────────────────────────
@@ -1350,6 +1505,75 @@
       } catch {}
     }
 
+    const currentStatus = _boardStatuses.find(s => Number(s.id) === Number(p.board_status_id)) || null;
+    const statusName = currentStatus ? currentStatus.name : 'Uncategorized';
+    const statusColor = currentStatus ? currentStatus.color : 'var(--muted)';
+    const isTerminal = currentStatus?.is_terminal === 1;
+
+    // Uncategorized button
+    const uncategorizedActive = p.board_status_id === null || p.board_status_id === undefined;
+    let statusButtons = `
+      <button
+        class="status-action-btn js-move-board-status ${uncategorizedActive ? 'active' : ''}"
+        data-project-id="${p.project_id}"
+        data-status-id="null"
+        ${uncategorizedActive ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--muted); margin-right:6px;"></span>
+        Uncategorized
+      </button>
+    `;
+
+    // Statuses buttons
+    statusButtons += _boardStatuses.map(s => `
+      <button
+        class="status-action-btn js-move-board-status ${Number(s.id) === Number(p.board_status_id) ? 'active' : ''}"
+        data-project-id="${p.project_id}"
+        data-status-id="${s.id}"
+        ${Number(s.id) === Number(p.board_status_id) ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${escA(s.color)}; margin-right:6px;"></span>
+        ${esc(s.name)}
+        ${s.is_terminal ? '<small style="margin-left:4px; font-size:9px; background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:4px;">Final</small>' : ''}
+      </button>
+    `).join('');
+
+    const isCompleted = p.final_report_status === 'completed';
+    const archiveEligible = isCompleted && isTerminal;
+    let archiveHtml = '';
+    if (archiveEligible) {
+      archiveHtml = `
+        <div class="archive-panel" style="margin-top:16px;">
+          <div style="font-size:11px; font-weight:700; color:#10b981; margin-bottom:4px; text-transform:uppercase;">Ready to archive</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">This engagement is completed and in a final stage.</div>
+          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
+            Archive Engagement
+          </button>
+        </div>
+      `;
+    } else if (isCompleted && !isTerminal) {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--yellow, #eab308); margin-bottom:4px; text-transform:uppercase;">Move to final stage</div>
+          <div style="font-size:12px; color:var(--muted);">Move this engagement to a final board status before archiving.</div>
+        </div>
+      `;
+    } else if (!isCompleted && isTerminal) {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Final stage reached</div>
+          <div style="font-size:12px; color:var(--muted);">Complete the final report before archiving this engagement.</div>
+        </div>
+      `;
+    } else {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Active Engagement</div>
+          <div style="font-size:12px; color:var(--muted);">Complete the final report and move to a final stage to make this engagement eligible for archiving.</div>
+        </div>
+      `;
+    }
+
     bodyEl.innerHTML = `
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
         <div><div style="font-size:11px; color:var(--muted)">CLIENT</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${esc(p.client_name)}</div></div>
@@ -1361,20 +1585,48 @@
         <div><div style="font-size:11px; color:var(--muted)">AUDIT MANDAYS</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${p.mandays_assessment || 0} hari</div></div>
         <div></div>
         <div style="grid-column:1/-1;"><div style="font-size:11px; color:var(--muted)">LEAD CONSULTANT &amp; PICs</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${esc(p.engineer_name || '—')}</div></div>
+        <div style="grid-column:1/-1;">
+          <div style="font-size:11px; color:var(--muted)">BOARD STATUS</div>
+          <div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px; display:flex; align-items:center; gap:6px;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${statusColor};"></span>
+            ${esc(statusName)}
+            ${isTerminal ? '<span class="badge badge-terminal" style="font-size:9px; padding:1px 6px;">Final Stage</span>' : ''}
+          </div>
+        </div>
       </div>
       ${metaHtml}
       <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
         <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">RESOURCE / EVIDENCE LINKS</div>
         <div>${linksHtml}</div>
       </div>
-      ${p.board_status_id === -1 ? `
-        <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
-          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
-            Archive Engagement
-          </button>
+      <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
+        <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">MOVE TO STATUS</div>
+        <div class="status-action-grid">
+          ${statusButtons}
         </div>
-      ` : ''}
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
+        ${archiveHtml}
+      </div>
     `;
+
+    // Bind local click events to bd-body (once only)
+    if (!bodyEl.dataset.bound) {
+      bodyEl.addEventListener('click', function(e) {
+        const statusBtn = e.target.closest('.js-move-board-status');
+        if (statusBtn) {
+          const statusId = statusBtn.dataset.statusId === 'null' ? null : Number(statusBtn.dataset.statusId);
+          moveBoardProject(Number(statusBtn.dataset.projectId), statusId);
+          return;
+        }
+        const archiveBtn = e.target.closest('.js-archive-project-from-board');
+        if (archiveBtn) {
+          archiveProjectFromBoard(Number(archiveBtn.dataset.id));
+          return;
+        }
+      });
+      bodyEl.dataset.bound = 'true';
+    }
 
     document.getElementById('modal-board-detail').classList.add('open');
   }
@@ -1702,14 +1954,8 @@
       return;
     }
 
-    // 4. Select client in create project modal
-    const selectNeBtn = e.target.closest('.js-select-ne-client');
-    if (selectNeBtn) {
-      window.selectNeClient(Number(selectNeBtn.dataset.id));
-      return;
-    }
-
     // 5. Delete board status
+
     const deleteBoardStatusBtn = e.target.closest('.js-delete-board-status');
     if (deleteBoardStatusBtn) {
       deleteBoardStatus(Number(deleteBoardStatusBtn.dataset.id));
@@ -1737,5 +1983,20 @@
       return;
     }
   });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.quick-move-menu') && !e.target.closest('.js-card-move-menu')) {
+      closeQuickMoveMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeQuickMoveMenu();
+  });
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('scroll', closeQuickMoveMenu, true);
+    window.addEventListener('resize', closeQuickMoveMenu);
+  }
 
 })();

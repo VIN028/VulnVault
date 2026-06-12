@@ -769,6 +769,87 @@
     </div>
   </div>
 
+  <!-- BAST Generator Modal -->
+  <div class="modal-overlay" id="modal-bast" onclick="closeModal(event)">
+    <div class="modal" style="max-width:760px; max-height:88vh; overflow-y:auto;" onclick="event.stopPropagation()">
+      <div class="modal-title">Generate BAST DOCX</div>
+      <div style="font-size:12px; color:var(--muted); margin:-12px 0 18px;">
+        Project: <span id="bast-project-title" style="color:var(--text); font-weight:700;">—</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>Client Name</label>
+          <input id="bast-client-name" readonly>
+        </div>
+        <div class="form-group">
+          <label>Service Type</label>
+          <input id="bast-service-type" readonly>
+        </div>
+        <div class="form-group">
+          <label>Client PIC Name *</label>
+          <input id="bast-client-pic-name" placeholder="e.g. Budi Santoso">
+        </div>
+        <div class="form-group">
+          <label>Client PIC Position *</label>
+          <input id="bast-client-pic-position" placeholder="e.g. IT Security Manager">
+        </div>
+        <div class="form-group">
+          <label>Client Company *</label>
+          <input id="bast-client-company" placeholder="e.g. PT Contoh Teknologi">
+        </div>
+        <div class="form-group">
+          <label>Report Date *</label>
+          <input id="bast-report-date" type="date">
+        </div>
+        <div class="form-group" style="grid-column:1/-1;">
+          <label>Client Company Address *</label>
+          <textarea id="bast-client-company-address" rows="2" placeholder="Full company address"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Project Phase *</label>
+          <input id="bast-project-phase" placeholder="e.g. Final">
+        </div>
+        <div class="form-group">
+          <label>Reference Type *</label>
+          <input id="bast-reference-type" placeholder="e.g. Final Report">
+        </div>
+        <div class="form-group">
+          <label>Report Type *</label>
+          <input id="bast-report-type" placeholder="e.g. Final Report">
+        </div>
+        <div class="form-group">
+          <label>Billing Percentage *</label>
+          <input id="bast-billing-percentage" placeholder="e.g. 100%">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:8px;">
+        <div>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+            <div style="font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px;">Placeholder Preview</div>
+            <button class="btn-ghost" id="bast-preview-btn" type="button" style="padding:5px 10px; font-size:11px;">Refresh Preview</button>
+          </div>
+          <div id="bast-preview-box" style="border:1px solid var(--border); border-radius:8px; padding:8px 12px; background:rgba(15,23,42,.55); max-height:240px; overflow:auto;">
+            <div style="color:var(--muted); font-size:12px;">Fill the form to preview placeholder values.</div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px; font-weight:800; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin-bottom:8px;">Generated History</div>
+          <div id="bast-history-list" style="border:1px solid var(--border); border-radius:8px; padding:8px 12px; background:rgba(15,23,42,.55); max-height:240px; overflow:auto;">
+            <div style="color:var(--muted); font-size:12px;">No BAST documents generated yet.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-err" id="bast-err"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" onclick="document.getElementById('modal-bast').classList.remove('open')">Cancel</button>
+        <button class="btn-primary" id="bast-generate-btn" type="button">Generate DOCX</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Retest Modal -->
   <div class="modal-overlay" id="modal-retest" onclick="closeModal(event)">
     <div class="modal" onclick="event.stopPropagation()">
@@ -828,11 +909,15 @@
       
       <div class="setup-status-list" id="setup-status-list" style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;"></div>
 
-      <div style="display:flex; gap:8px; margin-bottom:20px;">
-        <input id="setup-new-name" placeholder="New status title..." style="flex:1;">
+      <div style="display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; align-items:center;">
+        <input id="setup-new-name" placeholder="New status title..." style="flex:1; min-width:150px;">
         <input type="color" id="setup-new-color" value="#6366f1" style="width:36px; height:36px; padding:2px; border-radius:8px; cursor:pointer;">
-        <button class="btn-primary" id="btn-add-status" type="button" style="font-size:12px;">Add</button>
+        <label style="font-size:12px; display:inline-flex; align-items:center; gap:6px; cursor:pointer; color:var(--muted); margin-left:8px;">
+          <input type="checkbox" id="setup-new-terminal"> Final / Closed stage
+        </label>
+        <button class="btn-primary" id="btn-add-status" type="button" style="font-size:12px; margin-left:auto;">Add</button>
       </div>
+
 
       <div class="modal-actions">
         <button class="btn-ghost" onclick="document.getElementById('modal-board-setup').classList.remove('open')">Close</button>
@@ -853,8 +938,8 @@
   </div>
 
   <!-- Global scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" async></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0" async></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0" defer></script>
   <script src="/js/portal/shared.js" defer></script>
   <script src="/js/portal/projectFormShared.js" defer></script>
   <script src="/js/portal/boardShared.js" defer></script>

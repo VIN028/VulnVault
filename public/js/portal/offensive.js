@@ -94,7 +94,18 @@
     document.getElementById('btn-save-board-order')?.addEventListener('click', function () {
       runUiAction(saveBoardOrder, 'Failed to save board sequence');
     });
+    document.getElementById('bast-preview-btn')?.addEventListener('click', function () {
+      renderBastPreview();
+    });
+    document.getElementById('bast-generate-btn')?.addEventListener('click', function () {
+      runUiAction(generateBastDocx, 'Failed to generate BAST document');
+    });
+    document.getElementById('modal-bast')?.addEventListener('input', function (e) {
+      if (e.target.closest('input, textarea')) renderBastPreview();
+    });
+    bindNewEntryClientSelection();
   }
+
 
   // Bind high-priority static buttons as soon as the deferred script executes.
   bindStaticEventListeners();
@@ -662,7 +673,7 @@
                       <th>Target Initial</th>
                       <th>Target Final</th>
                       <th>Findings</th>
-                      <th>Actions</th>
+                      <th class="project-actions-heading">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -675,11 +686,12 @@
                         <td style="font-size:12px; color:var(--muted);">${fmt(p.initial_report_date)}</td>
                         <td style="font-size:12px; color:var(--muted);">${fmt(p.final_report_date)}</td>
                         <td><span class="finding-count ${countColor(p.finding_count)}">${p.finding_count || 0}</span></td>
-                        <td>
-                          <div style="display:flex; gap:6px;">
-                            <button class="btn-ghost js-edit-project" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; flex:none;">Edit</button>
-                            <button class="btn-ghost js-open-highlight" data-id="${p.project_id}" data-highlight="${escA(p.highlight_text || '')}" style="padding:4px 8px; font-size:11px; flex:none;">Highlight</button>
-                            <button class="btn-ghost js-open-retest" data-id="${p.project_id}" style="padding:4px 8px; font-size:11px; flex:none; background:rgba(34,197,94,0.1); color:var(--green);">Retest</button>
+                        <td class="project-actions-cell">
+                          <div class="project-actions">
+                            <button class="project-action-btn js-edit-project" data-id="${p.project_id}">Edit</button>
+                            <button class="project-action-btn js-open-highlight" data-id="${p.project_id}" data-highlight="${escA(p.highlight_text || '')}">Highlight</button>
+                            <button class="project-action-btn project-action-btn--success js-open-retest" data-id="${p.project_id}">Retest</button>
+                            ${canGenerateBast() ? `<button class="project-action-btn project-action-btn--accent js-open-bast" data-id="${p.project_id}">BAST</button>` : ''}
                           </div>
                         </td>
                       </tr>
@@ -711,6 +723,197 @@
     const isOpen = el.classList.toggle('open');
     if (arr) arr.style.transform = isOpen ? 'rotate(90deg)' : 'none';
     localStorage.setItem(`cg_exp_${clientId}`, isOpen ? 'true' : 'false');
+  }
+
+  function canGenerateBast() {
+    return currentUser && ['admin', 'pm'].includes(currentUser.role);
+  }
+
+  function findProjectById(projectId) {
+    for (const client of _clientGroups) {
+      const project = (client.projects || []).find(p => Number(p.project_id) === Number(projectId));
+      if (project) return { client, project };
+    }
+    return null;
+  }
+
+  let _bastProjectId = null;
+
+  function setBastError(message) {
+    const errEl = document.getElementById('bast-err');
+    if (!errEl) return;
+    errEl.textContent = message || '';
+    errEl.style.display = message ? 'block' : 'none';
+  }
+
+  function getTodayInputDate() {
+    return new Date().toLocaleDateString('en-CA');
+  }
+
+  function getBastFormData() {
+    return {
+      client_pic_name: document.getElementById('bast-client-pic-name')?.value.trim() || '',
+      client_company: document.getElementById('bast-client-company')?.value.trim() || '',
+      client_company_address: document.getElementById('bast-client-company-address')?.value.trim() || '',
+      project_phase: document.getElementById('bast-project-phase')?.value.trim() || '',
+      reference_type: document.getElementById('bast-reference-type')?.value.trim() || '',
+      report_date: document.getElementById('bast-report-date')?.value || '',
+      report_type: document.getElementById('bast-report-type')?.value.trim() || '',
+      billing_percentage: document.getElementById('bast-billing-percentage')?.value.trim() || '',
+      client_pic_position: document.getElementById('bast-client-pic-position')?.value.trim() || '',
+    };
+  }
+
+  function validateBastForm(data) {
+    const labels = {
+      client_pic_name: 'Client PIC Name',
+      client_company: 'Client Company',
+      client_company_address: 'Client Company Address',
+      project_phase: 'Project Phase',
+      reference_type: 'Reference Type',
+      report_date: 'Report Date',
+      report_type: 'Report Type',
+      billing_percentage: 'Billing Percentage',
+      client_pic_position: 'Client PIC Position',
+    };
+    return Object.keys(labels)
+      .filter(key => !String(data[key] || '').trim())
+      .map(key => labels[key]);
+  }
+
+  function formatBastPreviewDate(value) {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+  }
+
+  function renderBastPreview() {
+    const box = document.getElementById('bast-preview-box');
+    if (!box) return;
+    const data = getBastFormData();
+    const clientName = document.getElementById('bast-client-name')?.value || '';
+    const serviceType = document.getElementById('bast-service-type')?.value || '';
+    const rows = [
+      ['CLIENT_NAME', clientName],
+      ['CLIENT_PIC_NAME', data.client_pic_name],
+      ['CLIENT_COMPANY', data.client_company],
+      ['CLIENT_COMPANY_ADDRESS', data.client_company_address],
+      ['SERVICE_TYPE', serviceType],
+      ['PROJECT_PHASE', data.project_phase],
+      ['REFERENCE_TYPE', data.reference_type],
+      ['REPORT_DATE', formatBastPreviewDate(data.report_date)],
+      ['REPORT_TYPE', data.report_type],
+      ['BILLING_PERCENTAGE', data.billing_percentage],
+      ['CLIENT_PIC_POSITION', data.client_pic_position],
+    ];
+    box.innerHTML = rows.map(([key, value]) => `
+      <div style="display:grid; grid-template-columns:180px 1fr; gap:10px; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+        <div style="font-size:11px; color:var(--muted); font-weight:700;">{{${esc(key)}}}</div>
+        <div style="font-size:12px; color:var(--text);">${esc(value || '—')}</div>
+      </div>
+    `).join('');
+  }
+
+  async function loadBastHistory(projectId) {
+    const listEl = document.getElementById('bast-history-list');
+    if (!listEl) return;
+    listEl.innerHTML = '<div style="color:var(--muted); font-size:12px;">Loading history...</div>';
+    try {
+      const history = await apiFetch(`/api/projects/${projectId}/bast-documents`);
+      if (!history.length) {
+        listEl.innerHTML = '<div style="color:var(--muted); font-size:12px;">No BAST documents generated yet.</div>';
+        return;
+      }
+      listEl.innerHTML = history.map(item => `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; padding:9px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+          <div style="min-width:0;">
+            <div style="font-size:12px; color:var(--text); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(item.filename)}</div>
+            <div style="font-size:11px; color:var(--muted); margin-top:2px;">${esc(item.generated_by_name || 'Unknown')} &bull; ${esc(timeAgo(item.created_at))}</div>
+          </div>
+          <a href="${escA(item.download_url)}" class="btn-ghost" style="padding:5px 9px; font-size:11px; flex:none;">Download</a>
+        </div>
+      `).join('');
+    } catch (e) {
+      listEl.innerHTML = `<div style="color:var(--red); font-size:12px;">Failed to load history: ${esc(e.message)}</div>`;
+    }
+  }
+
+  async function openBastModal(projectId) {
+    if (!canGenerateBast()) {
+      showToast('Only PM and Admin can generate BAST documents.', 'error');
+      return;
+    }
+    _bastProjectId = projectId;
+    setBastError('');
+
+    const found = findProjectById(projectId);
+    const title = document.getElementById('bast-project-title');
+    if (title) title.textContent = found ? found.project.project_name : 'Selected project';
+
+    document.getElementById('modal-bast').classList.add('open');
+    document.getElementById('bast-history-list').innerHTML = '<div style="color:var(--muted); font-size:12px;">Loading history...</div>';
+
+    try {
+      const preview = await apiFetch(`/api/projects/${projectId}/bast/preview`);
+      const p = preview.placeholders || {};
+      document.getElementById('bast-client-name').value = p.CLIENT_NAME || '';
+      document.getElementById('bast-service-type').value = p.SERVICE_TYPE || 'VAPT Services';
+      document.getElementById('bast-client-pic-name').value = p.CLIENT_PIC_NAME || '';
+      document.getElementById('bast-client-company').value = p.CLIENT_COMPANY || p.CLIENT_NAME || '';
+      document.getElementById('bast-client-company-address').value = p.CLIENT_COMPANY_ADDRESS || '';
+      document.getElementById('bast-project-phase').value = p.PROJECT_PHASE || 'Final';
+      document.getElementById('bast-reference-type').value = p.REFERENCE_TYPE || '';
+      document.getElementById('bast-report-date').value = getTodayInputDate();
+      document.getElementById('bast-report-type').value = p.REPORT_TYPE || 'Final Report';
+      document.getElementById('bast-billing-percentage').value = p.BILLING_PERCENTAGE || '';
+      document.getElementById('bast-client-pic-position').value = p.CLIENT_PIC_POSITION || '';
+      renderBastPreview();
+      await loadBastHistory(projectId);
+    } catch (e) {
+      setBastError(e.message);
+    }
+  }
+
+  async function generateBastDocx() {
+    if (!_bastProjectId) return;
+    const btn = document.getElementById('bast-generate-btn');
+    const oldText = btn ? btn.textContent : '';
+    const payload = getBastFormData();
+    const missing = validateBastForm(payload);
+    setBastError('');
+    renderBastPreview();
+    if (missing.length) {
+      const message = `Please complete required field(s): ${missing.join(', ')}`;
+      setBastError(message);
+      showToast(message, 'error');
+      document.getElementById('bast-err')?.scrollIntoView({ block: 'nearest' });
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Generating...';
+    }
+    try {
+      const result = await apiFetch(`/api/projects/${_bastProjectId}/generate-bast-docx`, 'POST', payload);
+      showToast('BAST document generated.', 'success');
+      await loadBastHistory(_bastProjectId);
+      const a = document.createElement('a');
+      a.href = result.download_url;
+      a.download = result.filename || 'BAST.docx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      setBastError(e.message);
+      showToast('BAST generation failed: ' + e.message, 'error');
+      document.getElementById('bast-err')?.scrollIntoView({ block: 'nearest' });
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = oldText || 'Generate DOCX';
+      }
+    }
   }
 
   // ── Mandays & Date logic helpers ──────────────────────────────────────────────
@@ -973,19 +1176,31 @@
           ${c.engagement_reference ? `<div style="font-size:11px; color:var(--muted); margin-top:4px;">Engagement: ${esc(c.engagement_reference)} (${esc(c.engagement_info)})</div>` : ''}
         </div>
       `).join('');
+      bindNewEntryClientSelection();
     } catch { }
+  }
+
+  function bindNewEntryClientSelection() {
+    const listEl = document.getElementById('ne-client-list');
+    if (!listEl || listEl.dataset.bound === 'true') return;
+
+    listEl.addEventListener('click', function (e) {
+      const card = e.target.closest('.js-select-ne-client');
+      if (!card || !listEl.contains(card)) return;
+      window.selectNeClient(Number(card.dataset.id));
+    });
+
+    listEl.dataset.bound = 'true';
   }
 
   window.selectNeClient = function(id) {
     _selectedClientId = id;
     document.querySelectorAll('.ne-client-card').forEach(el => {
-      el.style.borderColor = 'var(--border)';
-      el.style.background = 'rgba(255,255,255,0.02)';
+      el.classList.remove('selected');
     });
     const sel = document.getElementById('ne-ccard-' + id);
     if (sel) {
-      sel.style.borderColor = 'var(--accent)';
-      sel.style.background = 'rgba(99,102,241,0.05)';
+      sel.classList.add('selected');
     }
     // Collapse new client form
     document.getElementById('ne-new-client-fields').style.display = 'none';
@@ -995,9 +1210,9 @@
   function _toggleNewClientForm() {
     _selectedClientId = null;
     document.querySelectorAll('.ne-client-card').forEach(el => {
-      el.style.borderColor = 'var(--border)';
-      el.style.background = 'rgba(255,255,255,0.02)';
+      el.classList.remove('selected');
     });
+
 
     const fields = document.getElementById('ne-new-client-fields');
     const isShowing = fields.style.display === 'block';
@@ -1127,6 +1342,7 @@
 
   // ── Kanban Board logic ─────────────────────────────────────────────────────────
   async function loadBoard() {
+    closeQuickMoveMenu();
     const boardEl = document.getElementById('board-container');
     if (!boardEl) return;
     boardEl.innerHTML = '<div class="empty-state">Loading board data...</div>';
@@ -1185,27 +1401,71 @@
       const cardContainer = document.createElement('div');
       cardContainer.id = `board-col-${col.info.id}`;
       cardContainer.style = `flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px; min-height:300px;`;
-      cardContainer.ondragover = (e) => e.preventDefault();
-      cardContainer.ondrop = (e) => onCardDrop(e, col.info.id);
 
       col.projects.forEach(p => {
         const card = document.createElement('div');
         card.className = 'board-card';
-        card.draggable = true;
-        card.ondragstart = (e) => e.dataTransfer.setData('text/plain', p.project_id);
-        card.onclick = () => openBoardDetail(p);
-        card.style = `padding:14px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:grab; transition:all 0.15s;`;
-        card.onmouseover = () => { card.style.borderColor = 'rgba(255,255,255,0.2)'; card.style.transform = 'translateY(-2px)'; };
-        card.onmouseout = () => { card.style.borderColor = 'var(--border)'; card.style.transform = 'none'; };
+        card.style = `padding:14px; background:var(--card); border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:all 0.15s;`;
+
+        const isTerminal = col.info.is_terminal === 1;
+        const isArchiveReady = isTerminal && p.final_report_status === 'completed';
+
+        let badgeHtml = `<span class="badge badge-${p.project_type}" style="font-size:9px; padding:2px 6px;">${tl[p.project_type] || p.project_type || 'Web'}</span>`;
+        if (isArchiveReady) {
+          badgeHtml += ` <span class="badge badge-archive-ready" style="font-size:9px; padding:2px 6px; margin-left:4px;">Ready to archive</span>`;
+        } else if (isTerminal) {
+          badgeHtml += ` <span class="badge badge-terminal" style="font-size:9px; padding:2px 6px; margin-left:4px;">Final stage</span>`;
+        }
 
         card.innerHTML = `
-          <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">${esc(p.client_name)}</div>
-          <div style="font-weight:700; font-size:13px; color:var(--text); margin-bottom:8px; line-height:1.4;">${esc(p.project_name)}</div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span class="badge badge-${p.project_type}" style="font-size:9px; padding:2px 6px;">${tl[p.project_type] || p.project_type || 'Web'}</span>
-            <span style="font-size:10px; color:var(--muted); font-weight:600;">PIC: ${esc(p.engineer_name ? p.engineer_name.split(' ')[0] : '—')}</span>
+          <div class="js-open-board-detail">
+            <div style="font-size:11px; font-weight:600; color:var(--muted); margin-bottom:4px;">${esc(p.client_name)}</div>
+            <div style="font-weight:700; font-size:13px; color:var(--text); margin-bottom:8px; line-height:1.4;">${esc(p.project_name)}</div>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                ${badgeHtml}
+              </div>
+              <span style="font-size:10px; color:var(--muted); font-weight:600;">PIC: ${esc(p.engineer_name ? p.engineer_name.split(' ')[0] : '—')}</span>
+            </div>
+          </div>
+          <div class="board-card-actions">
+            <button
+              class="board-card-action js-card-move-menu"
+              data-project-id="${p.project_id}"
+              type="button"
+            >
+              Move ▾
+            </button>
+            ${isArchiveReady ? `
+              <button
+                class="board-card-action archive js-card-archive"
+                data-project-id="${p.project_id}"
+                type="button"
+              >
+                Archive
+              </button>
+            ` : ''}
           </div>
         `;
+
+        card.addEventListener('click', (e) => {
+          const moveBtn = e.target.closest('.js-card-move-menu');
+          const archiveBtn = e.target.closest('.js-card-archive');
+          if (moveBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            openQuickMoveMenu(p, moveBtn);
+            return;
+          }
+          if (archiveBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            archiveProjectFromBoard(Number(archiveBtn.dataset.projectId));
+            return;
+          }
+          openBoardDetail(p);
+        });
+
         cardContainer.appendChild(card);
       });
 
@@ -1214,18 +1474,6 @@
     });
   }
 
-  async function onCardDrop(e, colId) {
-    e.preventDefault();
-    const projId = e.dataTransfer.getData('text/plain');
-    if (!projId) return;
-    
-    try {
-      await apiFetch(`/api/projects/${projId}/board-status`, 'PATCH', { board_status_id: colId === -1 ? null : colId });
-      loadBoard();
-    } catch (err) {
-      showToast('Failed to update board status: ' + err.message, 'error');
-    }
-  }
 
   // ── Kanban board setup modal ───────────────────────────────────────────────────
   async function openBoardSetup() {
@@ -1258,6 +1506,36 @@
   function renderSetupList() {
     const listEl = document.getElementById('setup-status-list');
     if (!listEl) return;
+
+    if (!listEl.dataset.bound) {
+      listEl.addEventListener('change', async function(e) {
+        const toggle = e.target.closest('.js-status-terminal');
+        if (toggle) {
+          const statusId = Number(toggle.dataset.id);
+          const is_terminal = toggle.checked ? 1 : 0;
+          const status = _boardStatuses.find(s => Number(s.id) === statusId);
+          if (!status) return;
+
+          try {
+            await apiFetch(`/api/board-statuses/${statusId}`, 'PUT', {
+              name: status.name,
+              color: status.color,
+              team: 'offensive',
+              is_terminal: is_terminal
+            });
+            showToast('Status updated');
+            _boardStatuses = await apiFetch('/api/board-statuses?team=offensive');
+            renderSetupList();
+            loadBoard();
+          } catch (err) {
+            showToast('Failed to update status: ' + err.message, 'error');
+            toggle.checked = !toggle.checked;
+          }
+        }
+      });
+      listEl.dataset.bound = 'true';
+    }
+
     BoardShared.renderSetupList(listEl, _boardStatuses, () => {
       renderSetupList();
     });
@@ -1277,8 +1555,10 @@
   async function addBoardStatus() {
     const nameInput = document.getElementById('setup-new-name');
     const colorInput = document.getElementById('setup-new-color');
+    const terminalInput = document.getElementById('setup-new-terminal');
     const name = nameInput.value.trim();
     const color = colorInput ? colorInput.value : '';
+    const is_terminal = terminalInput ? (terminalInput.checked ? 1 : 0) : 0;
 
     if (!name) {
       showToast('Status title cannot be empty', 'error');
@@ -1298,8 +1578,9 @@
 
     try {
       const order = _boardStatuses.length;
-      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'offensive' });
+      await apiFetch('/api/board-statuses', 'POST', { name, color, sort_order: order, team: 'offensive', is_terminal });
       nameInput.value = '';
+      if (terminalInput) terminalInput.checked = false;
       
       // Reload lists
       _boardStatuses = await apiFetch('/api/board-statuses?team=offensive');
@@ -1342,6 +1623,83 @@
   }
 
   // ── Kanban detail card modal ───────────────────────────────────────────────────
+  async function moveBoardProject(projectId, statusId, options = {}) {
+    try {
+      await apiFetch(`/api/projects/${projectId}/board-status`, 'PATCH', {
+        board_status_id: statusId === null ? null : Number(statusId)
+      });
+      showToast('Project status updated');
+      if (options.closeDetailModal !== false) {
+        document.getElementById('modal-board-detail')?.classList.remove('open');
+      }
+      loadBoard();
+    } catch (e) {
+      showToast('Failed to update status: ' + e.message, 'error');
+    }
+  }
+
+  function closeQuickMoveMenu() {
+    if (window.BoardShared && typeof window.BoardShared.closeFloatingMenu === 'function') {
+      window.BoardShared.closeFloatingMenu('.quick-move-menu');
+    } else {
+      document.querySelector('.quick-move-menu')?.remove();
+    }
+  }
+
+  function openQuickMoveMenu(project, anchorEl) {
+    closeQuickMoveMenu();
+
+    const menu = document.createElement('div');
+    menu.className = 'quick-move-menu';
+
+    let optionsHtml = `
+      <button class="quick-move-option" data-status-id="null" ${project.board_status_id === null ? 'disabled' : ''}>
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#64748b; margin-right:6px;"></span>
+        Uncategorized
+      </button>
+    `;
+
+    optionsHtml += _boardStatuses.map(s => `
+      <button
+        class="quick-move-option"
+        data-status-id="${s.id}"
+        ${Number(s.id) === Number(project.board_status_id) ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${escA(s.color)}; margin-right:6px;"></span>
+        ${esc(s.name)}
+        ${s.is_terminal ? '<small style="margin-left:auto; font-size:9px; background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:4px;">Final</small>' : ''}
+      </button>
+    `).join('');
+
+    menu.innerHTML = optionsHtml;
+    document.body.appendChild(menu);
+
+    menu.addEventListener('click', async (e) => {
+      const option = e.target.closest('.quick-move-option');
+      if (!option) return;
+      e.stopPropagation();
+
+      const statusId = option.dataset.statusId === 'null' ? null : Number(option.dataset.statusId);
+      closeQuickMoveMenu();
+      await moveBoardProject(project.project_id, statusId, { closeDetailModal: false });
+    });
+
+    if (window.BoardShared && typeof window.BoardShared.positionFloatingMenu === 'function') {
+      window.BoardShared.positionFloatingMenu(menu, anchorEl);
+    } else {
+      positionMenu(menu, anchorEl);
+    }
+  }
+
+  function positionMenu(menu, anchorEl) {
+    const rect = anchorEl.getBoundingClientRect();
+    let top = rect.bottom + 6;
+    let left = rect.left;
+    menu.style.top = `${top}px`;
+    menu.style.left = `${left}px`;
+  }
+
+  // ── Kanban detail card modal ───────────────────────────────────────────────────
   function openBoardDetail(p) {
     const titleEl = document.getElementById('bd-title');
     const bodyEl = document.getElementById('bd-body');
@@ -1366,6 +1724,75 @@
       } catch {}
     }
 
+    const currentStatus = _boardStatuses.find(s => Number(s.id) === Number(p.board_status_id)) || null;
+    const statusName = currentStatus ? currentStatus.name : 'Uncategorized';
+    const statusColor = currentStatus ? currentStatus.color : 'var(--muted)';
+    const isTerminal = currentStatus?.is_terminal === 1;
+
+    // Uncategorized button
+    const uncategorizedActive = p.board_status_id === null || p.board_status_id === undefined;
+    let statusButtons = `
+      <button
+        class="status-action-btn js-move-board-status ${uncategorizedActive ? 'active' : ''}"
+        data-project-id="${p.project_id}"
+        data-status-id="null"
+        ${uncategorizedActive ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--muted); margin-right:6px;"></span>
+        Uncategorized
+      </button>
+    `;
+
+    // Statuses buttons
+    statusButtons += _boardStatuses.map(s => `
+      <button
+        class="status-action-btn js-move-board-status ${Number(s.id) === Number(p.board_status_id) ? 'active' : ''}"
+        data-project-id="${p.project_id}"
+        data-status-id="${s.id}"
+        ${Number(s.id) === Number(p.board_status_id) ? 'disabled' : ''}
+      >
+        <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${escA(s.color)}; margin-right:6px;"></span>
+        ${esc(s.name)}
+        ${s.is_terminal ? '<small style="margin-left:4px; font-size:9px; background:rgba(255,255,255,0.15); padding:1px 4px; border-radius:4px;">Final</small>' : ''}
+      </button>
+    `).join('');
+
+    const isCompleted = p.final_report_status === 'completed';
+    const archiveEligible = isCompleted && isTerminal;
+    let archiveHtml = '';
+    if (archiveEligible) {
+      archiveHtml = `
+        <div class="archive-panel" style="margin-top:16px;">
+          <div style="font-size:11px; font-weight:700; color:#10b981; margin-bottom:4px; text-transform:uppercase;">Ready to archive</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:12px;">This project is completed and in a final stage.</div>
+          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
+            Archive Project
+          </button>
+        </div>
+      `;
+    } else if (isCompleted && !isTerminal) {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--yellow, #eab308); margin-bottom:4px; text-transform:uppercase;">Move to final stage</div>
+          <div style="font-size:12px; color:var(--muted);">Move this project to a final board status before archiving.</div>
+        </div>
+      `;
+    } else if (!isCompleted && isTerminal) {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Final stage reached</div>
+          <div style="font-size:12px; color:var(--muted);">Complete the final report before archiving this project.</div>
+        </div>
+      `;
+    } else {
+      archiveHtml = `
+        <div style="margin-top:16px; color:var(--muted);">
+          <div style="font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px; text-transform:uppercase;">Active Project</div>
+          <div style="font-size:12px; color:var(--muted);">Complete the final report and move to a final stage to make this project eligible for archiving.</div>
+        </div>
+      `;
+    }
+
     bodyEl.innerHTML = `
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
         <div><div style="font-size:11px; color:var(--muted)">CLIENT</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${esc(p.client_name)}</div></div>
@@ -1379,19 +1806,47 @@
         <div><div style="font-size:11px; color:var(--muted)">MANDAYS ASSESSMENT</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${p.mandays_assessment || 0} hari</div></div>
         <div><div style="font-size:11px; color:var(--muted)">FINDINGS</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;"><span class="finding-count ${countColor(p.finding_count)}">${p.finding_count || 0}</span></div></div>
         <div style="grid-column:1/-1;"><div style="font-size:11px; color:var(--muted)">LEAD ASSESSOR &amp; PICs</div><div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px;">${esc(p.engineer_name || '—')}</div></div>
+        <div style="grid-column:1/-1;">
+          <div style="font-size:11px; color:var(--muted)">BOARD STATUS</div>
+          <div style="font-size:13px; font-weight:600; color:var(--text); margin-top:4px; display:flex; align-items:center; gap:6px;">
+            <span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:${statusColor};"></span>
+            ${esc(statusName)}
+            ${isTerminal ? '<span class="badge badge-terminal" style="font-size:9px; padding:1px 6px;">Final Stage</span>' : ''}
+          </div>
+        </div>
       </div>
       <div style="border-top:1px solid var(--border); padding-top:16px;">
         <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">EVIDENCE / RESOURCE LINKS</div>
         <div>${linksHtml}</div>
       </div>
-      ${p.board_status_id === -1 ? `
-        <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
-          <button class="btn-primary js-archive-project-from-board" data-id="${p.project_id}" style="width:100%; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.3); color:#10b981; justify-content:center;">
-            Archive Project
-          </button>
+      <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
+        <div style="font-size:11px; color:var(--muted); margin-bottom:8px;">MOVE TO STATUS</div>
+        <div class="status-action-grid">
+          ${statusButtons}
         </div>
-      ` : ''}
+      </div>
+      <div style="border-top:1px solid var(--border); padding-top:16px; margin-top:16px;">
+        ${archiveHtml}
+      </div>
     `;
+
+    // Bind local click events to bd-body (once only)
+    if (!bodyEl.dataset.bound) {
+      bodyEl.addEventListener('click', function(e) {
+        const statusBtn = e.target.closest('.js-move-board-status');
+        if (statusBtn) {
+          const statusId = statusBtn.dataset.statusId === 'null' ? null : Number(statusBtn.dataset.statusId);
+          moveBoardProject(Number(statusBtn.dataset.projectId), statusId);
+          return;
+        }
+        const archiveBtn = e.target.closest('.js-archive-project-from-board');
+        if (archiveBtn) {
+          archiveProjectFromBoard(Number(archiveBtn.dataset.id));
+          return;
+        }
+      });
+      bodyEl.dataset.bound = 'true';
+    }
 
     document.getElementById('modal-board-detail').classList.add('open');
   }
@@ -1704,8 +2159,12 @@
     btn.textContent = 'Thinking...';
 
     try {
-      const data = await apiFetch(`/api/projects/${_hlProjId}/highlight-ai`, 'POST', { api_key: key });
-      document.getElementById('hl-text').value = data.highlight || '';
+      const notesVal = document.getElementById('hl-text').value.trim();
+      const data = await apiFetch(`/api/projects/${_hlProjId}/highlight/generate`, 'POST', {
+        api_key: key,
+        notes: [notesVal]
+      });
+      document.getElementById('hl-text').value = data.highlight_text || '';
       showToast('Highlight summary generated!');
     } catch (e) {
       showToast(e.message, 'error');
@@ -2019,14 +2478,15 @@
       return;
     }
 
-    // 5. Select client in create project modal
-    const selectNeBtn = e.target.closest('.js-select-ne-client');
-    if (selectNeBtn) {
-      window.selectNeClient(Number(selectNeBtn.dataset.id));
+    // 5. BAST modal
+    const bastBtn = e.target.closest('.js-open-bast');
+    if (bastBtn) {
+      openBastModal(Number(bastBtn.dataset.id));
       return;
     }
 
     // 6. Delete board status
+
     const deleteBoardStatusBtn = e.target.closest('.js-delete-board-status');
     if (deleteBoardStatusBtn) {
       deleteBoardStatus(Number(deleteBoardStatusBtn.dataset.id));
@@ -2061,5 +2521,20 @@
       return;
     }
   });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.quick-move-menu') && !e.target.closest('.js-card-move-menu')) {
+      closeQuickMoveMenu();
+    }
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeQuickMoveMenu();
+  });
+
+  if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+    window.addEventListener('scroll', closeQuickMoveMenu, true);
+    window.addEventListener('resize', closeQuickMoveMenu);
+  }
 
 })();

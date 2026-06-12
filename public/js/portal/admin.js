@@ -184,7 +184,7 @@
   }
 
   async function submitCreateUser() {
-    const displayName = document.getElementById('cu-name').value.trim();
+    const display_name = document.getElementById('cu-name').value.trim();
     const username = document.getElementById('cu-username').value.trim();
     const role = document.getElementById('cu-role').value;
     const team = document.getElementById('cu-team').value;
@@ -193,14 +193,14 @@
     const err = document.getElementById('cu-err');
     err.style.display = 'none';
 
-    if (!displayName || !username || !password) {
+    if (!display_name || !username || !password) {
       err.textContent = 'All fields marked with * are required.';
       err.style.display = 'block';
       return;
     }
 
     try {
-      await apiFetch('/api/users', 'POST', { displayName, username, role, team, password });
+      await apiFetch('/api/users', 'POST', { display_name, username, role, team, password });
       showToast('User created successfully');
       document.getElementById('modal-create-user').classList.remove('open');
       loadUsers();
